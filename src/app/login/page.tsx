@@ -24,6 +24,7 @@ function LoginForm() {
     setLoading(true);
     try {
       const supabase = createClient();
+      if (!supabase) throw new Error("نظام الحسابات غير مفعّل بعد على هذا الموقع");
 
       if (mode === "signup") {
         const { data, error } = await supabase.auth.signUp({

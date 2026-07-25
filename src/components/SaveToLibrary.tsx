@@ -23,9 +23,12 @@ export default function SaveToLibrary(props: Props) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    createClient()
-      .auth.getUser()
-      .then(({ data }) => setSignedIn(!!data.user));
+    const supabase = createClient();
+    if (!supabase) {
+      setSignedIn(false);
+      return;
+    }
+    supabase.auth.getUser().then(({ data }) => setSignedIn(!!data.user));
   }, []);
 
   // إعادة الضبط عند وصول ناتج جديد

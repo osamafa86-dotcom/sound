@@ -21,6 +21,7 @@ export default function Navbar() {
 
   useEffect(() => {
     const supabase = createClient();
+    if (!supabase) return;
     supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) =>
       setEmail(session?.user?.email ?? null)
@@ -29,7 +30,7 @@ export default function Navbar() {
   }, []);
 
   async function signOut() {
-    await createClient().auth.signOut();
+    await createClient()?.auth.signOut();
     setOpen(false);
     router.push("/");
     router.refresh();

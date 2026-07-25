@@ -33,6 +33,11 @@ export default function Library() {
 
   useEffect(() => {
     const supabase = createClient();
+    if (!supabase) {
+      setSignedIn(false);
+      setLoading(false);
+      return;
+    }
     supabase.auth.getUser().then(({ data }) => {
       const isIn = !!data.user;
       setSignedIn(isIn);
