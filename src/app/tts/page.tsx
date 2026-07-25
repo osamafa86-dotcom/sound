@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
-import SaveButton from "@/components/SaveButton";
+import SaveToLibrary from "@/components/SaveToLibrary";
 import { VOICES, type Voice } from "@/lib/voices";
 import { authHeaders } from "@/lib/supabase";
 
@@ -364,26 +364,27 @@ export default function TTSStudio() {
           </button>
 
           {result && (
-            <div className="flex flex-col gap-3">
-              <AudioPlayer
-                src={result.url}
-                title="الناتج الصوتي"
-                mock={result.mock}
-                filename={`maqam-tts.${result.ext}`}
-                note={
-                  result.fellBack
-                    ? "تعذّر الوصول لمحرك ElevenLabs من هذه البيئة، فعُرضت نغمة تجريبية بدلاً منه."
-                    : undefined
-                }
-              />
-              <SaveButton
-                key={result.url}
-                blob={result.blob}
+            <AudioPlayer
+              src={result.url}
+              title="الناتج الصوتي"
+              mock={result.mock}
+              filename={`maqam-tts.${result.ext}`}
+              note={
+                result.fellBack
+                  ? "تعذّر الوصول لمحرك ElevenLabs من هذه البيئة، فعُرضت نغمة تجريبية بدلاً منه."
+                  : undefined
+              }
+            >
+              <SaveToLibrary
+                url={result.url}
                 kind="tts"
-                title={`تعليق صوتي — ${VOICES.find((v) => v.id === voiceId)?.name ?? ""}`}
-                details={text.trim().slice(0, 140)}
+                title={`تعليق صوتي — ${voices.find((v) => v.id === voiceId)?.name ?? ""}`}
+                content={text}
+                voiceId={voiceId}
+                provider={result.mock ? "mock" : "elevenlabs"}
+                settings={{ speed, stability, format }}
               />
-            </div>
+            </AudioPlayer>
           )}
         </div>
 

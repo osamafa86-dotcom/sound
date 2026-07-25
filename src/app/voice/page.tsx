@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
 import Recorder from "@/components/Recorder";
-import SaveButton from "@/components/SaveButton";
+import SaveToLibrary from "@/components/SaveToLibrary";
 import { VOICES, type Voice } from "@/lib/voices";
 import { authHeaders } from "@/lib/supabase";
 
@@ -17,6 +17,7 @@ const TABS: { id: Tab; label: string; desc: string }[] = [
 
 export default function VoiceLab() {
   const [audio, setAudio] = useState<Blob | null>(null);
+  const [audioUrl, setAudioUrl] = useState("");
   const [tab, setTab] = useState<Tab>("stt");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -152,17 +153,19 @@ export default function VoiceLab() {
       {/* التسجيل */}
       <div className="mt-8 rounded-2xl border border-border-soft bg-surface-card p-6">
         <h2 className="mb-4 text-lg font-bold">١ — التسجيل</h2>
-        <Recorder onAudio={(blob) => setAudio(blob)} />
+        <Recorder
+          onAudio={(blob) => {
+            setAudio(blob);
+            setAudioUrl((prev) => {
+              if (prev) URL.revokeObjectURL(prev);
+              return URL.createObjectURL(blob);
+            });
+          }}
+        />
         {audio && (
           <div className="mt-3 flex items-center justify-between text-xs text-muted">
             <span>✓ التسجيل جاهز ({Math.round(audio.size / 1024)} كيلوبايت)</span>
-            <SaveButton
-              key={`${audio.size}-${tab}`}
-              blob={audio}
-              kind="recording"
-              title="تسجيل صوتي"
-              details=""
-            />
+            {audioUrl && <SaveToLibrary url={audioUrl} kind="recording" title="تسجيل صوتي" />}
           </div>
         )}
       </div>
@@ -255,12 +258,12 @@ export default function VoiceLab() {
                     mock={converted.mock}
                     filename="maqam-voice-change.mp3"
                   />
-                  <SaveButton
-                    key={converted.url}
-                    blob={converted.blob}
+                  <SaveToLibrary
+                    url={converted.url}
                     kind="tts"
                     title={`تحويل صوت — ${voices.find((v) => v.id === targetVoiceId)?.name ?? ""}`}
-                    details=""
+                    voiceId={targetVoiceId}
+                    provider={converted.mock ? "mock" : "elevenlabs-sts"}
                   />
                 </div>
               )}

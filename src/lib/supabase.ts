@@ -1,30 +1,21 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient, supabaseConfigured } from "./supabase/client";
 
 /**
- * عميل Supabase للمتصفح — يُنشأ مرة واحدة، ويعيد null عندما تكون
- * المنصة غير مهيأة (بدون متغيرات البيئة) فتعمل المكتبة بالوضع المحلي.
+ * واجهة توافق فوق عميل المتصفح الموحّد (@supabase/ssr بجلسة كوكيز):
+ * getSupabase وauthHeaders تستخدمان نفس الجلسة التي تنشئها صفحات الدخول،
+ * فتصل ترويسة Bearer نفسها إلى مسارات API لرفع حدود الاستخدام وربط الملكية.
  */
 
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+export { supabaseConfigured };
 
-export const supabaseConfigured = Boolean(URL && ANON_KEY);
-
-let client: SupabaseClient | null | undefined;
-
-export function getSupabase(): SupabaseClient | null {
-  if (client === undefined) {
-    client = URL && ANON_KEY ? createClient(URL, ANON_KEY) : null;
-  }
-  return client;
-}
+export const getSupabase = createClient;
 
 /**
  * ترويسة المصادقة لطلبات API الداخلية — تمنح المستخدم المسجل حدود استخدام أعلى
- * وتربط توليداته بحسابه. تعيد كائناً فارغاً لغير المسجلين.
+ * وتربط توليداته وأصواته المستنسخة بحسابه. تعيد كائناً فارغاً لغير المسجلين.
  */
 export async function authHeaders(): Promise<Record<string, string>> {
-  const supabase = getSupabase();
+  const supabase = createClient();
   if (!supabase) return {};
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;

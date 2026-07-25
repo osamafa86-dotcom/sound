@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
-import SaveButton from "@/components/SaveButton";
+import SaveToLibrary from "@/components/SaveToLibrary";
 import { DIALECTS, INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
 import { authHeaders } from "@/lib/supabase";
 import type { AssistMode, AssistResult } from "@/lib/assistant/types";
@@ -14,6 +14,7 @@ type AssistResponse = AssistResult & { fellBack?: string };
 type JobStatusResponse = {
   status: "pending" | "running" | "done" | "failed";
   stage?: string;
+  provider?: string;
   stylePrompt?: string;
   mock?: boolean;
   fellBack?: string;
@@ -36,7 +37,7 @@ export default function SongsStudio() {
   const [durationSec, setDurationSec] = useState<number>(60);
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState("");
-  const [result, setResult] = useState<{ url: string; blob: Blob; jobId: string; mock: boolean; prompt: string; ext: string; fellBack: boolean } | null>(null);
+  const [result, setResult] = useState<{ url: string; blob: Blob; jobId: string; mock: boolean; prompt: string; ext: string; fellBack: boolean; provider?: string } | null>(null);
   const [error, setError] = useState("");
 
   const [idea, setIdea] = useState("");
@@ -137,6 +138,7 @@ export default function SongsStudio() {
         prompt: status.stylePrompt ?? "",
         ext,
         fellBack: !!status.fellBack,
+        provider: status.provider,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
@@ -467,21 +469,24 @@ export default function SongsStudio() {
                       ? "تعذّر الوصول لمحرك التوليد من هذه البيئة (أو تتطلب الميزة باقة مدفوعة)، فعُرض سلّم المقام التجريبي بدلاً منه."
                       : undefined
                   }
-                />
-                <SaveButton
-                  key={result.url}
-                  blob={result.blob}
-                  jobId={result.jobId}
-                  kind="song"
-                  title={
-                    tier === "preview"
-                      ? `معاينة بمقام ${maqam.name}`
-                      : assist?.title && assist.title !== "مسودة تجريبية"
+                >
+                  <SaveToLibrary
+                    url={result.url}
+                    kind="song"
+                    title={
+                      assist?.title && assist.title !== "مسودة تجريبية"
                         ? assist.title
-                        : `أغنية بمقام ${maqam.name}`
-                  }
-                  details={result.prompt.slice(0, 160)}
-                />
+                        : tier === "preview"
+                          ? `معاينة بمقام ${maqam.name}`
+                          : `أغنية بمقام ${maqam.name}`
+                    }
+                    content={lyrics}
+                    maqamId={maqamId}
+                    styleId={styleId}
+                    provider={result.provider}
+                    settings={{ instrumentIds, tier, durationSec }}
+                  />
+                </AudioPlayer>
                 {result.prompt && (
                   <div className="rounded-2xl border border-border-soft bg-surface-card p-4">
                     <p className="mb-2 text-sm font-semibold">البرومبت الموسيقي المُولَّد لمحرك الذكاء الاصطناعي:</p>

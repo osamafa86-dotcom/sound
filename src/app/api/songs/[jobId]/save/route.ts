@@ -11,12 +11,12 @@ import { getUserFromRequest } from "@/lib/serverAuth";
 export async function POST(req: NextRequest, ctx: { params: Promise<{ jobId: string }> }) {
   const admin = getSupabaseAdmin();
   if (!admin) {
-    // المنصة غير مهيأة — العميل يرجع لمسار الحفظ المحلي
+    // المنصة غير مهيأة — العميل يرجع لمسار الحفظ عبر المتصفح
     return NextResponse.json({ error: "الحفظ السحابي غير مفعّل" }, { status: 503 });
   }
   const user = await getUserFromRequest(req);
   if (!user) {
-    return NextResponse.json({ error: "سجّل الدخول للحفظ في مكتبتك السحابية" }, { status: 401 });
+    return NextResponse.json({ error: "سجّل الدخول لحفظ أعمالك" }, { status: 401 });
   }
 
   const { jobId } = await ctx.params;
@@ -31,12 +31,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ jobId: str
   }
 
   const body = await req.json().catch(() => ({}));
-  const title = typeof body?.title === "string" && body.title.trim() ? body.title.trim().slice(0, 120) : "أغنية";
-  const details = typeof body?.details === "string" ? body.details.trim().slice(0, 300) : "";
+  const title = typeof body?.title === "string" && body.title.trim() ? body.title.trim().slice(0, 200) : null;
 
   const id = randomUUID();
   const ext = audio.mimeType === "audio/mpeg" ? "mp3" : "wav";
-  const path = `${user.id}/${id}.${ext}`;
+  const path = `${user.id}/song-${id}.${ext}`;
 
   const upload = await admin.storage.from("audio").upload(path, audio.audio, {
     contentType: audio.mimeType,
@@ -50,9 +49,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ jobId: str
     user_id: user.id,
     kind: "song",
     title,
-    details,
-    mime_type: audio.mimeType,
-    storage_path: path,
+    content: job.request.lyrics ?? null,
+    maqam_id: job.request.maqamId,
+    style_id: job.request.styleId,
+    provider: job.provider ?? null,
+    settings: {
+      instrumentIds: job.request.instrumentIds,
+      tier: job.tier,
+      durationSec: job.request.durationSec,
+      stylePrompt: job.request.stylePrompt,
+    },
+    audio_path: path,
+    duration_sec: job.request.durationSec ?? null,
   });
   if (insert.error) {
     await admin.storage.from("audio").remove([path]);
