@@ -46,7 +46,9 @@ export function elevenLabsTTS(apiKey: string): TTSProvider {
       }
 
       const wantWav = req.format === "wav";
-      const outputFormat = wantWav ? "pcm_44100" : "mp3_44100_128";
+      // باقة Creator تتيح جودة 192kbps — قابلة للتخفيض عبر متغير البيئة عند تغيير الباقة
+      const mp3Quality = process.env.ELEVENLABS_MP3_QUALITY ?? "mp3_44100_192";
+      const outputFormat = wantWav ? "pcm_44100" : mp3Quality;
 
       const audio = await apiCall(
         `/text-to-speech/${elevenVoiceId}`,
