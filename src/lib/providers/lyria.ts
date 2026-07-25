@@ -82,6 +82,16 @@ export function lyriaMusic(apiKey: string): MusicProvider {
       }
 
       const json = await res.json();
+
+      // Lyria يعيد 200 بلا مرشّحين عندما يحجب مرشّح المحتوى الطلب
+      const blockReason = json?.promptFeedback?.blockReason;
+      if (blockReason) {
+        throw new LyriaError(
+          `رفض مرشّح المحتوى في Lyria هذه الكلمات (${blockReason}) — سيتولى المحرك البديل التوليد`,
+          400
+        );
+      }
+
       const candidate = json?.candidates?.[0];
       if (candidate?.finishReason === "SAFETY" || candidate?.finishReason === "PROHIBITED_CONTENT") {
         throw new LyriaError("رفض المحرك توليد هذا المقطع — جرّب وصفاً مختلفاً", 400);

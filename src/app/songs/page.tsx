@@ -23,7 +23,7 @@ export default function SongsStudio() {
   const [styleId, setStyleId] = useState<string>(SONG_STYLES[0].id);
   const [instrumentIds, setInstrumentIds] = useState<string[]>(["oud", "darbuka"]);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ url: string; mock: boolean; prompt: string; ext: string; fellBack: boolean; provider: string } | null>(null);
+  const [result, setResult] = useState<{ url: string; mock: boolean; prompt: string; ext: string; fellBack: boolean; provider: string; fallbackNote: string } | null>(null);
   const [error, setError] = useState("");
 
   const [idea, setIdea] = useState("");
@@ -88,10 +88,11 @@ export default function SongsStudio() {
       const mock = res.headers.get("X-Mock") === "1";
       const fellBack = res.headers.has("X-Fallback");
       const provider = res.headers.get("X-Provider") ?? "";
+      const fallbackNote = decodeURIComponent(res.headers.get("X-Fallback") ?? "");
       const prompt = decodeURIComponent(res.headers.get("X-Style-Prompt") ?? "");
       const blob = await res.blob();
       const ext = blob.type === "audio/mpeg" ? "mp3" : "wav";
-      setResult({ url: URL.createObjectURL(blob), mock, prompt, ext, fellBack, provider });
+      setResult({ url: URL.createObjectURL(blob), mock, prompt, ext, fellBack, provider, fallbackNote });
     } catch (e) {
       setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
     } finally {
@@ -355,7 +356,9 @@ export default function SongsStudio() {
                     result.mock
                       ? "تعذّر الوصول لمحرك التوليد (أو تتطلب الميزة باقة مدفوعة)، فعُرض سلّم المقام التجريبي بدلاً منه."
                       : result.fellBack
-                        ? `وُلّد بمحرك ${ENGINE_NAMES[result.provider] ?? result.provider} — تعذّر تشغيل المحرك المفضّل (Lyria 3 Pro) لهذا الطلب.`
+                        ? `وُلّد بمحرك ${ENGINE_NAMES[result.provider] ?? result.provider}${
+                            result.fallbackNote ? ` — ${result.fallbackNote}` : ""
+                          }`
                         : `وُلّد بمحرك ${ENGINE_NAMES[result.provider] ?? result.provider}`
                   }
                 />
