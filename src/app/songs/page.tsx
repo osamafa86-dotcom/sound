@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
+import SaveToLibrary from "@/components/SaveToLibrary";
 import { DIALECTS, INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
 import type { AssistMode, AssistResult } from "@/lib/assistant/types";
 
@@ -361,7 +362,18 @@ export default function SongsStudio() {
                           }`
                         : `وُلّد بمحرك ${ENGINE_NAMES[result.provider] ?? result.provider}`
                   }
-                />
+                >
+                  <SaveToLibrary
+                    url={result.url}
+                    kind="song"
+                    title={assist?.title}
+                    content={lyrics}
+                    maqamId={maqamId}
+                    styleId={styleId}
+                    provider={result.provider}
+                    settings={{ instrumentIds }}
+                  />
+                </AudioPlayer>
                 {result.prompt && (
                   <div className="rounded-2xl border border-border-soft bg-surface-card p-4">
                     <p className="mb-2 text-sm font-semibold">البرومبت الموسيقي المُولَّد لمحرك الذكاء الاصطناعي:</p>

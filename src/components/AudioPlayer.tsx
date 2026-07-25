@@ -6,12 +6,15 @@ export default function AudioPlayer({
   mock,
   filename = "maqam-audio.wav",
   note,
+  children,
 }: {
   src: string;
   title: string;
   mock?: boolean;
   filename?: string;
   note?: string;
+  /** إجراءات إضافية أسفل المشغّل — مثل زر الحفظ في المكتبة */
+  children?: React.ReactNode;
 }) {
   return (
     <div className="rounded-2xl border border-border-soft bg-surface-raised p-4">
@@ -32,6 +35,7 @@ export default function AudioPlayer({
       >
         ⬇ تنزيل الملف
       </a>
+      {children}
     </div>
   );
 }

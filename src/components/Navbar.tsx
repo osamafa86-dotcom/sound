@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 const links = [
   { href: "/", label: "الرئيسية" },
@@ -14,7 +15,25 @@ const links = [
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) =>
+      setEmail(session?.user?.email ?? null)
+    );
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  async function signOut() {
+    await createClient().auth.signOut();
+    setOpen(false);
+    router.push("/");
+    router.refresh();
+  }
 
   function isActive(href: string) {
     return href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -49,12 +68,26 @@ export default function Navbar() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <Link
-            href="/tts"
-            className="hidden rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-strong sm:block"
-          >
-            ابدأ الآن
-          </Link>
+          {email ? (
+            <div className="hidden items-center gap-2 sm:flex">
+              <span className="max-w-[140px] truncate text-xs text-muted" title={email}>
+                {email}
+              </span>
+              <button
+                onClick={signOut}
+                className="rounded-xl border border-border-soft px-3 py-2 text-sm transition-colors hover:border-primary"
+              >
+                خروج
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="hidden rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-strong sm:block"
+            >
+              دخول
+            </Link>
+          )}
           <button
             onClick={() => setOpen(!open)}
             aria-label="القائمة"
@@ -84,13 +117,22 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
-            <Link
-              href="/tts"
-              onClick={() => setOpen(false)}
-              className="mt-2 rounded-xl bg-primary px-4 py-3 text-center font-semibold text-white"
-            >
-              ابدأ الآن
-            </Link>
+            {email ? (
+              <button
+                onClick={signOut}
+                className="mt-2 rounded-xl border border-border-soft px-4 py-3 text-center font-semibold"
+              >
+                خروج ({email})
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                onClick={() => setOpen(false)}
+                className="mt-2 rounded-xl bg-primary px-4 py-3 text-center font-semibold text-white"
+              >
+                تسجيل الدخول
+              </Link>
+            )}
           </div>
         </nav>
       )}

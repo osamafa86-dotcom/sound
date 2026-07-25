@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
+import SaveToLibrary from "@/components/SaveToLibrary";
 import { DIALECTS, VOICES } from "@/lib/voices";
 
 type CustomVoice = { id: string; name: string };
@@ -339,7 +340,16 @@ export default function TTSStudio() {
                   ? "تعذّر الوصول لمحرك ElevenLabs من هذه البيئة، فعُرضت نغمة تجريبية بدلاً منه."
                   : undefined
               }
-            />
+            >
+              <SaveToLibrary
+                url={result.url}
+                kind="tts"
+                content={text}
+                voiceId={voiceId}
+                provider={result.mock ? "mock" : "elevenlabs"}
+                settings={{ speed, stability, format }}
+              />
+            </AudioPlayer>
           )}
         </div>
 
