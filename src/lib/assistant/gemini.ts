@@ -2,7 +2,7 @@ import { DIALECTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
 import type { AssistRequest, AssistResult, LyricsAssistant } from "./types";
 
 /** النموذج الافتراضي — سريع وممتاز مع العربية؛ قابل للتبديل عبر متغير البيئة */
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
 /** مخطط JSON يُلزم Gemini بإرجاع النتيجة كاملة البنية عبر responseSchema */
 const RESULT_SCHEMA = {
