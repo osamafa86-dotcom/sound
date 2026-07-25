@@ -36,3 +36,18 @@ ANTHROPIC_API_KEY=...
 AZURE_SPEECH_KEY=...
 AZURE_SPEECH_REGION=...
 ```
+
+## تفعيل الحسابات والمكتبة السحابية (Supabase)
+
+بدون إعداد، تعمل «مكتبتي» محلياً في المتصفح (IndexedDB). للتفعيل السحابي:
+
+1. أنشئ مشروعاً مجانياً على [supabase.com](https://supabase.com)
+2. نفّذ محتوى [`supabase/schema.sql`](./supabase/schema.sql) في **SQL Editor** (ينشئ جدول التوليدات وحاوية التخزين وسياسات الحماية RLS)
+3. أضف إلى `.env.local`:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+```
+
+فتظهر صفحات الدخول/التسجيل تلقائياً، ويُحفظ كل توليد في مكتبة المستخدم السحابية.

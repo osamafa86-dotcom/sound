@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
+import SaveButton from "@/components/SaveButton";
 import { DIALECTS, INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
 import type { AssistMode, AssistResult } from "@/lib/assistant/types";
 
@@ -34,7 +35,7 @@ export default function SongsStudio() {
   const [durationSec, setDurationSec] = useState<number>(60);
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState("");
-  const [result, setResult] = useState<{ url: string; mock: boolean; prompt: string; ext: string; fellBack: boolean } | null>(null);
+  const [result, setResult] = useState<{ url: string; blob: Blob; mock: boolean; prompt: string; ext: string; fellBack: boolean } | null>(null);
   const [error, setError] = useState("");
 
   const [idea, setIdea] = useState("");
@@ -129,6 +130,7 @@ export default function SongsStudio() {
       const ext = blob.type === "audio/mpeg" ? "mp3" : "wav";
       setResult({
         url: URL.createObjectURL(blob),
+        blob,
         mock: !!status.mock,
         prompt: status.stylePrompt ?? "",
         ext,
@@ -463,6 +465,19 @@ export default function SongsStudio() {
                       ? "تعذّر الوصول لمحرك التوليد من هذه البيئة (أو تتطلب الميزة باقة مدفوعة)، فعُرض سلّم المقام التجريبي بدلاً منه."
                       : undefined
                   }
+                />
+                <SaveButton
+                  key={result.url}
+                  blob={result.blob}
+                  kind="song"
+                  title={
+                    tier === "preview"
+                      ? `معاينة بمقام ${maqam.name}`
+                      : assist?.title && assist.title !== "مسودة تجريبية"
+                        ? assist.title
+                        : `أغنية بمقام ${maqam.name}`
+                  }
+                  details={result.prompt.slice(0, 160)}
                 />
                 {result.prompt && (
                   <div className="rounded-2xl border border-border-soft bg-surface-card p-4">

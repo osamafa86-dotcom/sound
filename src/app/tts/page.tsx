@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
+import SaveButton from "@/components/SaveButton";
 import { DIALECTS, VOICES } from "@/lib/voices";
 
 export default function TTSStudio() {
@@ -12,7 +13,7 @@ export default function TTSStudio() {
   const [stability, setStability] = useState(0.5);
   const [format, setFormat] = useState<"mp3" | "wav">("mp3");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ url: string; mock: boolean; ext: string; fellBack: boolean } | null>(null);
+  const [result, setResult] = useState<{ url: string; blob: Blob; mock: boolean; ext: string; fellBack: boolean } | null>(null);
   const [error, setError] = useState("");
 
   const shownVoices = useMemo(
@@ -42,7 +43,7 @@ export default function TTSStudio() {
       const fellBack = res.headers.has("X-Fallback");
       const blob = await res.blob();
       const ext = blob.type === "audio/mpeg" ? "mp3" : "wav";
-      setResult({ url: URL.createObjectURL(blob), mock, ext, fellBack });
+      setResult({ url: URL.createObjectURL(blob), blob, mock, ext, fellBack });
     } catch (e) {
       setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
     } finally {
@@ -89,17 +90,26 @@ export default function TTSStudio() {
           </button>
 
           {result && (
-            <AudioPlayer
-              src={result.url}
-              title="الناتج الصوتي"
-              mock={result.mock}
-              filename={`maqam-tts.${result.ext}`}
-              note={
-                result.fellBack
-                  ? "تعذّر الوصول لمحرك ElevenLabs من هذه البيئة، فعُرضت نغمة تجريبية بدلاً منه."
-                  : undefined
-              }
-            />
+            <div className="flex flex-col gap-3">
+              <AudioPlayer
+                src={result.url}
+                title="الناتج الصوتي"
+                mock={result.mock}
+                filename={`maqam-tts.${result.ext}`}
+                note={
+                  result.fellBack
+                    ? "تعذّر الوصول لمحرك ElevenLabs من هذه البيئة، فعُرضت نغمة تجريبية بدلاً منه."
+                    : undefined
+                }
+              />
+              <SaveButton
+                key={result.url}
+                blob={result.blob}
+                kind="tts"
+                title={`تعليق صوتي — ${VOICES.find((v) => v.id === voiceId)?.name ?? ""}`}
+                details={text.trim().slice(0, 140)}
+              />
+            </div>
           )}
         </div>
 
