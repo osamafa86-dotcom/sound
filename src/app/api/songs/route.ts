@@ -3,6 +3,7 @@ import { MAQAMAT, INSTRUMENTS, SONG_STYLES } from "@/lib/maqamat";
 import { getJobsStore, type GenerationTier } from "@/lib/jobs";
 import { runSongJob } from "@/lib/songWorker";
 import { buildStylePrompt } from "@/lib/stylePrompt";
+import { SECTION_MIN_SEC, sanitizeSections, sectionsTotalSec } from "@/lib/songSections";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
 import type { MusicRequest } from "@/lib/providers/types";
@@ -40,9 +41,34 @@ export async function POST(req: NextRequest) {
     variation,
   });
 
-  // المعاينة دائماً ~30 ثانية؛ الأغنية الكاملة بين 30 و180 ثانية
+  // المقاطع المُهيكلة (النسخة الكاملة فقط) — المعاينة تبقى مقطعاً سريعاً واحداً
+  let sections = tier === "full" ? sanitizeSections(body.sections) : undefined;
+  const MAX_TOTAL_SEC = 300;
+  if (sections) {
+    const total = sectionsTotalSec(sections);
+    // تجاوز سقف المنصة: تقليص المدد نسبياً بدل الرفض
+    if (total > MAX_TOTAL_SEC) {
+      const factor = MAX_TOTAL_SEC / total;
+      sections = sections.map((s) => ({
+        ...s,
+        durationSec: Math.max(SECTION_MIN_SEC, Math.round(s.durationSec * factor)),
+      }));
+    }
+  }
+
+  const singer = body.singer === "male" || body.singer === "female" ? body.singer : undefined;
+  const bpm = Number.isFinite(body.bpm)
+    ? Math.min(200, Math.max(40, Math.round(Number(body.bpm))))
+    : undefined;
+
+  // المعاينة دائماً ~30 ثانية؛ الأغنية الكاملة بين 30 و180 ثانية أو مجموع مقاطعها
   const requestedSec = Number.isFinite(body.durationSec) ? Number(body.durationSec) : 60;
-  const durationSec = tier === "preview" ? 30 : Math.min(180, Math.max(30, requestedSec));
+  const durationSec =
+    tier === "preview"
+      ? 30
+      : sections
+        ? sectionsTotalSec(sections)
+        : Math.min(180, Math.max(30, requestedSec));
 
   const request: MusicRequest = {
     lyrics: typeof body.lyrics === "string" ? body.lyrics.slice(0, 3000) : undefined,
@@ -51,6 +77,9 @@ export async function POST(req: NextRequest) {
     instrumentIds,
     stylePrompt,
     durationSec,
+    sections,
+    singer,
+    bpm,
   };
 
   const job = await getJobsStore().create(tier, request, user?.id ?? null);

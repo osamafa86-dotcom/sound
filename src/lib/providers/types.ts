@@ -1,3 +1,5 @@
+import type { SongSection } from "@/lib/songSections";
+
 /**
  * طبقة تجريد المزوّدين — كل خدمة ذكاء اصطناعي (ElevenLabs, Azure, Lyria, Suno...)
  * تُنفَّذ كوحدة مستقلة تحقق هذه الواجهات، فيسهل التبديل والإضافة دون تغيير بقية النظام.
@@ -23,6 +25,12 @@ export type MusicRequest = {
   /** برومبت الأسلوب النهائي المبني بواسطة طبقة الذكاء الاصطناعي الوسيطة */
   stylePrompt: string;
   durationSec?: number;
+  /** مقاطع مُهيكلة — تُترجم لخطة تأليف لدى المحركات الداعمة (Eleven Music) */
+  sections?: SongSection[];
+  /** جنس صوت الغناء المطلوب */
+  singer?: "male" | "female";
+  /** سرعة الإيقاع (نبضة/دقيقة) */
+  bpm?: number;
 };
 
 export type AudioResult = {

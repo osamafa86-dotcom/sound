@@ -2,6 +2,7 @@ import { VOICES } from "@/lib/voices";
 import { pcm16ToWav } from "@/lib/mockAudio";
 import { findDictionary } from "@/lib/pronunciation";
 import { splitTextForTTS } from "@/lib/tts/split";
+import { buildCompositionPlan } from "./compositionPlan";
 import type { AudioResult, MusicProvider, MusicRequest, TTSProvider, TTSRequest } from "./types";
 
 const API_BASE = "https://api.elevenlabs.io/v1";
@@ -163,9 +164,21 @@ export function elevenLabsMusic(apiKey: string): MusicProvider {
   return {
     id: "eleven-music",
     async generate(req: MusicRequest): Promise<AudioResult> {
+      // مقاطع مُهيكلة ← خطة تأليف كاملة: تحكم حقيقي في البنية والمدد لكل مقطع
+      const plan = buildCompositionPlan(req);
+      if (plan) {
+        const audio = await apiCall("/music", apiKey, {
+          model_id: "music_v1",
+          composition_plan: plan,
+        });
+        return { audio, mimeType: "audio/mpeg", provider: "eleven-music" };
+      }
+
       const instrumentalOnly = req.styleId === "instrumental" || !req.lyrics?.trim();
       const prompt = [
         req.stylePrompt,
+        ...(req.bpm ? [`${req.bpm} BPM`] : []),
+        ...(req.singer && !instrumentalOnly ? [`${req.singer} Arabic lead vocals`] : []),
         instrumentalOnly
           ? "instrumental only, no vocals"
           : `Arabic vocals singing these lyrics:\n${req.lyrics!.trim()}`,

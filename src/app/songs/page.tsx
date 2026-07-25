@@ -5,6 +5,18 @@ import AudioPlayer from "@/components/AudioPlayer";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import { DIALECTS, INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
 import { authHeaders } from "@/lib/supabase";
+import {
+  MAX_SECTIONS,
+  SECTION_LABELS,
+  SECTION_MAX_SEC,
+  SECTION_MIN_SEC,
+  estimateDurationSec,
+  joinSections,
+  parseSections,
+  sectionsTotalSec,
+  type SectionKind,
+  type SongSection,
+} from "@/lib/songSections";
 import type { AssistMode, AssistResult } from "@/lib/assistant/types";
 
 const STEPS = ["الكلمات", "المقام والأسلوب", "التوليد"] as const;
@@ -76,6 +88,36 @@ export default function SongsStudio() {
   const [imageAnalyzing, setImageAnalyzing] = useState(false);
   const [imageError, setImageError] = useState("");
 
+  // بنية الأغنية المُهيكلة + التحكم الغنائي
+  const [sections, setSections] = useState<SongSection[] | null>(null);
+  const [singer, setSinger] = useState<"female" | "male">("female");
+  const [bpm, setBpm] = useState<number | null>(null);
+
+  /** تحديث المقاطع مع إبقاء النص الكامل متزامناً (هو ما يُحفظ ويُعدّ كلماته) */
+  function applySections(next: SongSection[] | null) {
+    setSections(next);
+    if (next) setLyrics(joinSections(next));
+  }
+
+  function updateSection(i: number, patch: Partial<SongSection>) {
+    if (!sections) return;
+    applySections(sections.map((s, j) => (j === i ? { ...s, ...patch } : s)));
+  }
+
+  function moveSection(i: number, dir: -1 | 1) {
+    if (!sections) return;
+    const j = i + dir;
+    if (j < 0 || j >= sections.length) return;
+    const next = [...sections];
+    [next[i], next[j]] = [next[j], next[i]];
+    applySections(next);
+  }
+
+  function addSection(kind: SectionKind) {
+    const next = [...(sections ?? []), { kind, lyrics: "", durationSec: estimateDurationSec(kind, "") }];
+    applySections(next.slice(0, MAX_SECTIONS));
+  }
+
   const maqam = MAQAMAT.find((m) => m.id === maqamId)!;
   const instrumental = styleId === "instrumental";
 
@@ -101,6 +143,8 @@ export default function SongsStudio() {
       setAssist(data);
       setLyrics(data.lyrics);
       setMaqamId(data.maqamId);
+      // بنية المساعد تفتح محرر المقاطع مباشرة
+      if (data.sections?.length) setSections(data.sections);
     } catch (e) {
       setAssistError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
     } finally {
@@ -162,6 +206,10 @@ export default function SongsStudio() {
           tier,
           durationSec,
           aiStylePrompt,
+          // بنية المقاطع تُترجم خطة تأليف كاملة لدى المحرك (النسخة الكاملة فقط)
+          sections: tier === "full" && sections?.length ? sections : undefined,
+          singer: instrumental ? undefined : singer,
+          bpm: bpm ?? undefined,
           // «نسخة أخرى»: رقم النسخة يدفع المحرك للتنويع بدل تكرار التوزيع
           variation: versions.length,
         }),
@@ -385,16 +433,138 @@ export default function SongsStudio() {
               )}
             </div>
 
-            <textarea
-              value={lyrics}
-              onChange={(e) => setLyrics(e.target.value)}
-              maxLength={3000}
-              placeholder={"اكتب كلمات أغنيتك هنا (فصحى أو لهجة)...\nأو استخدم المساعد بالأعلى ليكتبها لك من فكرة."}
-              className="min-h-72 w-full resize-y rounded-2xl border border-border-soft bg-surface-card p-5 leading-loose outline-none transition-colors focus:border-gold"
-            />
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted">{lyrics.length} / 3000 حرف</span>
-            </div>
+            {sections ? (
+              <div className="rounded-2xl border border-gold/40 bg-surface-card p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="text-lg font-bold">
+                    🧩 بنية <span className="text-gradient">الأغنية</span>
+                    <span className="ms-3 rounded-full bg-gold/15 px-3 py-1 text-xs font-semibold text-gold">
+                      {sections.length} مقاطع · {Math.floor(sectionsTotalSec(sections) / 60)}:
+                      {String(sectionsTotalSec(sections) % 60).padStart(2, "0")} دقيقة
+                    </span>
+                  </h2>
+                  <button
+                    onClick={() => applySections(null)}
+                    className="rounded-lg border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:text-body"
+                  >
+                    ✍️ العودة للنص الحر
+                  </button>
+                </div>
+                <p className="mt-1 text-sm text-muted">
+                  كل مقطع يصل محرك التوليد باسمه ومدته وكلماته — فتأتي اللازمة لازمةً فعلاً والمقدمة آليةً كما رسمتها.
+                </p>
+
+                <div className="mt-4 flex flex-col gap-3">
+                  {sections.map((s, i) => (
+                    <div key={i} className="rounded-xl border border-border-soft bg-surface p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={s.kind}
+                          onChange={(e) => updateSection(i, { kind: e.target.value as SectionKind })}
+                          className="rounded-lg border border-border-soft bg-surface-raised px-2 py-1.5 text-sm font-semibold outline-none focus:border-gold"
+                        >
+                          {(Object.keys(SECTION_LABELS) as SectionKind[]).map((k) => (
+                            <option key={k} value={k}>
+                              {SECTION_LABELS[k]}
+                            </option>
+                          ))}
+                        </select>
+                        <label className="flex items-center gap-1.5 text-xs text-muted">
+                          المدة
+                          <input
+                            type="number"
+                            min={SECTION_MIN_SEC}
+                            max={SECTION_MAX_SEC}
+                            value={s.durationSec}
+                            onChange={(e) =>
+                              updateSection(i, {
+                                durationSec: Math.min(
+                                  SECTION_MAX_SEC,
+                                  Math.max(SECTION_MIN_SEC, Math.round(Number(e.target.value) || SECTION_MIN_SEC))
+                                ),
+                              })
+                            }
+                            className="w-16 rounded-lg border border-border-soft bg-surface-raised px-2 py-1.5 text-center text-sm outline-none focus:border-gold"
+                          />
+                          ثانية
+                        </label>
+                        <div className="ms-auto flex items-center gap-1">
+                          <button
+                            onClick={() => moveSection(i, -1)}
+                            disabled={i === 0}
+                            title="تقديم المقطع"
+                            className="rounded-lg border border-border-soft px-2 py-1 text-xs text-muted transition-colors hover:text-body disabled:opacity-30"
+                          >
+                            ▲
+                          </button>
+                          <button
+                            onClick={() => moveSection(i, 1)}
+                            disabled={i === sections.length - 1}
+                            title="تأخير المقطع"
+                            className="rounded-lg border border-border-soft px-2 py-1 text-xs text-muted transition-colors hover:text-body disabled:opacity-30"
+                          >
+                            ▼
+                          </button>
+                          <button
+                            onClick={() => applySections(sections.filter((_, j) => j !== i))}
+                            title="حذف المقطع"
+                            className="rounded-lg border border-border-soft px-2 py-1 text-xs text-muted transition-colors hover:border-red-500/50 hover:text-red-400"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                      {s.kind !== "intro" && s.kind !== "outro" ? (
+                        <textarea
+                          value={s.lyrics}
+                          onChange={(e) => updateSection(i, { lyrics: e.target.value })}
+                          rows={Math.max(2, s.lyrics.split("\n").length)}
+                          placeholder="أسطر هذا المقطع..."
+                          className="mt-3 w-full resize-y rounded-lg border border-border-soft bg-surface-raised p-3 text-sm leading-loose outline-none transition-colors focus:border-gold"
+                        />
+                      ) : (
+                        <p className="mt-2 text-xs text-muted">مقطع آلي بلا كلمات — تحدده المدة فقط.</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {sections.length < MAX_SECTIONS && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-muted">أضف:</span>
+                    {(Object.keys(SECTION_LABELS) as SectionKind[]).map((k) => (
+                      <button
+                        key={k}
+                        onClick={() => addSection(k)}
+                        className="rounded-full border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:border-gold hover:text-gold"
+                      >
+                        + {SECTION_LABELS[k]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <textarea
+                  value={lyrics}
+                  onChange={(e) => setLyrics(e.target.value)}
+                  maxLength={3000}
+                  placeholder={"اكتب كلمات أغنيتك هنا (فصحى أو لهجة)...\nأو استخدم المساعد بالأعلى ليكتبها لك من فكرة."}
+                  className="min-h-72 w-full resize-y rounded-2xl border border-border-soft bg-surface-card p-5 leading-loose outline-none transition-colors focus:border-gold"
+                />
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted">{lyrics.length} / 3000 حرف</span>
+                  <button
+                    onClick={() => applySections(parseSections(lyrics))}
+                    disabled={!lyrics.trim()}
+                    className="rounded-lg border border-gold px-3 py-1.5 text-xs font-semibold text-gold transition-colors hover:bg-gold/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    🧩 قسّم إلى مقاطع مُهيكلة
+                  </button>
+                </div>
+              </>
+            )}
             <button
               onClick={() => setStep(1)}
               className="self-start rounded-xl bg-primary px-6 py-3 font-semibold text-white transition-colors hover:bg-primary-strong"
@@ -519,22 +689,84 @@ export default function SongsStudio() {
                   </span>
                 </button>
               </div>
+              {tier === "full" &&
+                (sections?.length ? (
+                  <p className="mt-4 text-sm text-muted">
+                    ⏱️ المدة من بنية المقاطع:{" "}
+                    <span className="font-semibold text-body">
+                      {Math.floor(sectionsTotalSec(sections) / 60)}:
+                      {String(sectionsTotalSec(sections) % 60).padStart(2, "0")} دقيقة
+                    </span>{" "}
+                    — عدّلها من محرر البنية في الخطوة الأولى.
+                  </p>
+                ) : (
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-muted">المدة التقريبية:</span>
+                    {DURATIONS.map((d) => (
+                      <button
+                        key={d.sec}
+                        onClick={() => setDurationSec(d.sec)}
+                        className={`rounded-full border px-4 py-2 text-sm transition-colors ${
+                          durationSec === d.sec
+                            ? "border-accent bg-accent/10 text-accent"
+                            : "border-border-soft text-muted hover:text-body"
+                        }`}
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+
               {tier === "full" && (
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <span className="text-sm text-muted">المدة التقريبية:</span>
-                  {DURATIONS.map((d) => (
-                    <button
-                      key={d.sec}
-                      onClick={() => setDurationSec(d.sec)}
-                      className={`rounded-full border px-4 py-2 text-sm transition-colors ${
-                        durationSec === d.sec
-                          ? "border-accent bg-accent/10 text-accent"
-                          : "border-border-soft text-muted hover:text-body"
-                      }`}
-                    >
-                      {d.label}
-                    </button>
-                  ))}
+                <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3">
+                  {!instrumental && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted">صوت الغناء:</span>
+                      {(
+                        [
+                          { id: "female", label: "👩 أنثى" },
+                          { id: "male", label: "👨 ذكر" },
+                        ] as const
+                      ).map((g) => (
+                        <button
+                          key={g.id}
+                          onClick={() => setSinger(g.id)}
+                          className={`rounded-full border px-4 py-2 text-sm transition-colors ${
+                            singer === g.id
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border-soft text-muted hover:text-body"
+                          }`}
+                        >
+                          {g.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-muted">الإيقاع:</span>
+                    {(
+                      [
+                        { v: null, label: "تلقائي" },
+                        { v: 70, label: "هادئ ٧٠" },
+                        { v: 90, label: "متزن ٩٠" },
+                        { v: 110, label: "حيوي ١١٠" },
+                        { v: 130, label: "راقص ١٣٠" },
+                      ] as const
+                    ).map((t) => (
+                      <button
+                        key={t.label}
+                        onClick={() => setBpm(t.v)}
+                        className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                          bpm === t.v
+                            ? "border-accent bg-accent/10 text-accent"
+                            : "border-border-soft text-muted hover:text-body"
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -562,6 +794,14 @@ export default function SongsStudio() {
                   <dt className="text-muted">الكلمات</dt>
                   <dd className="font-semibold">
                     {instrumental ? "موسيقى آلية بدون غناء" : lyrics.trim() ? `${lyrics.trim().split(/\s+/).length} كلمة` : "بدون كلمات بعد"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted">البنية</dt>
+                  <dd className="font-semibold">
+                    {sections?.length
+                      ? sections.map((s) => SECTION_LABELS[s.kind]).join(" ← ")
+                      : "نص حر (بلا مقاطع مُهيكلة)"}
                   </dd>
                 </div>
               </dl>
@@ -612,7 +852,15 @@ export default function SongsStudio() {
                     maqamId={maqamId}
                     styleId={styleId}
                     provider={result.provider}
-                    settings={{ instrumentIds, tier, durationSec, stylePrompt: result.prompt }}
+                    settings={{
+                      instrumentIds,
+                      tier,
+                      durationSec,
+                      stylePrompt: result.prompt,
+                      singer: instrumental ? undefined : singer,
+                      bpm: bpm ?? undefined,
+                      sectionsCount: sections?.length,
+                    }}
                   />
                 </AudioPlayer>
 

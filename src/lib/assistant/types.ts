@@ -1,3 +1,5 @@
+import type { SongSection } from "@/lib/songSections";
+
 /**
  * مساعد الكلمات والمقامات — طبقة تجريد مماثلة لمزوّدي الصوت:
  * التنفيذ الفعلي عبر Claude API، مع بديل تجريبي إرشادي يعمل بدون مفتاح.
@@ -33,6 +35,8 @@ export type AssistResult = {
   maqamReason: string;
   /** البرومبت الموسيقي الاحترافي بالإنجليزية لمحركات التوليد */
   stylePromptEn: string;
+  /** الكلمات مقسّمة مقاطع مُهيكلة — تغذي محرر البنية وخطة التأليف */
+  sections?: SongSection[];
   provider: string;
   /** true عندما يكون الناتج من الوضع التجريبي وليس من Claude فعلياً */
   mock?: boolean;

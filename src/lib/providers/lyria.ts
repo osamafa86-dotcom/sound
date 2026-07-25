@@ -39,12 +39,26 @@ export function lyriaMusic(apiKey: string): MusicProvider {
       const instrumentalOnly = req.styleId === "instrumental" || !req.lyrics?.trim();
       const seconds = Math.min(180, Math.max(15, req.durationSec ?? 60));
 
+      // بنية المقاطع تصل Lyria وصفاً نصياً (لا يدعم خطط تأليف مهيكلة كـ Eleven Music)
+      const structure = req.sections?.length
+        ? `Song structure: ${req.sections
+            .map((s) => `${s.kind} (~${s.durationSec}s)`)
+            .join(" → ")}.`
+        : "";
+
       const prompt = [
         req.stylePrompt,
+        ...(req.bpm ? [`Tempo: ${req.bpm} BPM.`] : []),
+        ...(structure ? [structure] : []),
         `Target duration: about ${seconds} seconds.`,
         instrumentalOnly
           ? "Instrumental only, no vocals."
-          : `Sung vocals performing these Arabic lyrics:\n${req.lyrics!.trim()}`,
+          : [
+              req.singer ? `${req.singer} Arabic lead vocals.` : "",
+              `Sung vocals performing these Arabic lyrics:\n${req.lyrics!.trim()}`,
+            ]
+              .filter(Boolean)
+              .join("\n"),
       ].join("\n");
 
       // النموذج يعيد 503 عند الازدحام المؤقت — نعيد المحاولة قبل الرجوع للمزوّد البديل
