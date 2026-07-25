@@ -24,6 +24,8 @@ export const VOICES: Voice[] = [
   // فلسطينية
   { id: "v-pal-m1", name: "عدي", gender: "male", dialect: "فلسطينية", provider: "elevenlabs", tone: "معبّر واحترافي — سرد ومحتوى راقٍ", elevenVoiceId: "8sSDN08XkFeN2zqNwCZk" },
   { id: "v-pal-m2", name: "خالد", gender: "male", dialect: "فلسطينية", provider: "elevenlabs", tone: "عميق وقوي — وثائقيات وإعلانات", elevenVoiceId: "drMurExmkWVIH5nW8snR" },
+  { id: "v-pal-f1", name: "لالوش", gender: "female", dialect: "فلسطينية", provider: "elevenlabs", tone: "ناعم وهادئ — بودكاست وسرد وتأمل", elevenVoiceId: "albaa6OioIhKtKdCEkQw" },
+  { id: "v-pal-f2", name: "لالوش الحيوية", gender: "female", dialect: "فلسطينية", provider: "elevenlabs", tone: "طاقة وحماس — ريلز وسوشيال ميديا", elevenVoiceId: "zAHOVUiYXuxggpSljiCQ" },
 
   // أردنية (شامية — الأقرب للفلسطينية)
   { id: "v-jor-f1", name: "فرح", gender: "female", dialect: "أردنية", provider: "elevenlabs", tone: "دافئ وعفوي — الأكثر استخداماً عربياً", elevenVoiceId: "4wf10lgibMnboGJGCLrP" },
