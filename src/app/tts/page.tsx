@@ -88,12 +88,53 @@ export default function TTSStudio() {
     }
   }
 
+  // ذاكرة النطق المتراكمة — «عقل» المنصة الذي يكبر مع كل تصحيح
+  const [pronOpen, setPronOpen] = useState(false);
+  const [pronRules, setPronRules] = useState<{ word: string; alias: string }[]>([]);
+  const [pronWord, setPronWord] = useState("");
+  const [pronAlias, setPronAlias] = useState("");
+  const [pronSaving, setPronSaving] = useState(false);
+  const [pronMsg, setPronMsg] = useState("");
+
   useEffect(() => {
     fetch("/api/voices")
       .then((r) => r.json())
       .then((d) => setCustomVoices(d.voices ?? []))
       .catch(() => {});
+    fetch("/api/pronunciation")
+      .then((r) => r.json())
+      .then((d) => setPronRules(d.rules ?? []))
+      .catch(() => {});
   }, []);
+
+  async function teachPronunciation() {
+    if (!pronWord.trim() || !pronAlias.trim()) return;
+    setPronSaving(true);
+    setPronMsg("");
+    try {
+      const res = await fetch("/api/pronunciation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ word: pronWord.trim(), alias: pronAlias.trim() }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "تعذّر الحفظ");
+
+      setPronRules((prev) => [{ word: pronWord.trim(), alias: pronAlias.trim() }, ...prev]);
+      setPronMsg(`تعلّمت المنصة نطق «${pronWord.trim()}» — سيُطبَّق تلقائياً من الآن فصاعداً`);
+      setPronWord("");
+      setPronAlias("");
+    } catch (e) {
+      setPronMsg(e instanceof Error ? e.message : "حدث خطأ");
+    } finally {
+      setPronSaving(false);
+    }
+  }
+
+  async function forgetPronunciation(word: string) {
+    setPronRules((prev) => prev.filter((r) => r.word !== word));
+    await fetch(`/api/pronunciation?word=${encodeURIComponent(word)}`, { method: "DELETE" }).catch(() => {});
+  }
 
   async function startRecording() {
     setCloneError("");
@@ -325,6 +366,86 @@ export default function TTSStudio() {
                 >
                   {cloning ? "جارٍ الاستنساخ..." : "🧬 استنسخ الصوت"}
                 </button>
+              </div>
+            )}
+          </div>
+
+          {/* ذاكرة النطق */}
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+            <button
+              onClick={() => setPronOpen(!pronOpen)}
+              className="flex w-full items-center justify-between text-sm font-bold"
+            >
+              <span>
+                🧠 ذاكرة النطق
+                {pronRules.length > 0 && (
+                  <span className="mx-2 rounded-full bg-primary/20 px-2 py-0.5 text-xs text-primary">
+                    {pronRules.length} كلمة
+                  </span>
+                )}
+              </span>
+              <span className={`text-muted transition-transform ${pronOpen ? "rotate-180" : ""}`}>⌄</span>
+            </button>
+
+            {pronOpen && (
+              <div className="mt-3 flex flex-col gap-3">
+                <p className="text-xs leading-relaxed text-muted">
+                  سمعت كلمة نُطقت خطأً؟ علّمها للمنصة مرة واحدة، وستنطقها صحيحة في كل مرة بعدها —
+                  للأبد ولكل الأصوات. هكذا يتعلّم الموقع ويتحسّن مع استخدامك.
+                </p>
+
+                <input
+                  value={pronWord}
+                  onChange={(e) => setPronWord(e.target.value)}
+                  maxLength={100}
+                  placeholder="الكلمة كما تُكتب... مثال: نابلس"
+                  className="rounded-lg border border-border-soft bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+                />
+                <input
+                  value={pronAlias}
+                  onChange={(e) => setPronAlias(e.target.value)}
+                  maxLength={200}
+                  placeholder="النطق الصحيح (مشكّلاً)... مثال: نَابُلُس"
+                  className="rounded-lg border border-border-soft bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+                />
+
+                <button
+                  onClick={teachPronunciation}
+                  disabled={pronSaving || !pronWord.trim() || !pronAlias.trim()}
+                  className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-strong disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {pronSaving ? "جارٍ التعليم..." : "🧠 علّم المنصة"}
+                </button>
+
+                {pronMsg && (
+                  <p className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-xs text-primary">
+                    {pronMsg}
+                  </p>
+                )}
+
+                {pronRules.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-xs font-semibold text-muted">ما تعلّمته المنصة:</p>
+                    {pronRules.slice(0, 12).map((r) => (
+                      <div
+                        key={r.word}
+                        className="flex items-center justify-between rounded-lg bg-surface px-3 py-1.5 text-xs"
+                      >
+                        <span>
+                          {r.word} <span className="text-muted">←</span>{" "}
+                          <span className="text-primary">{r.alias}</span>
+                        </span>
+                        <button
+                          onClick={() => forgetPronunciation(r.word)}
+                          className="text-muted transition-colors hover:text-red-400"
+                          title="حذف"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

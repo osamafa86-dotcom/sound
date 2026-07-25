@@ -1,5 +1,6 @@
 import { VOICES } from "@/lib/voices";
 import { pcm16ToWav } from "@/lib/mockAudio";
+import { findDictionary } from "@/lib/pronunciation";
 import type { AudioResult, MusicProvider, MusicRequest, TTSProvider, TTSRequest } from "./types";
 
 const API_BASE = "https://api.elevenlabs.io/v1";
@@ -50,6 +51,9 @@ export function elevenLabsTTS(apiKey: string): TTSProvider {
       const mp3Quality = process.env.ELEVENLABS_MP3_QUALITY ?? "mp3_44100_192";
       const outputFormat = wantWav ? "pcm_44100" : mp3Quality;
 
+      // ذاكرة النطق المتراكمة للمنصة — تُطبَّق تلقائياً على كل توليد
+      const dict = await findDictionary(apiKey).catch(() => null);
+
       const audio = await apiCall(
         `/text-to-speech/${elevenVoiceId}`,
         apiKey,
@@ -62,6 +66,11 @@ export function elevenLabsTTS(apiKey: string): TTSProvider {
             // النطاق المدعوم للسرعة في ElevenLabs هو 0.7–1.2
             speed: Math.min(1.2, Math.max(0.7, req.speed ?? 1)),
           },
+          ...(dict?.id && {
+            pronunciation_dictionary_locators: [
+              { pronunciation_dictionary_id: dict.id, ...(dict.versionId && { version_id: dict.versionId }) },
+            ],
+          }),
         },
         `?output_format=${outputFormat}`
       );
