@@ -206,7 +206,7 @@ export default function DramaStudio() {
             <AudioPlayer
               src={result.url}
               title={`${script.title} — ${result.voices} أصوات · ${Math.round(Number(result.duration))} ثانية`}
-              filename={`${script.title}.wav`}
+              filename={`${script.title}.mp3`}
               note="عمل مسموع متعدد الأصوات، بوقفات محسوبة بين الأسطر والمشاهد."
             >
               <SaveToLibrary
