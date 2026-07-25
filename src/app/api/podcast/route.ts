@@ -7,6 +7,7 @@ import {
 } from "@/lib/podcast/script";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
+import { ANY_DIALECT, DIALECT_OPTIONS } from "@/lib/dialects";
 import { logUsage } from "@/lib/usage";
 
 /** إعداد حلقة كاملة يستغرق وقتاً */
@@ -30,7 +31,8 @@ export async function POST(req: NextRequest) {
   const topic: string = typeof body?.topic === "string" ? body.topic.trim() : "";
   const length: PodcastLength = LENGTHS.includes(body?.length) ? body.length : "medium";
   const tone: PodcastTone = TONES.includes(body?.tone) ? body.tone : "informative";
-  const dialect: string = typeof body?.dialect === "string" && body.dialect ? body.dialect : "الفصحى";
+  const dialect: string =
+    typeof body?.dialect === "string" && DIALECT_OPTIONS.includes(body.dialect) ? body.dialect : ANY_DIALECT;
 
   if (!topic) return NextResponse.json({ error: "موضوع الحلقة مطلوب" }, { status: 400 });
   if (topic.length > PODCAST_LIMITS.maxTopicChars) {

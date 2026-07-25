@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeDrama } from "@/lib/drama/analyze";
 import { DRAMA_LIMITS } from "@/lib/drama/types";
+import { ANY_DIALECT, DIALECT_OPTIONS } from "@/lib/dialects";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
 
@@ -20,6 +21,8 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null);
   const text: string = typeof body?.text === "string" ? body.text.trim() : "";
+  const dialect: string =
+    typeof body?.dialect === "string" && DIALECT_OPTIONS.includes(body.dialect) ? body.dialect : ANY_DIALECT;
 
   if (!text) return NextResponse.json({ error: "النص مطلوب" }, { status: 400 });
   if (text.length > DRAMA_LIMITS.maxInputChars) {
@@ -30,7 +33,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    return NextResponse.json(await analyzeDrama(key, text));
+    return NextResponse.json(await analyzeDrama(key, text, dialect));
   } catch (e) {
     const msg = e instanceof Error ? e.message : "تعذّر تحليل النص";
     return NextResponse.json(

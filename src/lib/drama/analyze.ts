@@ -1,10 +1,13 @@
 import { MAQAMAT } from "@/lib/maqamat";
 import { VOICES } from "@/lib/voices";
+import { dialectInstruction, voiceCatalogText, voicesForDialect } from "@/lib/dialects";
 import { DRAMA_LIMITS, type DramaScript } from "./types";
 
 const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
-const SCHEMA = {
+function buildSchema(dialect?: string) {
+  const allowedVoices = voicesForDialect(dialect).map((v) => v.id);
+  return {
   type: "object",
   properties: {
     title: { type: "string", description: "عنوان العمل بالعربية" },
@@ -24,7 +27,7 @@ const SCHEMA = {
           id: { type: "string", description: "معرّف لاتيني قصير: narrator, char1, char2..." },
           name: { type: "string" },
           description: { type: "string", description: "العمر والطبع والدور، بالعربية" },
-          voiceId: { type: "string", enum: VOICES.map((v) => v.id) },
+          voiceId: { type: "string", enum: allowedVoices },
           voiceReason: { type: "string", description: "سبب اختيار الصوت في جملة قصيرة" },
         },
         required: ["id", "name", "description", "voiceId", "voiceReason"],
@@ -48,14 +51,13 @@ const SCHEMA = {
       },
     },
   },
-  required: ["title", "summary", "mood", "maqamId", "musicPromptEn", "characters", "lines"],
-  propertyOrdering: ["title", "summary", "mood", "maqamId", "musicPromptEn", "characters", "lines"],
-};
+    required: ["title", "summary", "mood", "maqamId", "musicPromptEn", "characters", "lines"],
+    propertyOrdering: ["title", "summary", "mood", "maqamId", "musicPromptEn", "characters", "lines"],
+  };
+}
 
-function buildPrompt(text: string): string {
-  const catalog = VOICES.map(
-    (v) => `- ${v.id}: ${v.name} — ${v.gender === "male" ? "ذكر" : "أنثى"}، لهجة ${v.dialect}. ${v.tone}`
-  ).join("\n");
+function buildPrompt(text: string, dialect?: string): string {
+  const catalog = voiceCatalogText(dialect);
   const maqamList = MAQAMAT.map((m) => `- ${m.id}: ${m.name} (${m.mood})`).join("\n");
 
   return `أنت مخرج درامي إذاعي محترف، تحوّل النصوص إلى أعمال مسموعة داخل منصة «مقام».
@@ -67,15 +69,19 @@ function buildPrompt(text: string): string {
 - إن كان النص سرداً خالصاً بلا حوار، فاجعل الراوي شخصية واحدة، وأضف شخصيات فقط إن ورد كلام منقول.
 - لكل شخصية: اسم ووصف موجز (العمر والطبع والدور).
 
-**٢. وزّع الأصوات** من كتالوج المنصة حصراً — راعِ الجنس والعمر واللهجة وطابع الصوت. لا تعطِ شخصيتين الصوت نفسه إلا للضرورة:
+**٢. اللغة والأداء**
+${dialectInstruction(dialect)}
+واكتب كل سطر **مشكّلاً تشكيلاً كاملاً**.
+
+**٣. وزّع الأصوات** من كتالوج المنصة حصراً — راعِ الجنس والعمر واللهجة وطابع الصوت. لا تعطِ شخصيتين الصوت نفسه إلا للضرورة:
 ${catalog}
 
-**٣. قسّم النص إلى أسطر** (بحد أقصى ${DRAMA_LIMITS.maxLines} سطراً):
+**٤. قسّم النص إلى أسطر** (بحد أقصى ${DRAMA_LIMITS.maxLines} سطراً):
 - كل سطر: من يقوله (characterId)، ونصه **مشكّلاً تشكيلاً كاملاً** ومطبّعاً (الأرقام والاختصارات إلى صيغتها المنطوقة).
 - احذف علامات الحوار مثل «قال فلان:» من نص السطر إن كان الصوت وحده يكفي للتمييز، وأبقِها في سطر الراوي إن كانت جزءاً من السرد.
 - لكل سطر: الحالة الشعورية، وقيمة stability بين 0 و1 (اخفضها إلى 0.25–0.4 في الانفعال والصراخ والبكاء، وارفعها إلى 0.6–0.8 في السرد المتزن)، وقيمة speed بين 0.85 و1.15، وpauseAfterMs بين 150 و1200 حسب إيقاع المشهد (وقفة أطول بين المشاهد وبعد الجُمل المؤثرة).
 
-**٤. اقترح موسيقى خلفية**: المقام الأنسب لمزاج العمل، وبرومبت إنجليزي لموسيقى **آلية بحتة** (بلا غناء) تصلح خلفية هادئة لا تطغى على الحوار:
+**٥. اقترح موسيقى خلفية**: المقام الأنسب لمزاج العمل، وبرومبت إنجليزي لموسيقى **آلية بحتة** (بلا غناء) تصلح خلفية هادئة لا تطغى على الحوار:
 ${maqamList}
 
 **قواعد ملزمة:** حافظ على معنى النص وأحداثه وترتيبه — لا تختصر ولا تخترع أحداثاً. كل characterId في الأسطر يجب أن يطابق معرّف شخصية عرّفتها. لا تتجاوز ${DRAMA_LIMITS.maxLines} سطراً؛ إن كان النص أطول فادمج الجمل المتقاربة في سطر واحد للشخصية نفسها.
@@ -86,17 +92,21 @@ ${text}
 """`;
 }
 
-export async function analyzeDrama(apiKey: string, text: string): Promise<DramaScript> {
+export async function analyzeDrama(
+  apiKey: string,
+  text: string,
+  dialect?: string
+): Promise<DramaScript> {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: buildPrompt(text) }] }],
+        contents: [{ role: "user", parts: [{ text: buildPrompt(text, dialect) }] }],
         generationConfig: {
           responseMimeType: "application/json",
-          responseSchema: SCHEMA,
+          responseSchema: buildSchema(dialect),
           temperature: 0.4,
           maxOutputTokens: 40000,
         },
@@ -121,16 +131,17 @@ export async function analyzeDrama(apiKey: string, text: string): Promise<DramaS
   const out = candidate?.content?.parts?.[0]?.text;
   if (!out) throw new Error("استجابة فارغة من المحلّل");
 
-  return sanitize(JSON.parse(out) as DramaScript);
+  return sanitize(JSON.parse(out) as DramaScript, dialect);
 }
 
 /** تطهير الناتج: أصوات صالحة، أسطر مربوطة بشخصيات موجودة، وقيم ضمن نطاقها */
-function sanitize(script: DramaScript): DramaScript {
+function sanitize(script: DramaScript, dialect?: string): DramaScript {
+  const allowed = voicesForDialect(dialect);
   const characters = (script.characters ?? [])
     .filter((c) => c.id && c.name)
     .map((c) => ({
       ...c,
-      voiceId: VOICES.some((v) => v.id === c.voiceId) ? c.voiceId : VOICES[0].id,
+      voiceId: allowed.some((v) => v.id === c.voiceId) ? c.voiceId : allowed[0].id,
     }));
 
   if (!characters.length) throw new Error("لم يتعرّف المحلّل على أي شخصية في النص");

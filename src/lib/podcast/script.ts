@@ -1,5 +1,6 @@
 import { MAQAMAT } from "@/lib/maqamat";
 import { VOICES } from "@/lib/voices";
+import { dialectInstruction, voiceCatalogText, voicesForDialect } from "@/lib/dialects";
 import type { DramaScript } from "@/lib/drama/types";
 
 /**
@@ -33,7 +34,9 @@ const TONES: Record<PodcastTone, string> = {
   storytelling: "سردي مشوّق — الموضوع يُروى كقصة لها بداية وذروة",
 };
 
-const SCHEMA = {
+function buildSchema(dialect: string) {
+  const allowedVoices = voicesForDialect(dialect).map((v) => v.id);
+  return {
   type: "object",
   properties: {
     title: { type: "string", description: "عنوان الحلقة بالعربية — جذاب ومحدد" },
@@ -54,7 +57,7 @@ const SCHEMA = {
           id: { type: "string", description: "host1 أو host2" },
           name: { type: "string", description: "اسم عربي طبيعي للمقدّم" },
           description: { type: "string", description: "دوره في الحلقة وطبعه في الحوار" },
-          voiceId: { type: "string", enum: VOICES.map((v) => v.id) },
+          voiceId: { type: "string", enum: allowedVoices },
           voiceReason: { type: "string" },
         },
         required: ["id", "name", "description", "voiceId", "voiceReason"],
@@ -78,14 +81,13 @@ const SCHEMA = {
       },
     },
   },
-  required: ["title", "summary", "mood", "maqamId", "musicPromptEn", "characters", "lines"],
-  propertyOrdering: ["title", "summary", "mood", "maqamId", "musicPromptEn", "characters", "lines"],
-};
+    required: ["title", "summary", "mood", "maqamId", "musicPromptEn", "characters", "lines"],
+    propertyOrdering: ["title", "summary", "mood", "maqamId", "musicPromptEn", "characters", "lines"],
+  };
+}
 
 function buildPrompt(topic: string, length: PodcastLength, tone: PodcastTone, dialect: string): string {
-  const catalog = VOICES.map(
-    (v) => `- ${v.id}: ${v.name} — ${v.gender === "male" ? "ذكر" : "أنثى"}، لهجة ${v.dialect}. ${v.tone}`
-  ).join("\n");
+  const catalog = voiceCatalogText(dialect);
   const target = PODCAST_LIMITS.lengths[length];
 
   return `أنت معدّ ومخرج بودكاست عربي محترف داخل منصة «مقام».
@@ -100,7 +102,7 @@ ${topic}
 - اجعل بينهما تمايزاً واضحاً في الدور: أحدهما يقود الحلقة ويطرح الأسئلة، والآخر يشرح ويضيف العمق — أو حسب النبرة المطلوبة.
 - يفضَّل اختلاف الجنس بينهما ليسهل على المستمع التمييز، إلا إذا اقتضى الموضوع غير ذلك.
 
-**٢. الأصوات** من كتالوج المنصة حصراً، وباللهجة ${dialect}:
+**٢. الأصوات** من كتالوج المنصة حصراً:
 ${catalog}
 
 **٣. بنية الحلقة** (نحو ${target.lines} سطراً، أي ${target.minutes} دقائق تقريباً):
@@ -112,6 +114,7 @@ ${catalog}
 
 **٥. قواعد اللغة والأداء**
 - اكتب كل سطر **مشكّلاً تشكيلاً كاملاً**، وحوّل الأرقام والاختصارات إلى صيغتها المنطوقة.
+- ${dialectInstruction(dialect)}
 - اجعل الحوار طبيعياً كما يُنطق فعلاً: جمل قصيرة، عبارات وصل («طيب»، «بالضبط»، «خلينا نوضّح»)، لا لغة مكتوبة جامدة.
 - لكل سطر: انفعاله، وstability بين 0.35 و0.75 (أقل في الحماس والضحك، أعلى في الشرح الرصين)، وspeed بين 0.9 و1.1، وpauseAfterMs بين 120 و600 (وقفات قصيرة داخل الحوار حتى لا يبدو متقطعاً).
 - لا تتجاوز ${PODCAST_LIMITS.maxLines} سطراً.
@@ -137,7 +140,7 @@ export async function generatePodcast(
         contents: [{ role: "user", parts: [{ text: buildPrompt(topic, length, tone, dialect) }] }],
         generationConfig: {
           responseMimeType: "application/json",
-          responseSchema: SCHEMA,
+          responseSchema: buildSchema(dialect),
           temperature: 0.85,
           maxOutputTokens: 40000,
         },
@@ -162,17 +165,18 @@ export async function generatePodcast(
   const out = candidate?.content?.parts?.[0]?.text;
   if (!out) throw new Error("استجابة فارغة من معدّ الحلقة");
 
-  return sanitize(JSON.parse(out) as DramaScript);
+  return sanitize(JSON.parse(out) as DramaScript, dialect);
 }
 
 /** تطهير مماثل للسيناريو الدرامي — أصوات صالحة وأسطر مربوطة بمقدّم موجود */
-function sanitize(script: DramaScript): DramaScript {
+function sanitize(script: DramaScript, dialect: string): DramaScript {
+  const allowed = voicesForDialect(dialect);
   const characters = (script.characters ?? [])
     .filter((c) => c.id && c.name)
     .slice(0, 2)
     .map((c) => ({
       ...c,
-      voiceId: VOICES.some((v) => v.id === c.voiceId) ? c.voiceId : VOICES[0].id,
+      voiceId: allowed.some((v) => v.id === c.voiceId) ? c.voiceId : allowed[0].id,
     }));
 
   if (!characters.length) throw new Error("لم يُنشئ المعدّ مقدّمي الحلقة");

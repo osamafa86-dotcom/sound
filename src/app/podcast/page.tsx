@@ -5,6 +5,7 @@ import AudioPlayer from "@/components/AudioPlayer";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import { VOICES } from "@/lib/voices";
 import { authHeaders } from "@/lib/supabase";
+import { ANY_DIALECT, DIALECT_OPTIONS } from "@/lib/dialects";
 import { PODCAST_LIMITS, type PodcastLength, type PodcastTone } from "@/lib/podcast/script";
 import type { DramaScript } from "@/lib/drama/types";
 
@@ -21,13 +22,11 @@ const TONES: { id: PodcastTone; label: string; hint: string }[] = [
   { id: "storytelling", label: "سردي", hint: "الموضوع يُروى كقصة" },
 ];
 
-const DIALECTS = ["الفصحى", "الفلسطينية", "الشامية", "المصرية", "الخليجية"];
-
 export default function PodcastStudio() {
   const [topic, setTopic] = useState("");
   const [length, setLength] = useState<PodcastLength>("medium");
   const [tone, setTone] = useState<PodcastTone>("informative");
-  const [dialect, setDialect] = useState(DIALECTS[0]);
+  const [dialect, setDialect] = useState<string>(ANY_DIALECT);
 
   const [script, setScript] = useState<DramaScript | null>(null);
   const [writing, setWriting] = useState(false);
@@ -148,16 +147,19 @@ export default function PodcastStudio() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold">اللهجة</label>
+            <label className="mb-2 block text-sm font-semibold">لهجة الكتابة والإلقاء</label>
             <select
               value={dialect}
               onChange={(e) => setDialect(e.target.value)}
               className="w-full rounded-xl border border-border-soft bg-surface-card px-3 py-2.5 text-sm outline-none focus:border-accent"
             >
-              {DIALECTS.map((d) => (
+              {DIALECT_OPTIONS.map((d) => (
                 <option key={d}>{d}</option>
               ))}
             </select>
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              تحدد لهجة الحوار المكتوب، وتحصر أصوات المقدّمَين في اللهجة نفسها.
+            </p>
           </div>
         </div>
 
