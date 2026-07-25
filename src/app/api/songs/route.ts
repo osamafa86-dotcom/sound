@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { MAQAMAT, INSTRUMENTS, SONG_STYLES } from "@/lib/maqamat";
-import { getMusicProvider, mockMusic } from "@/lib/providers";
-import type { AudioResult, MusicRequest } from "@/lib/providers/types";
+import { createJob, type GenerationTier } from "@/lib/jobs";
+import { runSongJob } from "@/lib/songWorker";
+import type { MusicRequest } from "@/lib/providers/types";
 
+/** إنشاء مهمة توليد أغنية — يعيد jobId فوراً ويستعلم العميل عن الحالة دورياً */
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const maqam = MAQAMAT.find((m) => m.id === body?.maqamId);
@@ -12,6 +14,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "المقام والأسلوب مطلوبان" }, { status: 400 });
   }
 
+  const tier: GenerationTier = body.tier === "preview" ? "preview" : "full";
   const instrumentIds: string[] = Array.isArray(body.instrumentIds) ? body.instrumentIds : [];
   const instruments = INSTRUMENTS.filter((i) => instrumentIds.includes(i.id));
 
@@ -26,36 +29,22 @@ export async function POST(req: NextRequest) {
     .filter(Boolean)
     .join(", ");
 
+  // المعاينة دائماً ~30 ثانية؛ الأغنية الكاملة بين 30 و180 ثانية
+  const requestedSec = Number.isFinite(body.durationSec) ? Number(body.durationSec) : 60;
+  const durationSec = tier === "preview" ? 30 : Math.min(180, Math.max(30, requestedSec));
+
   const request: MusicRequest = {
-    lyrics: body.lyrics,
+    lyrics: typeof body.lyrics === "string" ? body.lyrics.slice(0, 3000) : undefined,
     maqamId: maqam.id,
     styleId: style.id,
     instrumentIds,
     stylePrompt,
-    durationSec: body.durationSec,
+    durationSec,
   };
 
-  const provider = getMusicProvider();
-  let result: AudioResult;
-  let fallbackReason = "";
+  const job = createJob(tier, request);
+  // تنفيذ في الخلفية دون انتظار — العميل يتابع عبر GET /api/songs/{jobId}
+  void runSongJob(job.id);
 
-  try {
-    result = await provider.generate(request);
-  } catch (e) {
-    // المحرك الحقيقي غير متاح (شبكة/باقة/إعداد) — نرجع لمعاينة سلّم المقام
-    if (provider.id === "mock") throw e;
-    fallbackReason = e instanceof Error ? e.message : "unknown";
-    console.error("Music provider failed, falling back to mock:", fallbackReason);
-    result = await mockMusic.generate(request);
-  }
-
-  return new NextResponse(new Uint8Array(result.audio), {
-    headers: {
-      "Content-Type": result.mimeType,
-      "X-Provider": result.provider,
-      "X-Mock": result.mock ? "1" : "0",
-      "X-Style-Prompt": encodeURIComponent(stylePrompt),
-      ...(fallbackReason && { "X-Fallback": encodeURIComponent(fallbackReason.slice(0, 200)) }),
-    },
-  });
+  return NextResponse.json({ jobId: job.id, stylePrompt }, { status: 202 });
 }

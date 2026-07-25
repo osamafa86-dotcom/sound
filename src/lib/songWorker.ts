@@ -1,0 +1,52 @@
+import { getJob, updateJob } from "./jobs";
+import { getMusicProvider, mockMusic } from "./providers";
+
+const PROVIDER_LABELS: Record<string, string> = {
+  "eleven-music": "Eleven Music",
+  "lyria-clip": "Lyria 3 (معاينة)",
+  "lyria-pro": "Lyria 3 Pro",
+  mock: "الوضع التجريبي",
+};
+
+/** تنفيذ مهمة توليد أغنية في الخلفية — يُستدعى بدون انتظار من مسار الإنشاء */
+export async function runSongJob(jobId: string): Promise<void> {
+  const job = getJob(jobId);
+  if (!job || job.status !== "pending") return;
+
+  const provider = getMusicProvider({
+    tier: job.tier,
+    instrumental: job.request.styleId === "instrumental",
+  });
+  updateJob(jobId, {
+    status: "running",
+    stage: `جارٍ التلحين والتوليد عبر ${PROVIDER_LABELS[provider.id] ?? provider.id}...`,
+  });
+
+  try {
+    const result = await provider.generate(job.request);
+    updateJob(jobId, { status: "done", stage: "اكتمل التوليد", result });
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : "unknown";
+    if (provider.id === "mock") {
+      updateJob(jobId, { status: "failed", stage: "فشل التوليد", error: reason });
+      return;
+    }
+    // المحرك الحقيقي غير متاح (شبكة/باقة/إعداد) — نرجع لمعاينة سلّم المقام
+    console.error("Music provider failed, falling back to mock:", reason);
+    try {
+      const result = await mockMusic.generate(job.request);
+      updateJob(jobId, {
+        status: "done",
+        stage: "اكتمل التوليد (وضع تجريبي)",
+        result,
+        fellBack: reason.slice(0, 200),
+      });
+    } catch (mockError) {
+      updateJob(jobId, {
+        status: "failed",
+        stage: "فشل التوليد",
+        error: mockError instanceof Error ? mockError.message : "unknown",
+      });
+    }
+  }
+}

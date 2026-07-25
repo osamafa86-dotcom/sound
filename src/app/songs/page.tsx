@@ -9,13 +9,31 @@ const STEPS = ["الكلمات", "المقام والأسلوب", "التولي�
 
 type AssistResponse = AssistResult & { fellBack?: string };
 
+type JobStatusResponse = {
+  status: "pending" | "running" | "done" | "failed";
+  stage?: string;
+  stylePrompt?: string;
+  mock?: boolean;
+  fellBack?: string;
+  error?: string;
+};
+
+const DURATIONS = [
+  { sec: 60, label: "دقيقة" },
+  { sec: 120, label: "دقيقتان" },
+  { sec: 180, label: "3 دقائق" },
+] as const;
+
 export default function SongsStudio() {
   const [step, setStep] = useState(0);
   const [lyrics, setLyrics] = useState("");
   const [maqamId, setMaqamId] = useState(MAQAMAT[0].id);
   const [styleId, setStyleId] = useState<string>(SONG_STYLES[0].id);
   const [instrumentIds, setInstrumentIds] = useState<string[]>(["oud", "darbuka"]);
+  const [tier, setTier] = useState<"preview" | "full">("full");
+  const [durationSec, setDurationSec] = useState<number>(60);
   const [loading, setLoading] = useState(false);
+  const [stage, setStage] = useState("");
   const [result, setResult] = useState<{ url: string; mock: boolean; prompt: string; ext: string; fellBack: boolean } | null>(null);
   const [error, setError] = useState("");
 
@@ -60,6 +78,7 @@ export default function SongsStudio() {
   async function generate() {
     setError("");
     setLoading(true);
+    setStage("جارٍ إنشاء المهمة...");
     setResult(null);
     try {
       const res = await fetch("/api/songs", {
@@ -70,24 +89,56 @@ export default function SongsStudio() {
           maqamId,
           styleId,
           instrumentIds,
+          tier,
+          durationSec,
           // برومبت Claude يُمرَّر فقط ما دام المستخدم باقياً على المقام المقترح
           aiStylePrompt: assist && assist.maqamId === maqamId ? assist.stylePromptEn : undefined,
         }),
       });
+      const created = await res.json().catch(() => null);
       if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error ?? "تعذّر التوليد، حاول مجدداً");
+        throw new Error(created?.error ?? "تعذّر التوليد، حاول مجدداً");
       }
-      const mock = res.headers.get("X-Mock") === "1";
-      const fellBack = res.headers.has("X-Fallback");
-      const prompt = decodeURIComponent(res.headers.get("X-Style-Prompt") ?? "");
-      const blob = await res.blob();
+      const jobId: string = created.jobId;
+
+      // استعلام دوري عن حالة المهمة حتى الاكتمال (مهلة قصوى 5 دقائق)
+      const started = Date.now();
+      let status: JobStatusResponse | null = null;
+      while (Date.now() - started < 5 * 60_000) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const sres = await fetch(`/api/songs/${jobId}`);
+        status = (await sres.json().catch(() => null)) as JobStatusResponse | null;
+        if (!sres.ok) {
+          throw new Error(status?.error ?? "تعذّر متابعة حالة المهمة");
+        }
+        setStage(status?.stage ?? "");
+        if (status?.status === "done") break;
+        if (status?.status === "failed") {
+          throw new Error(status.error ?? "فشل التوليد، حاول مجدداً");
+        }
+      }
+      if (status?.status !== "done") {
+        throw new Error("انتهت مهلة انتظار التوليد، حاول مجدداً");
+      }
+
+      const ares = await fetch(`/api/songs/${jobId}/audio`);
+      if (!ares.ok) {
+        throw new Error("تعذّر جلب الملف الصوتي");
+      }
+      const blob = await ares.blob();
       const ext = blob.type === "audio/mpeg" ? "mp3" : "wav";
-      setResult({ url: URL.createObjectURL(blob), mock, prompt, ext, fellBack });
+      setResult({
+        url: URL.createObjectURL(blob),
+        mock: !!status.mock,
+        prompt: status.stylePrompt ?? "",
+        ext,
+        fellBack: !!status.fellBack,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
     } finally {
       setLoading(false);
+      setStage("");
     }
   }
 
@@ -290,6 +341,64 @@ export default function SongsStudio() {
         {/* الخطوة 3: التوليد */}
         {step === 2 && (
           <div className="flex flex-col gap-6">
+            <div>
+              <h2 className="mb-4 text-xl font-bold">مستوى التوليد</h2>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  onClick={() => setTier("preview")}
+                  className={`rounded-2xl border p-4 text-start transition-colors ${
+                    tier === "preview"
+                      ? "border-gold bg-gold/10"
+                      : "border-border-soft bg-surface-card hover:border-gold/50"
+                  }`}
+                >
+                  <span className="flex items-center justify-between">
+                    <span className="text-lg font-bold">🎧 معاينة سريعة</span>
+                    {tier === "preview" && <span className="text-gold">✓</span>}
+                  </span>
+                  <span className="mt-2 block text-xs leading-relaxed text-muted">
+                    مسودة آلية ~30 ثانية لتجربة المقام والأسلوب بأقل تكلفة (Lyria 3)، قبل توليد النسخة النهائية.
+                  </span>
+                </button>
+                <button
+                  onClick={() => setTier("full")}
+                  className={`rounded-2xl border p-4 text-start transition-colors ${
+                    tier === "full"
+                      ? "border-gold bg-gold/10"
+                      : "border-border-soft bg-surface-card hover:border-gold/50"
+                  }`}
+                >
+                  <span className="flex items-center justify-between">
+                    <span className="text-lg font-bold">🎼 النسخة الكاملة</span>
+                    {tier === "full" && <span className="text-gold">✓</span>}
+                  </span>
+                  <span className="mt-2 block text-xs leading-relaxed text-muted">
+                    {instrumental
+                      ? "موسيقى آلية كاملة بالمقام المختار (Lyria 3 Pro)."
+                      : "أغنية كاملة بالغناء العربي عبر Eleven Music."}
+                  </span>
+                </button>
+              </div>
+              {tier === "full" && (
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <span className="text-sm text-muted">المدة التقريبية:</span>
+                  {DURATIONS.map((d) => (
+                    <button
+                      key={d.sec}
+                      onClick={() => setDurationSec(d.sec)}
+                      className={`rounded-full border px-4 py-2 text-sm transition-colors ${
+                        durationSec === d.sec
+                          ? "border-accent bg-accent/10 text-accent"
+                          : "border-border-soft text-muted hover:text-body"
+                      }`}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="rounded-2xl border border-border-soft bg-surface-card p-6">
               <h2 className="mb-4 text-xl font-bold">ملخص أغنيتك</h2>
               <dl className="grid gap-3 text-sm sm:grid-cols-2">
@@ -329,7 +438,11 @@ export default function SongsStudio() {
               disabled={loading}
               className="rounded-xl bg-gold px-6 py-3.5 font-semibold text-surface transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              {loading ? "جارٍ التلحين والتوليد..." : "🎼 ولّد الأغنية"}
+              {loading
+                ? stage || "جارٍ التلحين والتوليد..."
+                : tier === "preview"
+                  ? "🎧 ولّد المعاينة"
+                  : "🎼 ولّد الأغنية"}
             </button>
 
             {result && (
@@ -339,7 +452,9 @@ export default function SongsStudio() {
                   title={
                     result.mock
                       ? `معاينة مقام ${maqam.name} (سلّم المقام بأرباع النغمات)`
-                      : `أغنيتك بمقام ${maqam.name}`
+                      : tier === "preview"
+                        ? `معاينة سريعة بمقام ${maqam.name}`
+                        : `أغنيتك بمقام ${maqam.name}`
                   }
                   mock={result.mock}
                   filename={`maqam-song.${result.ext}`}
