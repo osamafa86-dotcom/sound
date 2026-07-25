@@ -2,9 +2,12 @@
 
 import { useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
-import { INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
+import { DIALECTS, INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
+import type { AssistMode, AssistResult } from "@/lib/assistant/types";
 
 const STEPS = ["الكلمات", "المقام والأسلوب", "التوليد"] as const;
+
+type AssistResponse = AssistResult & { fellBack?: string };
 
 export default function SongsStudio() {
   const [step, setStep] = useState(0);
@@ -16,6 +19,12 @@ export default function SongsStudio() {
   const [result, setResult] = useState<{ url: string; mock: boolean; prompt: string; ext: string; fellBack: boolean } | null>(null);
   const [error, setError] = useState("");
 
+  const [idea, setIdea] = useState("");
+  const [dialectId, setDialectId] = useState<string>(DIALECTS[0].id);
+  const [assist, setAssist] = useState<AssistResponse | null>(null);
+  const [assistLoading, setAssistLoading] = useState<"" | AssistMode>("");
+  const [assistError, setAssistError] = useState("");
+
   const maqam = MAQAMAT.find((m) => m.id === maqamId)!;
   const instrumental = styleId === "instrumental";
 
@@ -23,6 +32,29 @@ export default function SongsStudio() {
     setInstrumentIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+  }
+
+  async function runAssist(mode: AssistMode) {
+    setAssistError("");
+    setAssistLoading(mode);
+    try {
+      const res = await fetch("/api/lyrics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode, idea, lyrics, dialectId, styleId }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error ?? "تعذّر تشغيل المساعد، حاول مجدداً");
+      }
+      setAssist(data);
+      setLyrics(data.lyrics);
+      setMaqamId(data.maqamId);
+    } catch (e) {
+      setAssistError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally {
+      setAssistLoading("");
+    }
   }
 
   async function generate() {
@@ -33,7 +65,14 @@ export default function SongsStudio() {
       const res = await fetch("/api/songs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lyrics, maqamId, styleId, instrumentIds }),
+        body: JSON.stringify({
+          lyrics,
+          maqamId,
+          styleId,
+          instrumentIds,
+          // برومبت Claude يُمرَّر فقط ما دام المستخدم باقياً على المقام المقترح
+          aiStylePrompt: assist && assist.maqamId === maqamId ? assist.stylePromptEn : undefined,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
@@ -85,22 +124,85 @@ export default function SongsStudio() {
         {/* الخطوة 1: الكلمات */}
         {step === 0 && (
           <div className="flex flex-col gap-4">
+            {/* مساعد الكلمات والمقامات */}
+            <div className="rounded-2xl border border-border-soft bg-surface-card p-5">
+              <h2 className="text-lg font-bold">
+                ✨ مساعد <span className="text-gradient">الكلمات والمقامات</span>
+              </h2>
+              <p className="mt-1 text-sm leading-relaxed text-muted">
+                اكتب فكرة أغنيتك ليؤلّف لك المساعد الكلمات ويقترح المقام الأنسب لمعناها، أو الصق كلماتك الجاهزة في الأسفل ثم حسّنها.
+              </p>
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                <input
+                  value={idea}
+                  onChange={(e) => setIdea(e.target.value)}
+                  maxLength={500}
+                  placeholder="فكرة الأغنية... مثال: شوق للوطن بعد سنين غربة"
+                  className="flex-1 rounded-xl border border-border-soft bg-surface p-3 text-sm outline-none transition-colors focus:border-gold"
+                />
+                <select
+                  value={dialectId}
+                  onChange={(e) => setDialectId(e.target.value)}
+                  className="rounded-xl border border-border-soft bg-surface p-3 text-sm outline-none transition-colors focus:border-gold"
+                >
+                  {DIALECTS.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  onClick={() => runAssist("write")}
+                  disabled={!!assistLoading || !idea.trim()}
+                  className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-strong disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {assistLoading === "write" ? "جارٍ التأليف..." : "✨ اكتب لي الكلمات"}
+                </button>
+                <button
+                  onClick={() => runAssist("improve")}
+                  disabled={!!assistLoading || !lyrics.trim()}
+                  className="rounded-xl border border-gold px-4 py-2 text-sm font-semibold text-gold transition-colors hover:bg-gold/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {assistLoading === "improve" ? "جارٍ التحسين..." : "✨ حسّن كلماتي واقترح المقام"}
+                </button>
+              </div>
+              {assistError && (
+                <p className="mt-3 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                  {assistError}
+                </p>
+              )}
+              {assist && (
+                <div className="mt-4 rounded-xl border border-gold/40 bg-gold/5 p-4 text-sm">
+                  <p className="font-semibold text-gold">
+                    {assist.title && assist.title !== "مسودة تجريبية" && `«${assist.title}» — `}
+                    المقام المقترح: {MAQAMAT.find((m) => m.id === assist.maqamId)?.name}
+                  </p>
+                  <p className="mt-1 leading-relaxed">{assist.maqamReason}</p>
+                  <p className="mt-2 text-xs text-muted">
+                    اعتُمد المقام المقترح تلقائياً — يمكنك تغييره في الخطوة التالية.
+                  </p>
+                  {assist.mock && (
+                    <p className="mt-2 text-xs text-muted">
+                      {assist.fellBack
+                        ? "تعذّر الوصول لمحرك Claude من هذه البيئة، فعُرض اقتراح تجريبي مبسّط بدلاً منه."
+                        : "اقتراح من الوضع التجريبي — يُفعَّل التأليف والتحليل الفعليان عند ربط مفتاح Claude API."}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
             <textarea
               value={lyrics}
               onChange={(e) => setLyrics(e.target.value)}
               maxLength={3000}
-              placeholder={"اكتب كلمات أغنيتك هنا (فصحى أو لهجة)...\n\nقريباً: مساعد الذكاء الاصطناعي لكتابة الكلمات وتحسينها واقتراح المقام الأنسب لمعناها."}
+              placeholder={"اكتب كلمات أغنيتك هنا (فصحى أو لهجة)...\nأو استخدم المساعد بالأعلى ليكتبها لك من فكرة."}
               className="min-h-72 w-full resize-y rounded-2xl border border-border-soft bg-surface-card p-5 leading-loose outline-none transition-colors focus:border-gold"
             />
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted">{lyrics.length} / 3000 حرف</span>
-              <button
-                disabled
-                title="يُفعَّل مع ربط مفتاح Claude API"
-                className="cursor-not-allowed rounded-xl border border-border-soft px-4 py-2 text-sm text-muted opacity-60"
-              >
-                ✨ تحسين بالذكاء الاصطناعي (قريباً)
-              </button>
             </div>
             <button
               onClick={() => setStep(1)}
