@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkLimit, limitResponse } from "@/lib/rateLimit";
 
 const API_BASE = "https://api.elevenlabs.io/v1";
 
@@ -25,6 +26,9 @@ export async function GET() {
 
 /** استنساخ صوت جديد من عينة صوتية (Instant Voice Cloning) */
 export async function POST(req: NextRequest) {
+  const limit = checkLimit(req, "voiceClone");
+  if (!limit.allowed) return limitResponse(limit);
+
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) {
     return NextResponse.json(

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkLimit, limitResponse } from "@/lib/rateLimit";
 
 const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
@@ -27,6 +28,9 @@ const RESULT_SCHEMA = {
 };
 
 export async function POST(req: NextRequest) {
+  const limit = checkLimit(req, "pronunciation");
+  if (!limit.allowed) return limitResponse(limit);
+
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
     return NextResponse.json(

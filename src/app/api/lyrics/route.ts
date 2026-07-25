@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { DIALECTS, SONG_STYLES } from "@/lib/maqamat";
 import { getLyricsAssistant, mockAssistant } from "@/lib/assistant";
 import type { AssistRequest, AssistResult } from "@/lib/assistant/types";
+import { checkLimit, limitResponse } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
+  const limit = checkLimit(req, "lyrics");
+  if (!limit.allowed) return limitResponse(limit);
+
   const body = await req.json().catch(() => null);
   const mode = body?.mode;
   if (mode !== "write" && mode !== "improve") {

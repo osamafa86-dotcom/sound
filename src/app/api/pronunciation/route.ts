@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { addRules, findDictionary, removeRules, type PronunciationRule } from "@/lib/pronunciation";
+import { checkLimit, limitResponse } from "@/lib/rateLimit";
 
 const API_BASE = "https://api.elevenlabs.io/v1";
 
@@ -33,6 +34,9 @@ export async function GET() {
 
 /** تعليم المنصة نطقاً جديداً */
 export async function POST(req: NextRequest) {
+  const limit = checkLimit(req, "pronunciation");
+  if (!limit.allowed) return limitResponse(limit);
+
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) {
     return NextResponse.json({ error: "ذاكرة النطق تتطلب مفتاح ElevenLabs" }, { status: 503 });

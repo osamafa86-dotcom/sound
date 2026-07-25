@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { MAQAMAT, INSTRUMENTS, SONG_STYLES } from "@/lib/maqamat";
 import { getMusicProvider, mockMusic } from "@/lib/providers";
 import type { AudioResult, MusicRequest } from "@/lib/providers/types";
+import { checkLimit, limitResponse } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
+  const limit = checkLimit(req, "songs");
+  if (!limit.allowed) return limitResponse(limit);
+
   const body = await req.json().catch(() => null);
   const maqam = MAQAMAT.find((m) => m.id === body?.maqamId);
   const style = SONG_STYLES.find((s) => s.id === body?.styleId);

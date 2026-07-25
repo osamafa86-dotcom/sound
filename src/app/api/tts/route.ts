@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTTSProvider, mockTTS } from "@/lib/providers";
 import type { AudioResult, TTSRequest } from "@/lib/providers/types";
+import { checkLimit, limitResponse } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
+  const limit = checkLimit(req, "tts");
+  if (!limit.allowed) return limitResponse(limit);
+
   const body = await req.json().catch(() => null);
   const text: string = body?.text?.trim();
 

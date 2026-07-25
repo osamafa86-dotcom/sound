@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkLimit, limitResponse } from "@/lib/rateLimit";
 
 const API_BASE = "https://api.elevenlabs.io/v1";
 
@@ -8,6 +9,9 @@ const DEFAULT_PREVIEW_TEXT =
 
 /** الخطوة 1: توليد معاينات صوتية من وصف نصي */
 export async function POST(req: NextRequest) {
+  const limit = checkLimit(req, "voiceDesign");
+  if (!limit.allowed) return limitResponse(limit);
+
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) {
     return NextResponse.json({ error: "تصميم الأصوات يتطلب مفتاح ElevenLabs" }, { status: 503 });
@@ -62,6 +66,9 @@ export async function POST(req: NextRequest) {
 
 /** الخطوة 2: حفظ المعاينة المختارة كصوت دائم في المكتبة */
 export async function PUT(req: NextRequest) {
+  const limit = checkLimit(req, "voiceDesign");
+  if (!limit.allowed) return limitResponse(limit);
+
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) {
     return NextResponse.json({ error: "تصميم الأصوات يتطلب مفتاح ElevenLabs" }, { status: 503 });
