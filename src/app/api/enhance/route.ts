@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { enhanceText } from "@/lib/textEnhance";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
+import { logUsage } from "@/lib/usage";
 
 /** التشكيل الكامل قد يستغرق وقتاً على النصوص الطويلة */
 export const maxDuration = 180;
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await enhanceText(key!, text, dialectHint);
+    await logUsage("enhance", user?.id ?? null);
     return NextResponse.json(result);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "تعذّر تحليل النص";

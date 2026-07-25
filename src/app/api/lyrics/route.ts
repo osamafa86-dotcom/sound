@@ -4,6 +4,7 @@ import { getLyricsAssistant, mockAssistant } from "@/lib/assistant";
 import { getPromptExemplars } from "@/lib/brain";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
+import { logUsage } from "@/lib/usage";
 import type { AssistRequest, AssistResult } from "@/lib/assistant/types";
 
 /** تأليف الكلمات عبر المساعد قد يستغرق دقائق على المهام المعقدة */
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
 
   try {
     result = await assistant.assist(request);
+    if (assistant.id !== "mock") await logUsage("lyrics", user?.id ?? null);
   } catch (e) {
     // المحرك الفعلي غير متاح (شبكة/مفتاح/رفض) — نرجع للاقتراح التجريبي
     if (assistant.id === "mock") {

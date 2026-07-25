@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { imageToMusicBrief } from "@/lib/imageBrief";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
+import { logUsage } from "@/lib/usage";
 
 /** تحليل الرؤية قد يستغرق وقتاً على الصور الكبيرة */
 export const maxDuration = 60;
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
   try {
     const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
     const brief = await imageToMusicBrief(apiKey, base64, file.type);
+    await logUsage("imageBrief", user?.id ?? null);
     return NextResponse.json(brief);
   } catch (e) {
     const message = e instanceof Error ? e.message : "تعذّر تحليل الصورة";

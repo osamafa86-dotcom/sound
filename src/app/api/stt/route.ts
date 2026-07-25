@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { elevenLabsTranscribe } from "@/lib/providers/elevenlabs";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
+import { logUsage } from "@/lib/usage";
 
 export const maxDuration = 120;
 
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const text = await elevenLabsTranscribe(apiKey, audio);
+    await logUsage("stt", user?.id ?? null);
     return NextResponse.json({ text, mock: false });
   } catch (e) {
     const message = e instanceof Error ? e.message : "تعذّر التفريغ";

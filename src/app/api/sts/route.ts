@@ -5,6 +5,7 @@ import { mockTTS } from "@/lib/providers";
 import { getCustomVoice } from "@/lib/customVoices";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
+import { logUsage } from "@/lib/usage";
 
 export const maxDuration = 120;
 
@@ -50,6 +51,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await elevenLabsSpeechToSpeech(apiKey, targetElevenId, audio);
+    await logUsage("sts", user?.id ?? null);
     return new NextResponse(new Uint8Array(result.audio), {
       headers: { "Content-Type": result.mimeType, "X-Mock": "0" },
     });

@@ -4,6 +4,7 @@ import { getVoiceTuning } from "@/lib/brain";
 import { getCustomVoice } from "@/lib/customVoices";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
+import { logUsage } from "@/lib/usage";
 import type { AudioResult, TTSRequest } from "@/lib/providers/types";
 
 /** النصوص الطويلة تستغرق وقتاً لدى المحرك — مهلة موسّعة على Vercel */
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest) {
 
   try {
     result = await provider.synthesize(request);
+    if (provider.id !== "mock") await logUsage("tts", user?.id ?? null);
   } catch (e) {
     // المحرك الحقيقي غير متاح (شبكة/رصيد/إعداد) — نرجع للوضع التجريبي بدل كسر التجربة
     if (provider.id === "mock") throw e;

@@ -25,11 +25,14 @@ const PROVIDER_NAMES: Record<string, string> = {
   mock: "تجريبي",
 };
 
+type UsageSummary = { monthTotal: number; byRoute: Record<string, number> };
+
 export default function Library() {
   const [items, setItems] = useState<Generation[]>([]);
   const [loading, setLoading] = useState(true);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [ratings, setRatings] = useState<Record<string, number>>({});
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,9 +46,13 @@ export default function Library() {
         return;
       }
       try {
-        const r = await fetch("/api/generations");
+        const [r, u] = await Promise.all([fetch("/api/generations"), fetch("/api/usage")]);
         const d = await r.json();
         if (!cancelled) setItems(d.generations ?? []);
+        if (u.ok) {
+          const us = await u.json();
+          if (!cancelled) setUsage(us);
+        }
       } catch {
         /* تجاهل */
       }
@@ -131,6 +138,30 @@ export default function Library() {
           </Link>
         </div>
       </div>
+
+      {usage && (
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { icon: "📚", label: "أعمال محفوظة", value: items.length },
+            { icon: "🎙️", label: "أصوات هذا الشهر", value: usage.byRoute.tts ?? 0 },
+            { icon: "🎼", label: "أغانٍ هذا الشهر", value: usage.byRoute.songs ?? 0 },
+            {
+              icon: "✨",
+              label: "مساعد وذكاء",
+              value:
+                (usage.byRoute.lyrics ?? 0) +
+                (usage.byRoute.enhance ?? 0) +
+                (usage.byRoute.imageBrief ?? 0),
+            },
+          ].map((s) => (
+            <div key={s.label} className="rounded-2xl border border-border-soft bg-surface-card p-4 text-center">
+              <p className="text-2xl">{s.icon}</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums">{s.value}</p>
+              <p className="mt-0.5 text-xs text-muted">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {items.length === 0 ? (
         <div className="mt-10 rounded-3xl border border-dashed border-border-soft bg-surface-card/50 p-16 text-center">
