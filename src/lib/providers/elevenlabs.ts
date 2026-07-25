@@ -34,8 +34,13 @@ export function elevenLabsTTS(apiKey: string): TTSProvider {
   return {
     id: "elevenlabs",
     async synthesize(req: TTSRequest): Promise<AudioResult> {
+      // الأصوات المستنسخة تصل بصيغة custom:<voice_id> مباشرة من حساب ElevenLabs
+      const customId = req.voiceId.startsWith("custom:") ? req.voiceId.slice(7) : undefined;
+      if (customId && !/^[A-Za-z0-9]{8,64}$/.test(customId)) {
+        throw new ElevenLabsError("معرّف الصوت المستنسخ غير صالح", 400);
+      }
       const voice = VOICES.find((v) => v.id === req.voiceId);
-      const elevenVoiceId = voice?.elevenVoiceId;
+      const elevenVoiceId = customId ?? voice?.elevenVoiceId;
       if (!elevenVoiceId) {
         throw new ElevenLabsError(`لا يوجد صوت ElevenLabs مطابق للمعرّف ${req.voiceId}`, 400);
       }

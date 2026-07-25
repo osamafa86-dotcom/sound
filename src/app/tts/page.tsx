@@ -1,13 +1,85 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
 import { DIALECTS, VOICES } from "@/lib/voices";
+
+type CustomVoice = { id: string; name: string };
 
 export default function TTSStudio() {
   const [text, setText] = useState("");
   const [dialect, setDialect] = useState<string>("الكل");
   const [voiceId, setVoiceId] = useState(VOICES[0].id);
+
+  // الأصوات المستنسخة + نموذج الاستنساخ
+  const [customVoices, setCustomVoices] = useState<CustomVoice[]>([]);
+  const [cloneOpen, setCloneOpen] = useState(false);
+  const [cloneName, setCloneName] = useState("");
+  const [cloneFile, setCloneFile] = useState<File | null>(null);
+  const [consent, setConsent] = useState(false);
+  const [cloning, setCloning] = useState(false);
+  const [cloneError, setCloneError] = useState("");
+  const [cloneSuccess, setCloneSuccess] = useState("");
+  const [recording, setRecording] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+
+  useEffect(() => {
+    fetch("/api/voices")
+      .then((r) => r.json())
+      .then((d) => setCustomVoices(d.voices ?? []))
+      .catch(() => {});
+  }, []);
+
+  async function startRecording() {
+    setCloneError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => chunksRef.current.push(e.data);
+      rec.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
+        setCloneFile(new File([blob], "تسجيل-مباشر.webm", { type: blob.type }));
+        stream.getTracks().forEach((t) => t.stop());
+      };
+      rec.start();
+      recorderRef.current = rec;
+      setRecording(true);
+    } catch {
+      setCloneError("تعذر الوصول للمايكروفون — تأكد من السماح للموقع باستخدامه");
+    }
+  }
+
+  function stopRecording() {
+    recorderRef.current?.stop();
+    setRecording(false);
+  }
+
+  async function submitClone() {
+    if (!cloneName.trim() || !cloneFile || !consent) return;
+    setCloneError("");
+    setCloneSuccess("");
+    setCloning(true);
+    try {
+      const fd = new FormData();
+      fd.append("name", cloneName.trim());
+      fd.append("file", cloneFile);
+      const res = await fetch("/api/voices", { method: "POST", body: fd });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "تعذر استنساخ الصوت");
+      setCustomVoices((prev) => [{ id: data.voiceId, name: data.name }, ...prev]);
+      setVoiceId(`custom:${data.voiceId}`);
+      setCloneSuccess(`تم إنشاء صوت «${data.name}» — اخترناه لك، اكتب نصاً وجرّبه!`);
+      setCloneName("");
+      setCloneFile(null);
+      setConsent(false);
+    } catch (e) {
+      setCloneError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally {
+      setCloning(false);
+    }
+  }
   const [speed, setSpeed] = useState(1);
   const [stability, setStability] = useState(0.5);
   const [format, setFormat] = useState<"mp3" | "wav">("mp3");
@@ -105,6 +177,117 @@ export default function TTSStudio() {
 
         {/* الإعدادات */}
         <aside className="flex h-fit flex-col gap-5 rounded-2xl border border-border-soft bg-surface-card p-5">
+          {/* استنساخ الصوت */}
+          <div className="rounded-xl border border-accent/30 bg-accent/5 p-4">
+            <button
+              onClick={() => setCloneOpen(!cloneOpen)}
+              className="flex w-full items-center justify-between text-sm font-bold"
+            >
+              <span>🎤 صوتك الخاص (استنساخ)</span>
+              <span className={`text-muted transition-transform ${cloneOpen ? "rotate-180" : ""}`}>⌄</span>
+            </button>
+
+            {cloneOpen && (
+              <div className="mt-3 flex flex-col gap-3">
+                <p className="text-xs leading-relaxed text-muted">
+                  ارفع عينة من صوتك (30 ثانية – 3 دقائق كلام واضح بلا ضجيج) أو سجّلها الآن،
+                  وسينطق الموقع أي نص بنفس نبرتك وطبقتك.
+                </p>
+
+                <input
+                  value={cloneName}
+                  onChange={(e) => setCloneName(e.target.value)}
+                  maxLength={60}
+                  placeholder="اسم الصوت... مثال: صوتي"
+                  className="rounded-lg border border-border-soft bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+
+                <div className="flex gap-2">
+                  <label className="flex-1 cursor-pointer rounded-lg border border-border-soft px-3 py-2 text-center text-xs text-muted transition-colors hover:border-accent hover:text-body">
+                    📁 اختر ملفاً
+                    <input
+                      type="file"
+                      accept="audio/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        setCloneFile(e.target.files?.[0] ?? null);
+                        setCloneError("");
+                      }}
+                    />
+                  </label>
+                  <button
+                    onClick={recording ? stopRecording : startRecording}
+                    className={`flex-1 rounded-lg border px-3 py-2 text-xs transition-colors ${
+                      recording
+                        ? "animate-pulse border-red-500 bg-red-500/10 text-red-300"
+                        : "border-border-soft text-muted hover:border-accent hover:text-body"
+                    }`}
+                  >
+                    {recording ? "⏹ إيقاف التسجيل" : "🔴 سجّل من المايك"}
+                  </button>
+                </div>
+
+                {cloneFile && (
+                  <p className="rounded-lg bg-surface px-3 py-2 text-xs text-accent">
+                    ✓ العينة جاهزة: {cloneFile.name} ({(cloneFile.size / 1024 / 1024).toFixed(1)}MB)
+                  </p>
+                )}
+
+                <label className="flex items-start gap-2 text-xs leading-relaxed text-muted">
+                  <input
+                    type="checkbox"
+                    checked={consent}
+                    onChange={(e) => setConsent(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  أقرّ أن هذا الصوت لي، أو أن لديّ إذناً صريحاً من صاحبه باستنساخه واستخدامه.
+                </label>
+
+                {cloneError && (
+                  <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                    {cloneError}
+                  </p>
+                )}
+                {cloneSuccess && (
+                  <p className="rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent">
+                    {cloneSuccess}
+                  </p>
+                )}
+
+                <button
+                  onClick={submitClone}
+                  disabled={cloning || !cloneName.trim() || !cloneFile || !consent}
+                  className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-surface transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {cloning ? "جارٍ الاستنساخ..." : "🧬 استنسخ الصوت"}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* أصواتي المستنسخة */}
+          {customVoices.length > 0 && (
+            <div>
+              <label className="mb-2 block text-sm font-semibold">أصواتي المستنسخة</label>
+              <div className="flex flex-col gap-2">
+                {customVoices.map((v) => (
+                  <button
+                    key={v.id}
+                    onClick={() => setVoiceId(`custom:${v.id}`)}
+                    className={`rounded-xl border px-3 py-2.5 text-start transition-colors ${
+                      voiceId === `custom:${v.id}`
+                        ? "border-accent bg-accent/10"
+                        : "border-border-soft hover:border-accent/50"
+                    }`}
+                  >
+                    <span className="font-semibold">🧬 {v.name}</span>
+                    <span className="mt-1 block text-xs text-muted">صوت مستنسخ — ينطق بنبرة صاحبه</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="mb-2 block text-sm font-semibold">اللهجة</label>
             <select
