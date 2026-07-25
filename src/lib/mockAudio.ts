@@ -25,7 +25,7 @@ function renderNotes(notes: Note[]): Float32Array {
     for (let i = 0; i < len && cursor + i < total; i++) {
       const t = i / SAMPLE_RATE;
       // أساس + هارمونيك ثانٍ خفيف لدفء الصوت (يقارب طابع الناي)
-      let sample =
+      const sample =
         0.7 * Math.sin(2 * Math.PI * note.freq * t) +
         0.2 * Math.sin(4 * Math.PI * note.freq * t) +
         0.06 * Math.sin(6 * Math.PI * note.freq * t);

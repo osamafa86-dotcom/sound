@@ -15,10 +15,11 @@ export async function POST(req: NextRequest) {
   const instrumentIds: string[] = Array.isArray(body.instrumentIds) ? body.instrumentIds : [];
   const instruments = INSTRUMENTS.filter((i) => instrumentIds.includes(i.id));
 
-  // بناء البرومبت الموسيقي — لاحقاً تتولاه طبقة Claude بصياغة أغنى وأدق
+  // بناء البرومبت الموسيقي — برومبت Claude الاحترافي (من مساعد الكلمات) إن توفر،
+  // وإلا تركيب محلي من بيانات المقام والأسلوب
+  const aiStylePrompt = typeof body.aiStylePrompt === "string" ? body.aiStylePrompt.trim().slice(0, 700) : "";
   const stylePrompt = [
-    maqam.stylePrompt,
-    style.en,
+    ...(aiStylePrompt ? [aiStylePrompt] : [maqam.stylePrompt, style.en]),
     instruments.map((i) => i.en).join(", "),
     "high quality studio production",
   ]

@@ -91,3 +91,13 @@ export const SONG_STYLES = [
   { id: "muwashah", name: "موشح / تراثي", en: "traditional muwashah" },
   { id: "instrumental", name: "موسيقى آلية (بدون غناء)", en: "instrumental only, no vocals" },
 ] as const;
+
+/** لهجات كتابة الكلمات المتاحة في مساعد الذكاء الاصطناعي */
+export const DIALECTS = [
+  { id: "fusha", name: "فصحى", en: "Modern Standard Arabic" },
+  { id: "egyptian", name: "مصرية", en: "Egyptian Arabic dialect" },
+  { id: "gulf", name: "خليجية", en: "Gulf Arabic dialect" },
+  { id: "levantine", name: "شامية", en: "Levantine Arabic dialect" },
+  { id: "iraqi", name: "عراقية", en: "Iraqi Arabic dialect" },
+  { id: "maghrebi", name: "مغربية", en: "Maghrebi Arabic dialect" },
+] as const;
