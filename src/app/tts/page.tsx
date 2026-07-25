@@ -107,6 +107,69 @@ export default function TTSStudio() {
       .catch(() => {});
   }, []);
 
+  // تعليم النطق بالصوت: تسجيل ← تحليل صوتي ← تشكيل دقيق
+  const [pronRecording, setPronRecording] = useState(false);
+  const [pronAnalyzing, setPronAnalyzing] = useState(false);
+  const [pronAnalysis, setPronAnalysis] = useState<{
+    heardWord: string;
+    vocalized: string;
+    ipa: string;
+    confidence: number;
+    note: string;
+  } | null>(null);
+  const pronRecRef = useRef<MediaRecorder | null>(null);
+  const pronChunksRef = useRef<Blob[]>([]);
+
+  async function startPronRecording() {
+    setPronMsg("");
+    setPronAnalysis(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      pronChunksRef.current = [];
+      rec.ondataavailable = (e) => pronChunksRef.current.push(e.data);
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const raw = new Blob(pronChunksRef.current, { type: rec.mimeType || "audio/webm" });
+        await analyzePronunciation(raw);
+      };
+      rec.start();
+      pronRecRef.current = rec;
+      setPronRecording(true);
+    } catch {
+      setPronMsg("تعذر الوصول للمايكروفون — تأكد من السماح للموقع باستخدامه");
+    }
+  }
+
+  function stopPronRecording() {
+    pronRecRef.current?.stop();
+    setPronRecording(false);
+  }
+
+  async function analyzePronunciation(raw: Blob) {
+    setPronAnalyzing(true);
+    try {
+      const { blobToWav } = await import("@/lib/wavEncoder");
+      const wav = await blobToWav(raw);
+
+      const fd = new FormData();
+      fd.append("file", new File([wav], "pron.wav", { type: "audio/wav" }));
+      if (pronWord.trim()) fd.append("word", pronWord.trim());
+
+      const res = await fetch("/api/pronunciation/from-audio", { method: "POST", body: fd });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "تعذّر تحليل التسجيل");
+
+      setPronAnalysis(data);
+      if (!pronWord.trim() && data.heardWord) setPronWord(data.heardWord);
+      setPronAlias(data.vocalized);
+    } catch (e) {
+      setPronMsg(e instanceof Error ? e.message : "حدث خطأ في التحليل");
+    } finally {
+      setPronAnalyzing(false);
+    }
+  }
+
   async function teachPronunciation() {
     if (!pronWord.trim() || !pronAlias.trim()) return;
     setPronSaving(true);
@@ -408,6 +471,45 @@ export default function TTSStudio() {
                   placeholder="النطق الصحيح (مشكّلاً)... مثال: نَابُلُس"
                   className="rounded-lg border border-border-soft bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
                 />
+
+                {/* التعليم بالصوت */}
+                <div className="rounded-lg border border-accent/30 bg-accent/5 p-3">
+                  <p className="mb-2 text-xs leading-relaxed text-muted">
+                    🎙️ <strong className="text-accent">أو علّمها بصوتك:</strong> انطق الكلمة بشكل
+                    صحيح، وسيستمع الذكاء الاصطناعي لتسجيلك ويستخرج التشكيل الدقيق بنفسه.
+                  </p>
+                  <button
+                    onClick={pronRecording ? stopPronRecording : startPronRecording}
+                    disabled={pronAnalyzing}
+                    className={`w-full rounded-lg border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                      pronRecording
+                        ? "animate-pulse border-red-500 bg-red-500/10 text-red-300"
+                        : "border-accent text-accent hover:bg-accent/10"
+                    }`}
+                  >
+                    {pronAnalyzing
+                      ? "جارٍ تحليل نطقك..."
+                      : pronRecording
+                        ? "⏹ أنهيت النطق"
+                        : "🎙️ سجّل نطق الكلمة"}
+                  </button>
+
+                  {pronAnalysis && (
+                    <div className="mt-3 rounded-lg bg-surface p-3 text-xs">
+                      <p className="font-semibold text-accent">
+                        سمعت: «{pronAnalysis.heardWord}» ← {pronAnalysis.vocalized}
+                      </p>
+                      <p dir="ltr" className="mt-1 text-muted">
+                        IPA: {pronAnalysis.ipa}
+                      </p>
+                      <p className="mt-1 leading-relaxed text-muted">{pronAnalysis.note}</p>
+                      <p className="mt-1 text-muted">
+                        الثقة: {Math.round((pronAnalysis.confidence ?? 0) * 100)}% — راجع الحقول
+                        أعلاه ثم احفظ.
+                      </p>
+                    </div>
+                  )}
+                </div>
 
                 <button
                   onClick={teachPronunciation}
