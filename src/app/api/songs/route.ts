@@ -28,11 +28,16 @@ export async function POST(req: NextRequest) {
   const instrumentIds: string[] = Array.isArray(body.instrumentIds) ? body.instrumentIds : [];
   const instruments = INSTRUMENTS.filter((i) => instrumentIds.includes(i.id));
 
+  // «نسخة أخرى»: رقم النسخة يوجّه المحرك للتنويع بدل إعادة إنتاج التوزيع نفسه
+  const variation =
+    Number.isInteger(body.variation) && body.variation > 0 ? Math.min(9, body.variation) : 0;
+
   const stylePrompt = buildStylePrompt({
     maqam,
     styleEn: style.en,
     instrumentsEn: instruments.map((i) => i.en),
     aiStylePrompt: typeof body.aiStylePrompt === "string" ? body.aiStylePrompt : undefined,
+    variation,
   });
 
   // المعاينة دائماً ~30 ثانية؛ الأغنية الكاملة بين 30 و180 ثانية

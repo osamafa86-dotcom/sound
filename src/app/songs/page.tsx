@@ -27,6 +27,28 @@ const DURATIONS = [
   { sec: 180, label: "3 دقائق" },
 ] as const;
 
+type SongResult = {
+  url: string;
+  blob: Blob;
+  jobId: string;
+  mock: boolean;
+  prompt: string;
+  ext: string;
+  fellBack: boolean;
+  provider?: string;
+  /** لقطة وقت التوليد — تسمح بعرض النسخ السابقة بعناوينها الصحيحة */
+  maqamName: string;
+  title: string;
+};
+
+type ImageBriefResponse = {
+  titleAr: string;
+  descriptionAr: string;
+  maqamId: string;
+  maqamReason: string;
+  stylePromptEn: string;
+};
+
 export default function SongsStudio() {
   const [step, setStep] = useState(0);
   const [lyrics, setLyrics] = useState("");
@@ -37,7 +59,9 @@ export default function SongsStudio() {
   const [durationSec, setDurationSec] = useState<number>(60);
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState("");
-  const [result, setResult] = useState<{ url: string; blob: Blob; jobId: string; mock: boolean; prompt: string; ext: string; fellBack: boolean; provider?: string } | null>(null);
+  const [result, setResult] = useState<SongResult | null>(null);
+  /** كل نسخ هذه الجلسة بالأحدث أولاً — للمقارنة واختيار الأفضل */
+  const [versions, setVersions] = useState<SongResult[]>([]);
   const [error, setError] = useState("");
 
   const [idea, setIdea] = useState("");
@@ -45,6 +69,12 @@ export default function SongsStudio() {
   const [assist, setAssist] = useState<AssistResponse | null>(null);
   const [assistLoading, setAssistLoading] = useState<"" | AssistMode>("");
   const [assistError, setAssistError] = useState("");
+
+  // من صورة إلى موسيقى — عين المنصة
+  const [imageBrief, setImageBrief] = useState<ImageBriefResponse | null>(null);
+  const [imagePreview, setImagePreview] = useState("");
+  const [imageAnalyzing, setImageAnalyzing] = useState(false);
+  const [imageError, setImageError] = useState("");
 
   const maqam = MAQAMAT.find((m) => m.id === maqamId)!;
   const instrumental = styleId === "instrumental";
@@ -78,12 +108,49 @@ export default function SongsStudio() {
     }
   }
 
+  async function analyzeImage(file: File) {
+    setImageError("");
+    setImageBrief(null);
+    setImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    setImageAnalyzing(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/songs/image-brief", {
+        method: "POST",
+        headers: await authHeaders(),
+        body: fd,
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "تعذّر تحليل الصورة");
+      setImageBrief(data);
+      // اعتماد قراءة الصورة تلقائياً: مقامها المقترح وأسلوب موسيقي آلي
+      setMaqamId(data.maqamId);
+      setStyleId("instrumental");
+    } catch (e) {
+      setImageError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally {
+      setImageAnalyzing(false);
+    }
+  }
+
   async function generate() {
     setError("");
     setLoading(true);
     setStage("جارٍ إنشاء المهمة...");
     setResult(null);
     try {
+      // أولوية البرومبت: موجز الصورة ثم المساعد — ما دام المستخدم باقياً على المقام المقترح
+      const aiStylePrompt =
+        imageBrief && imageBrief.maqamId === maqamId && styleId === "instrumental"
+          ? imageBrief.stylePromptEn
+          : assist && assist.maqamId === maqamId
+            ? assist.stylePromptEn
+            : undefined;
+
       const res = await fetch("/api/songs", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
@@ -94,8 +161,9 @@ export default function SongsStudio() {
           instrumentIds,
           tier,
           durationSec,
-          // برومبت Claude يُمرَّر فقط ما دام المستخدم باقياً على المقام المقترح
-          aiStylePrompt: assist && assist.maqamId === maqamId ? assist.stylePromptEn : undefined,
+          aiStylePrompt,
+          // «نسخة أخرى»: رقم النسخة يدفع المحرك للتنويع بدل تكرار التوزيع
+          variation: versions.length,
         }),
       });
       const created = await res.json().catch(() => null);
@@ -130,7 +198,8 @@ export default function SongsStudio() {
       }
       const blob = await ares.blob();
       const ext = blob.type === "audio/mpeg" ? "mp3" : "wav";
-      setResult({
+      const maqamName = MAQAMAT.find((m) => m.id === maqamId)?.name ?? "";
+      const song: SongResult = {
         url: URL.createObjectURL(blob),
         blob,
         jobId,
@@ -139,7 +208,18 @@ export default function SongsStudio() {
         ext,
         fellBack: !!status.fellBack,
         provider: status.provider,
-      });
+        maqamName,
+        title:
+          assist?.title && assist.title !== "مسودة تجريبية"
+            ? assist.title
+            : imageBrief?.titleAr && styleId === "instrumental"
+              ? imageBrief.titleAr
+              : tier === "preview"
+                ? `معاينة بمقام ${maqamName}`
+                : `أغنية بمقام ${maqamName}`,
+      };
+      setResult(song);
+      setVersions((prev) => [song, ...prev]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
     } finally {
@@ -247,6 +327,60 @@ export default function SongsStudio() {
                         : "اقتراح من الوضع التجريبي — يُفعَّل التأليف والتحليل الفعليان عند ربط مفتاح Claude API."}
                     </p>
                   )}
+                </div>
+              )}
+            </div>
+
+            {/* من صورة إلى موسيقى */}
+            <div className="rounded-2xl border border-border-soft bg-surface-card p-5">
+              <h2 className="text-lg font-bold">
+                🖼️ من صورة إلى <span className="text-gradient">موسيقى</span>
+              </h2>
+              <p className="mt-1 text-sm leading-relaxed text-muted">
+                ارفع صورة — مشهداً، لوحة، ذكرى — وستقرأ المنصة مزاجها وتقترح المقام وتؤلف لها موسيقاها.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <label className="cursor-pointer rounded-xl border border-accent px-4 py-2 text-sm font-semibold text-accent transition-colors hover:bg-accent/10">
+                  {imageAnalyzing ? "جارٍ قراءة الصورة..." : imagePreview ? "🖼️ صورة أخرى" : "🖼️ اختر صورة"}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    disabled={imageAnalyzing}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) analyzeImage(f);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {imagePreview && (
+                  /* eslint-disable-next-line @next/next/no-img-element -- معاينة blob محلية */
+                  <img
+                    src={imagePreview}
+                    alt="الصورة المرفوعة"
+                    className="h-16 w-16 rounded-xl border border-border-soft object-cover"
+                  />
+                )}
+              </div>
+              {imageError && (
+                <p className="mt-3 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                  {imageError}
+                </p>
+              )}
+              {imageBrief && (
+                <div className="mt-4 rounded-xl border border-accent/40 bg-accent/5 p-4 text-sm">
+                  <p className="font-semibold text-accent">
+                    «{imageBrief.titleAr}» — المقام المقترح: {MAQAMAT.find((m) => m.id === imageBrief.maqamId)?.name}
+                  </p>
+                  <p className="mt-1 leading-relaxed">{imageBrief.descriptionAr}</p>
+                  <p className="mt-1 text-xs text-muted">{imageBrief.maqamReason}</p>
+                  <button
+                    onClick={() => setStep(2)}
+                    className="mt-3 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-surface transition-opacity hover:opacity-90"
+                  >
+                    🎼 اعتمد وانتقل للتوليد ←
+                  </button>
                 </div>
               )}
             </div>
@@ -457,13 +591,13 @@ export default function SongsStudio() {
                   src={result.url}
                   title={
                     result.mock
-                      ? `معاينة مقام ${maqam.name} (سلّم المقام بأرباع النغمات)`
-                      : tier === "preview"
-                        ? `معاينة سريعة بمقام ${maqam.name}`
-                        : `أغنيتك بمقام ${maqam.name}`
+                      ? `معاينة مقام ${result.maqamName} (سلّم المقام بأرباع النغمات)`
+                      : versions.length > 1
+                        ? `«${result.title}» — النسخة ${versions.length}`
+                        : `«${result.title}»`
                   }
                   mock={result.mock}
-                  filename={`maqam-song.${result.ext}`}
+                  filename={`maqam-song-v${versions.length}.${result.ext}`}
                   note={
                     result.fellBack
                       ? "تعذّر الوصول لمحرك التوليد من هذه البيئة (أو تتطلب الميزة باقة مدفوعة)، فعُرض سلّم المقام التجريبي بدلاً منه."
@@ -473,26 +607,55 @@ export default function SongsStudio() {
                   <SaveToLibrary
                     url={result.url}
                     kind="song"
-                    title={
-                      assist?.title && assist.title !== "مسودة تجريبية"
-                        ? assist.title
-                        : tier === "preview"
-                          ? `معاينة بمقام ${maqam.name}`
-                          : `أغنية بمقام ${maqam.name}`
-                    }
+                    title={result.title}
                     content={lyrics}
                     maqamId={maqamId}
                     styleId={styleId}
                     provider={result.provider}
-                    settings={{ instrumentIds, tier, durationSec }}
+                    settings={{ instrumentIds, tier, durationSec, stylePrompt: result.prompt }}
                   />
                 </AudioPlayer>
+
+                <button
+                  onClick={generate}
+                  disabled={loading}
+                  className="self-start rounded-xl border border-gold px-5 py-2.5 text-sm font-semibold text-gold transition-colors hover:bg-gold/10 disabled:opacity-50"
+                >
+                  🔁 ولّد نسخة أخرى بنفس الإعدادات
+                </button>
+
                 {result.prompt && (
                   <div className="rounded-2xl border border-border-soft bg-surface-card p-4">
                     <p className="mb-2 text-sm font-semibold">البرومبت الموسيقي المُولَّد لمحرك الذكاء الاصطناعي:</p>
                     <code dir="ltr" className="block rounded-lg bg-surface p-3 text-xs leading-relaxed text-accent">
                       {result.prompt}
                     </code>
+                  </div>
+                )}
+
+                {versions.length > 1 && (
+                  <div className="flex flex-col gap-3">
+                    <h3 className="text-sm font-semibold text-muted">نسخ سابقة للمقارنة — احفظ أفضلها في مكتبتك</h3>
+                    {versions.slice(1).map((v, i) => (
+                      <AudioPlayer
+                        key={v.jobId}
+                        src={v.url}
+                        title={`«${v.title}» — النسخة ${versions.length - 1 - i}`}
+                        mock={v.mock}
+                        filename={`maqam-song-v${versions.length - 1 - i}.${v.ext}`}
+                      >
+                        <SaveToLibrary
+                          url={v.url}
+                          kind="song"
+                          title={v.title}
+                          content={lyrics}
+                          maqamId={maqamId}
+                          styleId={styleId}
+                          provider={v.provider}
+                          settings={{ instrumentIds, tier, durationSec, stylePrompt: v.prompt }}
+                        />
+                      </AudioPlayer>
+                    ))}
                   </div>
                 )}
               </div>

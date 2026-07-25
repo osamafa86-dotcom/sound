@@ -43,4 +43,12 @@ describe("بناء البرومبت الموسيقي", () => {
     const prompt = buildStylePrompt({ maqam, styleEn: "pop", instrumentsEn: [] });
     expect(prompt).not.toContain(", ,");
   });
+
+  it("«نسخة أخرى»: رقم النسخة يضيف توجيه التنويع", () => {
+    const base = buildStylePrompt({ maqam, styleEn: "pop", instrumentsEn: ["oud"] });
+    const alt = buildStylePrompt({ maqam, styleEn: "pop", instrumentsEn: ["oud"], variation: 1 });
+    expect(base).not.toContain("alternate take");
+    expect(alt).toContain("alternate take 2");
+    expect(alt).toContain("same maqam and mood");
+  });
 });

@@ -10,12 +10,19 @@ export function buildStylePrompt(opts: {
   styleEn: string;
   instrumentsEn: string[];
   aiStylePrompt?: string;
+  /** رقم النسخة البديلة (١ فأعلى) — يوجّه المحرك لتنويع التوزيع مع بقاء المقام والمزاج */
+  variation?: number;
 }): string {
   const ai = opts.aiStylePrompt?.trim().slice(0, 700) ?? "";
   return [
     ...(ai ? [ai] : [opts.maqam.stylePrompt, opts.styleEn]),
     opts.instrumentsEn.join(", "),
     "high quality studio production",
+    ...(opts.variation
+      ? [
+          `alternate take ${opts.variation + 1}: different intro, varied arrangement and dynamics, same maqam and mood`,
+        ]
+      : []),
   ]
     .filter(Boolean)
     .join(", ");
