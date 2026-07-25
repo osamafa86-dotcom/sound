@@ -23,37 +23,41 @@ export async function renderDrama(
 
   const total = script.lines.length;
   let done = 0;
-
   const segments: Buffer[] = new Array(total);
-  const queue = script.lines.map((line, index) => ({ line, index }));
 
-  // توليد متوازٍ محدود: يقصّر الزمن دون إغراق المزوّد بالطلبات
-  async function worker() {
-    for (;;) {
-      const item = queue.shift();
-      if (!item) return;
-      const { line, index } = item;
+  /**
+   * التوازي بالصوت لا بالسطر: ElevenLabs يرفض طلبين متزامنين على الصوت نفسه
+   * (409 already_running). فنجمع أسطر كل صوت في مسار يُنفَّذ بالتسلسل،
+   * والمسارات المختلفة تعمل معاً — يبقى الزمن قصيراً بلا تعارض.
+   */
+  const byVoice = new Map<string, { line: (typeof script.lines)[number]; index: number }[]>();
+  script.lines.forEach((line, index) => {
+    const catalogVoice = VOICES.find((v) => v.id === voiceOf.get(line.characterId));
+    const elevenVoiceId = catalogVoice?.elevenVoiceId ?? VOICES[0].elevenVoiceId!;
+    const bucket = byVoice.get(elevenVoiceId);
+    if (bucket) bucket.push({ line, index });
+    else byVoice.set(elevenVoiceId, [{ line, index }]);
+  });
 
-      const catalogVoice = VOICES.find((v) => v.id === voiceOf.get(line.characterId));
-      const elevenVoiceId = catalogVoice?.elevenVoiceId ?? VOICES[0].elevenVoiceId!;
-
-      segments[index] = await synthesizeLine(
-        apiKey,
-        elevenVoiceId,
-        withPause(line.text, line.pauseAfterMs),
-        line.stability,
-        line.speed,
-        dict
-      );
-
-      done++;
-      onProgress?.(done, total);
-    }
+  const voiceTracks = [...byVoice.entries()];
+  for (let i = 0; i < voiceTracks.length; i += DRAMA_LIMITS.concurrency) {
+    await Promise.all(
+      voiceTracks.slice(i, i + DRAMA_LIMITS.concurrency).map(async ([elevenVoiceId, items]) => {
+        for (const { line, index } of items) {
+          segments[index] = await synthesizeLine(
+            apiKey,
+            elevenVoiceId,
+            withPause(line.text, line.pauseAfterMs),
+            line.stability,
+            line.speed,
+            dict
+          );
+          done++;
+          onProgress?.(done, total);
+        }
+      })
+    );
   }
-
-  await Promise.all(
-    Array.from({ length: Math.min(DRAMA_LIMITS.concurrency, total) }, () => worker())
-  );
 
   const audio = Buffer.concat(segments.filter(Boolean));
   return { audio, durationSec: audio.length / BYTES_PER_SEC };
@@ -72,7 +76,8 @@ async function synthesizeLine(
   text: string,
   stability: number,
   speed: number,
-  dict: { id: string; versionId: string } | null
+  dict: { id: string; versionId: string } | null,
+  attempt = 0
 ): Promise<Buffer> {
   const res = await fetch(
     `${API_BASE}/text-to-speech/${elevenVoiceId}?output_format=${OUTPUT_FORMAT}`,
@@ -98,6 +103,11 @@ async function synthesizeLine(
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
+    // تعارض أو ازدحام لحظي: مهلة قصيرة ثم محاولة أخيرة قبل إفشال الإنتاج كله
+    if ((res.status === 409 || res.status === 429) && attempt < 2) {
+      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+      return synthesizeLine(apiKey, elevenVoiceId, text, stability, speed, dict, attempt + 1);
+    }
     throw new Error(`ElevenLabs ${res.status}: ${detail.slice(0, 200)}`);
   }
   return Buffer.from(await res.arrayBuffer());

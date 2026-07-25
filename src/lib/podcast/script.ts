@@ -68,7 +68,7 @@ const SCHEMA = {
         properties: {
           characterId: { type: "string" },
           text: { type: "string", description: "نص الحوار مشكّلاً تشكيلاً كاملاً" },
-          emotion: { type: "string" },
+          emotion: { type: "string", description: "الحالة الشعورية بالعربية في كلمة أو كلمتين" },
           stability: { type: "number" },
           speed: { type: "number" },
           pauseAfterMs: { type: "number" },
