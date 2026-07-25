@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { consumeRateLimit, rateLimitFor, rateLimitKey, RATE_LIMITS, SIGNED_IN_MULTIPLIER } from "@/lib/rateLimit";
+import { consumeRateLimit, rateLimitFor, rateLimitKey, LIMITS, SIGNED_IN_MULTIPLIER } from "@/lib/rateLimit";
 
 // بيئة الاختبار بلا Supabase → يعمل عدّاد الذاكرة
 
@@ -34,7 +34,7 @@ describe("تحديد معدل الاستخدام (عدّاد الذاكرة)", (
   });
 
   it("المسجلون يحصلون على حدود مضاعفة", () => {
-    expect(rateLimitFor("songs", true)).toBe(RATE_LIMITS.songs * SIGNED_IN_MULTIPLIER);
-    expect(rateLimitFor("songs", false)).toBe(RATE_LIMITS.songs);
+    expect(rateLimitFor("songs", true)).toBe(LIMITS.songs.perVisitor * SIGNED_IN_MULTIPLIER);
+    expect(rateLimitFor("songs", false)).toBe(LIMITS.songs.perVisitor);
   });
 });

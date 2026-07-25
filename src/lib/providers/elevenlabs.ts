@@ -1,5 +1,6 @@
 import { VOICES } from "@/lib/voices";
 import { pcm16ToWav } from "@/lib/mockAudio";
+import { findDictionary } from "@/lib/pronunciation";
 import { splitTextForTTS } from "@/lib/tts/split";
 import type { AudioResult, MusicProvider, MusicRequest, TTSProvider, TTSRequest } from "./types";
 
@@ -12,19 +13,6 @@ class ElevenLabsError extends Error {
   constructor(message: string, readonly status: number) {
     super(message);
   }
-}
-
-async function apiCallMultipart(path: string, apiKey: string, form: FormData): Promise<Response> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers: { "xi-api-key": apiKey },
-    body: form,
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new ElevenLabsError(`ElevenLabs ${res.status}: ${detail.slice(0, 300)}`, res.status);
-  }
-  return res;
 }
 
 async function apiCall(path: string, apiKey: string, body: unknown, query = ""): Promise<Buffer> {
@@ -44,19 +32,42 @@ async function apiCall(path: string, apiKey: string, body: unknown, query = ""):
   return Buffer.from(await res.arrayBuffer());
 }
 
+async function apiCallMultipart(path: string, apiKey: string, form: FormData): Promise<Response> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { "xi-api-key": apiKey },
+    body: form,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new ElevenLabsError(`ElevenLabs ${res.status}: ${detail.slice(0, 300)}`, res.status);
+  }
+  return res;
+}
+
 export function elevenLabsTTS(apiKey: string): TTSProvider {
   return {
     id: "elevenlabs",
     async synthesize(req: TTSRequest): Promise<AudioResult> {
-      // الأصوات المستنسخة تمرر معرّف ElevenLabs مباشرة؛ أصوات الكتالوج تُحل من القائمة
+      // الأصوات المستنسخة تصل بصيغة custom:<voice_id> مباشرة من حساب ElevenLabs،
+      // أو كمعرّف ElevenLabs مباشر (elevenVoiceId) من سجل أصوات المستخدم
+      const customId = req.voiceId.startsWith("custom:") ? req.voiceId.slice(7) : undefined;
+      if (customId && !/^[A-Za-z0-9]{8,64}$/.test(customId)) {
+        throw new ElevenLabsError("معرّف الصوت المستنسخ غير صالح", 400);
+      }
       const voice = VOICES.find((v) => v.id === req.voiceId);
-      const elevenVoiceId = req.elevenVoiceId ?? voice?.elevenVoiceId;
+      const elevenVoiceId = req.elevenVoiceId ?? customId ?? voice?.elevenVoiceId;
       if (!elevenVoiceId) {
         throw new ElevenLabsError(`لا يوجد صوت ElevenLabs مطابق للمعرّف ${req.voiceId}`, 400);
       }
 
       const wantWav = req.format === "wav";
-      const outputFormat = wantWav ? "pcm_44100" : "mp3_44100_128";
+      // باقة Creator تتيح جودة 192kbps — قابلة للتخفيض عبر متغير البيئة عند تغيير الباقة
+      const mp3Quality = process.env.ELEVENLABS_MP3_QUALITY ?? "mp3_44100_192";
+      const outputFormat = wantWav ? "pcm_44100" : mp3Quality;
+
+      // ذاكرة النطق المتراكمة للمنصة — تُطبَّق تلقائياً على كل توليد
+      const dict = await findDictionary(apiKey).catch(() => null);
 
       // النصوص الطويلة تُقسَّم عند حدود الجمل وتُدمج مخرجاتها (mp3 مباشرة، وwav عبر PCM خام)
       const chunks = splitTextForTTS(req.text);
@@ -75,6 +86,11 @@ export function elevenLabsTTS(apiKey: string): TTSProvider {
                 // النطاق المدعوم للسرعة في ElevenLabs هو 0.7–1.2
                 speed: Math.min(1.2, Math.max(0.7, req.speed ?? 1)),
               },
+              ...(dict?.id && {
+                pronunciation_dictionary_locators: [
+                  { pronunciation_dictionary_id: dict.id, ...(dict.versionId && { version_id: dict.versionId }) },
+                ],
+              }),
             },
             `?output_format=${outputFormat}`
           )

@@ -1,25 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DIALECTS, SONG_STYLES } from "@/lib/maqamat";
 import { getLyricsAssistant, mockAssistant } from "@/lib/assistant";
-import { consumeRateLimit, rateLimitFor, rateLimitKey } from "@/lib/rateLimit";
-import { clientIp, getUserFromRequest } from "@/lib/serverAuth";
+import { checkLimit, limitResponse } from "@/lib/rateLimit";
+import { getUserFromRequest } from "@/lib/serverAuth";
 import type { AssistRequest, AssistResult } from "@/lib/assistant/types";
 
-/** تأليف الكلمات عبر Claude قد يستغرق دقائق على المهام المعقدة */
+/** تأليف الكلمات عبر المساعد قد يستغرق دقائق على المهام المعقدة */
 export const maxDuration = 180;
 
 export async function POST(req: NextRequest) {
   const user = await getUserFromRequest(req);
-  const allowed = await consumeRateLimit(
-    rateLimitKey("lyrics", user?.id ?? null, clientIp(req)),
-    rateLimitFor("lyrics", !!user)
-  );
-  if (!allowed) {
-    return NextResponse.json(
-      { error: "تجاوزت الحد المسموح من طلبات المساعد مؤقتاً — حاول بعد قليل" + (user ? "" : "، أو سجّل الدخول لحدود أعلى") },
-      { status: 429 }
-    );
-  }
+  const verdict = await checkLimit(req, "lyrics", user?.id ?? null);
+  if (!verdict.allowed) return limitResponse(verdict);
 
   const body = await req.json().catch(() => null);
   const mode = body?.mode;

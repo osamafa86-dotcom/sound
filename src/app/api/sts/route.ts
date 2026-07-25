@@ -3,8 +3,8 @@ import { VOICES } from "@/lib/voices";
 import { elevenLabsSpeechToSpeech } from "@/lib/providers/elevenlabs";
 import { mockTTS } from "@/lib/providers";
 import { getCustomVoice } from "@/lib/customVoices";
-import { consumeRateLimit, rateLimitFor, rateLimitKey } from "@/lib/rateLimit";
-import { clientIp, getUserFromRequest } from "@/lib/serverAuth";
+import { checkLimit, limitResponse } from "@/lib/rateLimit";
+import { getUserFromRequest } from "@/lib/serverAuth";
 
 export const maxDuration = 120;
 
@@ -13,13 +13,8 @@ const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 /** تحويل صوت إلى صوت: أداء المستخدم المسجّل بصوت آخر مع الحفاظ على النبرة والتوقيت */
 export async function POST(req: NextRequest) {
   const user = await getUserFromRequest(req);
-  const allowed = await consumeRateLimit(
-    rateLimitKey("sts", user?.id ?? null, clientIp(req)),
-    rateLimitFor("sts", !!user)
-  );
-  if (!allowed) {
-    return NextResponse.json({ error: "تجاوزت الحد المسموح من التحويلات مؤقتاً — حاول بعد قليل" }, { status: 429 });
-  }
+  const verdict = await checkLimit(req, "sts", user?.id ?? null);
+  if (!verdict.allowed) return limitResponse(verdict);
 
   const form = await req.formData().catch(() => null);
   const audio = form?.get("audio");

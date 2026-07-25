@@ -3,7 +3,7 @@ import type { AssistRequest, AssistResult, LyricsAssistant } from "./types";
 
 /**
  * اختيار مقام إرشادي حسب كلمات مفتاحية في النص —
- * بديل تجريبي مبسّط عن تحليل Claude الفعلي للمعنى والمزاج.
+ * بديل تجريبي مبسّط عن تحليل نموذج الذكاء الاصطناعي الفعلي للمعنى والمزاج.
  */
 const MOOD_RULES: { pattern: RegExp; maqamId: string }[] = [
   { pattern: /حزن|حزين|فراق|دمع|وداع|رحيل|شجن|ألم/, maqamId: "saba" },
@@ -17,7 +17,7 @@ const MOOD_RULES: { pattern: RegExp; maqamId: string }[] = [
 
 function mockLyrics(idea: string): string {
   return [
-    "«مسودة تجريبية — تُستبدل بكتابة Claude الفعلية عند ربط المفتاح»",
+    "«مسودة تجريبية — تُستبدل بكتابة الذكاء الاصطناعي الفعلية عند ربط المفتاح»",
     "",
     "مطلع:",
     `في خاطري حكاية عن ${idea}`,
@@ -47,7 +47,7 @@ export const mockAssistant: LyricsAssistant = {
       // في وضع التحسين لا يستطيع البديل التجريبي تحسين الصياغة فعلياً، فيعيد الكلمات كما هي
       lyrics: req.mode === "improve" ? (req.lyrics ?? "").trim() : mockLyrics((req.idea ?? "").trim()),
       maqamId: maqam.id,
-      maqamReason: `اقتراح تجريبي مبني على كلمات مفتاحية في النص: مقام ${maqam.name} يناسب أجواء «${maqam.mood}». التحليل الدقيق للمعنى يُفعَّل مع ربط مفتاح Claude API.`,
+      maqamReason: `اقتراح تجريبي مبني على كلمات مفتاحية في النص: مقام ${maqam.name} يناسب أجواء «${maqam.mood}». التحليل الدقيق للمعنى يُفعَّل مع ربط مفتاح الذكاء الاصطناعي.`,
       stylePromptEn: [
         maqam.stylePrompt,
         style.en,

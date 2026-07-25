@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { elevenLabsTranscribe } from "@/lib/providers/elevenlabs";
-import { consumeRateLimit, rateLimitFor, rateLimitKey } from "@/lib/rateLimit";
-import { clientIp, getUserFromRequest } from "@/lib/serverAuth";
+import { checkLimit, limitResponse } from "@/lib/rateLimit";
+import { getUserFromRequest } from "@/lib/serverAuth";
 
 export const maxDuration = 120;
 
@@ -10,13 +10,8 @@ const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 /** تفريغ صوتي: تسجيل/ملف صوتي ← نص عربي */
 export async function POST(req: NextRequest) {
   const user = await getUserFromRequest(req);
-  const allowed = await consumeRateLimit(
-    rateLimitKey("stt", user?.id ?? null, clientIp(req)),
-    rateLimitFor("stt", !!user)
-  );
-  if (!allowed) {
-    return NextResponse.json({ error: "تجاوزت الحد المسموح من التفريغات مؤقتاً — حاول بعد قليل" }, { status: 429 });
-  }
+  const verdict = await checkLimit(req, "stt", user?.id ?? null);
+  if (!verdict.allowed) return limitResponse(verdict);
 
   const form = await req.formData().catch(() => null);
   const audio = form?.get("audio");

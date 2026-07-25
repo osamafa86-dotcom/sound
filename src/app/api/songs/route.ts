@@ -3,8 +3,8 @@ import { MAQAMAT, INSTRUMENTS, SONG_STYLES } from "@/lib/maqamat";
 import { getJobsStore, type GenerationTier } from "@/lib/jobs";
 import { runSongJob } from "@/lib/songWorker";
 import { buildStylePrompt } from "@/lib/stylePrompt";
-import { consumeRateLimit, rateLimitFor, rateLimitKey } from "@/lib/rateLimit";
-import { clientIp, getUserFromRequest } from "@/lib/serverAuth";
+import { checkLimit, limitResponse } from "@/lib/rateLimit";
+import { getUserFromRequest } from "@/lib/serverAuth";
 import type { MusicRequest } from "@/lib/providers/types";
 
 /** توليد الأغنية قد يطول — نمنح الدالة مهلة كاملة على Vercel (يشمل التنفيذ الخلفي) */
@@ -13,16 +13,8 @@ export const maxDuration = 300;
 /** إنشاء مهمة توليد أغنية — يعيد jobId فوراً ويستعلم العميل عن الحالة دورياً */
 export async function POST(req: NextRequest) {
   const user = await getUserFromRequest(req);
-  const allowed = await consumeRateLimit(
-    rateLimitKey("songs", user?.id ?? null, clientIp(req)),
-    rateLimitFor("songs", !!user)
-  );
-  if (!allowed) {
-    return NextResponse.json(
-      { error: "تجاوزت الحد المسموح من التوليدات مؤقتاً — حاول بعد قليل" + (user ? "" : "، أو سجّل الدخول لحدود أعلى") },
-      { status: 429 }
-    );
-  }
+  const verdict = await checkLimit(req, "songs", user?.id ?? null);
+  if (!verdict.allowed) return limitResponse(verdict);
 
   const body = await req.json().catch(() => null);
   const maqam = MAQAMAT.find((m) => m.id === body?.maqamId);

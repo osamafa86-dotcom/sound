@@ -1,9 +1,14 @@
 import { getSupabaseAdmin } from "./supabaseAdmin";
 
 /**
- * تحديد معدل الاستخدام (نافذة ثابتة) — حماية أساسية لمفاتيح التوليد المدفوعة.
- * على الإنتاج يعتمد دالة SQL ذرّية في Supabase (النسخ Serverless لا تتشارك ذاكرة)،
- * وفي التطوير أو عند تعذر القاعدة يعمل عدّاد محلي في الذاكرة.
+ * حماية الاستهلاك — سياج يمنع استنزاف أرصدة المزوّدين المدفوعة.
+ *
+ * طبقتان لكل مسار:
+ * 1. سقف عام للمنصة (حماية المحفظة من الإساءة الجماعية)
+ * 2. حد لكل زائر (IP) أو مستخدم — المسجلون يحصلون على أضعاف الحد
+ *
+ * التخزين: دالة SQL ذرّية في Supabase على الإنتاج (نسخ Serverless لا تتشارك
+ * ذاكرة)، وعدّاد محلي في التطوير أو عند تعذر القاعدة.
  */
 
 function envInt(name: string, fallback: number): number {
@@ -11,20 +16,31 @@ function envInt(name: string, fallback: number): number {
   return Number.isFinite(v) && v > 0 ? Math.floor(v) : fallback;
 }
 
-/** الحدود لكل ساعة لغير المسجلين — المسجلون يحصلون على أضعافها */
-export const RATE_LIMITS = {
-  tts: envInt("RATE_LIMIT_TTS", 10),
-  songs: envInt("RATE_LIMIT_SONGS", 6),
-  lyrics: envInt("RATE_LIMIT_LYRICS", 12),
-  stt: envInt("RATE_LIMIT_STT", 8),
-  sts: envInt("RATE_LIMIT_STS", 6),
-  clone: envInt("RATE_LIMIT_CLONE", 2),
-} as const;
+export type LimitRule = {
+  /** أقصى عدد طلبات ضمن النافذة لكل زائر غير مسجل */
+  perVisitor: number;
+  /** أقصى عدد طلبات إجمالي للمنصة ضمن النافذة (سقف حماية المحفظة) */
+  global: number;
+  /** طول النافذة بالثواني */
+  windowSec: number;
+};
+
+/** حدود كل مسار — الموسيقى والاستنساخ أغلى فحدودها أضيق */
+export const LIMITS = {
+  tts: { perVisitor: envInt("RATE_LIMIT_TTS", 20), global: 300, windowSec: 3600 },
+  songs: { perVisitor: envInt("RATE_LIMIT_SONGS", 6), global: 60, windowSec: 3600 },
+  lyrics: { perVisitor: envInt("RATE_LIMIT_LYRICS", 30), global: 400, windowSec: 3600 },
+  stt: { perVisitor: envInt("RATE_LIMIT_STT", 8), global: 120, windowSec: 3600 },
+  sts: { perVisitor: envInt("RATE_LIMIT_STS", 6), global: 80, windowSec: 3600 },
+  voiceClone: { perVisitor: envInt("RATE_LIMIT_CLONE", 3), global: 20, windowSec: 24 * 3600 },
+  voiceDesign: { perVisitor: envInt("RATE_LIMIT_DESIGN", 5), global: 40, windowSec: 3600 },
+  pronunciation: { perVisitor: envInt("RATE_LIMIT_PRONUNCIATION", 30), global: 200, windowSec: 3600 },
+} satisfies Record<string, LimitRule>;
+
+export type LimitScope = keyof typeof LIMITS;
 
 /** مضاعف حدود المستخدمين المسجلين */
 export const SIGNED_IN_MULTIPLIER = envInt("RATE_LIMIT_SIGNED_IN_MULTIPLIER", 3);
-
-export const WINDOW_SECONDS = 3600;
 
 type MemoryWindow = { windowStart: number; count: number };
 const globalStore = globalThis as unknown as { __rateLimits?: Map<string, MemoryWindow> };
@@ -33,6 +49,12 @@ const memoryWindows = (globalStore.__rateLimits ??= new Map<string, MemoryWindow
 function consumeInMemory(key: string, limit: number, windowSeconds: number): boolean {
   const now = Date.now();
   const windowMs = windowSeconds * 1000;
+  // تنظيف كسول حتى لا تنمو الخريطة بلا حدود
+  if (memoryWindows.size > 5000) {
+    for (const [k, w] of memoryWindows) {
+      if (now - w.windowStart > windowMs) memoryWindows.delete(k);
+    }
+  }
   const entry = memoryWindows.get(key);
   if (!entry || now - entry.windowStart > windowMs) {
     memoryWindows.set(key, { windowStart: now, count: 1 });
@@ -43,11 +65,7 @@ function consumeInMemory(key: string, limit: number, windowSeconds: number): boo
 }
 
 /** يستهلك محاولة من النافذة ويعيد هل ما زالت مسموحة */
-export async function consumeRateLimit(
-  key: string,
-  limit: number,
-  windowSeconds: number = WINDOW_SECONDS
-): Promise<boolean> {
+export async function consumeRateLimit(key: string, limit: number, windowSeconds: number): Promise<boolean> {
   const admin = getSupabaseAdmin();
   if (admin) {
     const { data, error } = await admin.rpc("consume_rate_limit", {
@@ -62,12 +80,59 @@ export async function consumeRateLimit(
   return consumeInMemory(key, limit, windowSeconds);
 }
 
+/** معرّف الزائر — عنوان IP كما يمرره Vercel */
+export function visitorIp(req: Request): string {
+  return (
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    req.headers.get("cf-connecting-ip") ||
+    "unknown"
+  );
+}
+
 /** مفتاح التحديد: بالمستخدم إن كان مسجلاً وإلا بعنوان IP */
-export function rateLimitKey(scope: keyof typeof RATE_LIMITS, userId: string | null, ip: string): string {
+export function rateLimitKey(scope: LimitScope, userId: string | null, ip: string): string {
   return userId ? `${scope}:user:${userId}` : `${scope}:ip:${ip}`;
 }
 
 /** حد النطاق حسب حالة التسجيل */
-export function rateLimitFor(scope: keyof typeof RATE_LIMITS, signedIn: boolean): number {
-  return signedIn ? RATE_LIMITS[scope] * SIGNED_IN_MULTIPLIER : RATE_LIMITS[scope];
+export function rateLimitFor(scope: LimitScope, signedIn: boolean): number {
+  return signedIn ? LIMITS[scope].perVisitor * SIGNED_IN_MULTIPLIER : LIMITS[scope].perVisitor;
+}
+
+export type LimitVerdict = { allowed: boolean; message: string };
+
+/** فحص واستهلاك طلب واحد: السقف العام أولاً ثم حد الزائر/المستخدم */
+export async function checkLimit(
+  req: Request,
+  scope: LimitScope,
+  userId: string | null = null
+): Promise<LimitVerdict> {
+  const rule = LIMITS[scope];
+
+  const globalOk = await consumeRateLimit(`${scope}:global`, rule.global, rule.windowSec);
+  if (!globalOk) {
+    return { allowed: false, message: "المنصة تستقبل عدداً كبيراً من الطلبات الآن — جرّب بعد قليل" };
+  }
+
+  const ok = await consumeRateLimit(
+    rateLimitKey(scope, userId, visitorIp(req)),
+    rateLimitFor(scope, !!userId),
+    rule.windowSec
+  );
+  return {
+    allowed: ok,
+    message: ok
+      ? ""
+      : "تجاوزت الحد المسموح من الطلبات مؤقتاً — حاول بعد قليل" +
+        (userId ? "" : "، أو سجّل الدخول لحدود أعلى"),
+  };
+}
+
+/** استجابة 429 موحّدة */
+export function limitResponse(verdict: LimitVerdict): Response {
+  return new Response(JSON.stringify({ error: verdict.message }), {
+    status: 429,
+    headers: { "Content-Type": "application/json" },
+  });
 }

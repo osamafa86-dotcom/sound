@@ -36,10 +36,25 @@ export default function VoiceLab() {
     let cancelled = false;
     async function loadVoices() {
       try {
-        const res = await fetch("/api/voices", { headers: await authHeaders() });
-        const data = await res.json().catch(() => null);
-        if (cancelled || !res.ok || !data) return;
-        const all = [...(data.custom ?? []), ...(data.voices ?? [])].filter(
+        const [catalogRes, customRes] = await Promise.all([
+          fetch("/api/voices/catalog"),
+          fetch("/api/voices", { headers: await authHeaders() }),
+        ]);
+        const catalog = await catalogRes.json().catch(() => null);
+        const custom = await customRes.json().catch(() => null);
+        if (cancelled) return;
+        const customVoices: Voice[] = (custom?.voices ?? []).map(
+          (v: { id: string; name: string }) => ({
+            id: `clone-${v.id}`,
+            name: v.name,
+            gender: "male" as const,
+            dialect: "مستنسخ",
+            provider: "elevenlabs" as const,
+            tone: "نسختك الرقمية",
+            elevenVoiceId: v.id,
+          })
+        );
+        const all = [...customVoices, ...(catalog?.voices ?? [])].filter(
           (v: Voice) => v.elevenVoiceId
         );
         if (all.length) {

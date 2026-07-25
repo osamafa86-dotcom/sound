@@ -51,3 +51,35 @@ body {
 input[type="range"] {
   accent-color: var(--primary);
 }
+
+/* الموجة الصوتية المتحركة */
+@keyframes wave-pulse {
+  0%, 100% { transform: scaleY(0.25); }
+  50% { transform: scaleY(1); }
+}
+
+.wave-bar {
+  transform-origin: center;
+  animation: wave-pulse 1.4s ease-in-out infinite;
+  background: linear-gradient(180deg, var(--accent), var(--primary));
+  border-radius: 999px;
+}
+
+/* توهج خلفي ناعم للواجهة */
+.hero-glow {
+  background:
+    radial-gradient(50% 45% at 50% 0%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 75%),
+    radial-gradient(35% 30% at 15% 25%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 70%),
+    radial-gradient(35% 30% at 85% 20%, color-mix(in srgb, var(--gold) 7%, transparent), transparent 70%);
+}
+
+details.faq summary {
+  cursor: pointer;
+  list-style: none;
+}
+details.faq summary::-webkit-details-marker {
+  display: none;
+}
+details.faq[open] .faq-chevron {
+  transform: rotate(180deg);
+}

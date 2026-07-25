@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { elevenLabsCloneVoice } from "@/lib/providers/elevenlabs";
 import { addCustomVoice } from "@/lib/customVoices";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { consumeRateLimit, rateLimitFor, rateLimitKey } from "@/lib/rateLimit";
-import { clientIp, getUserFromRequest } from "@/lib/serverAuth";
+import { checkLimit, limitResponse } from "@/lib/rateLimit";
+import { getUserFromRequest } from "@/lib/serverAuth";
 
 export const maxDuration = 120;
 
@@ -20,13 +20,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "سجّل الدخول لاستنساخ صوتك" }, { status: 401 });
   }
 
-  const allowed = await consumeRateLimit(
-    rateLimitKey("clone", user?.id ?? null, clientIp(req)),
-    rateLimitFor("clone", !!user)
-  );
-  if (!allowed) {
-    return NextResponse.json({ error: "تجاوزت الحد المسموح من عمليات الاستنساخ — حاول لاحقاً" }, { status: 429 });
-  }
+  const verdict = await checkLimit(req, "voiceClone", user?.id ?? null);
+  if (!verdict.allowed) return limitResponse(verdict);
 
   const form = await req.formData().catch(() => null);
   const name = form?.get("name");

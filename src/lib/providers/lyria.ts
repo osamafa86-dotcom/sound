@@ -1,75 +1,108 @@
+import { pcm16ToWav } from "@/lib/mockAudio";
 import type { AudioResult, MusicProvider, MusicRequest } from "./types";
 
-/**
- * Google Lyria 3 عبر Gemini API — نقطة النهاية interactions (معاينة عامة).
- * الغناء العربي غير مدعوم رسمياً بعد، لذا نستخدم Lyria حصراً للموسيقى الآلية
- * بالمقامات وللمعاينات الرخيصة، حسب استراتيجية الخطة (القسم 2-ب).
- */
-const API_URL = "https://generativelanguage.googleapis.com/v1beta/interactions";
+/** نموذج توليد الموسيقى — Lyria 3 Pro يدعم أغانٍ حتى ~3 دقائق بجودة عالية */
+const MODEL = process.env.LYRIA_MODEL ?? "lyria-3-pro-preview";
 
-/** Clip: مقاطع 30 ثانية للمعاينة؛ Pro: أغانٍ كاملة حتى بضع دقائق */
-const CLIP_MODEL = process.env.LYRIA_CLIP_MODEL ?? "lyria-3-clip-preview";
-const PRO_MODEL = process.env.LYRIA_PRO_MODEL ?? "lyria-3-pro-preview";
-
-class LyriaError extends Error {
-  constructor(message: string, readonly status: number) {
+export class LyriaError extends Error {
+  constructor(message: string, readonly status: number, readonly needsBilling = false) {
     super(message);
   }
 }
 
-type InteractionResponse = {
-  steps?: {
-    type?: string;
-    content?: { type?: string; data?: string; mime_type?: string }[];
-  }[];
-};
+type Part = { inlineData?: { mimeType?: string; data?: string }; text?: string };
 
-export function lyriaMusic(apiKey: string, variant: "clip" | "pro"): MusicProvider {
-  const id = variant === "clip" ? "lyria-clip" : "lyria-pro";
+/** استخراج أول جزء صوتي من استجابة Gemini وتحويله لصيغة قابلة للتشغيل */
+function extractAudio(parts: Part[]): { audio: Buffer; mimeType: string } | null {
+  for (const part of parts) {
+    const mime = part.inlineData?.mimeType ?? "";
+    const data = part.inlineData?.data;
+    if (!data || !mime.startsWith("audio/")) continue;
+
+    const raw = Buffer.from(data, "base64");
+
+    // PCM خام (audio/L16;codec=pcm;rate=48000) يحتاج ترويسة WAV ليعمل في المتصفح
+    if (/^audio\/(l16|pcm)/i.test(mime)) {
+      const rate = Number(mime.match(/rate=(\d+)/i)?.[1] ?? 48000);
+      const channels = Number(mime.match(/channels=(\d+)/i)?.[1] ?? 2);
+      return { audio: pcm16ToWav(raw, rate, channels), mimeType: "audio/wav" };
+    }
+    return { audio: raw, mimeType: mime.split(";")[0] };
+  }
+  return null;
+}
+
+export function lyriaMusic(apiKey: string): MusicProvider {
   return {
-    id,
+    id: "lyria",
     async generate(req: MusicRequest): Promise<AudioResult> {
+      const instrumentalOnly = req.styleId === "instrumental" || !req.lyrics?.trim();
+      const seconds = Math.min(180, Math.max(15, req.durationSec ?? 60));
+
       const prompt = [
         req.stylePrompt,
-        "Instrumental only, no vocals.",
-        variant === "pro" && req.durationSec
-          ? `Intended length: about ${Math.round(req.durationSec)} seconds.`
-          : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
+        `Target duration: about ${seconds} seconds.`,
+        instrumentalOnly
+          ? "Instrumental only, no vocals."
+          : `Sung vocals performing these Arabic lyrics:\n${req.lyrics!.trim()}`,
+      ].join("\n");
 
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": apiKey,
-        },
-        body: JSON.stringify({
-          model: variant === "clip" ? CLIP_MODEL : PRO_MODEL,
-          input: prompt,
-        }),
-      });
-
-      if (!res.ok) {
-        const detail = await res.text().catch(() => "");
-        throw new LyriaError(`Lyria ${res.status}: ${detail.slice(0, 300)}`, res.status);
+      // النموذج يعيد 503 عند الازدحام المؤقت — نعيد المحاولة قبل الرجوع للمزوّد البديل
+      let res: Response | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+            body: JSON.stringify({
+              contents: [{ role: "user", parts: [{ text: prompt }] }],
+              generationConfig: { responseModalities: ["AUDIO"] },
+            }),
+          }
+        );
+        if (res.status !== 503) break;
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 4000 * (attempt + 1)));
       }
 
-      const data = (await res.json()) as InteractionResponse;
-      const audioBlock = data.steps
-        ?.flatMap((s) => s.content ?? [])
-        .find((c) => c.type === "audio" && c.data);
-      if (!audioBlock?.data) {
-        throw new LyriaError("لم يُعثر على صوت في استجابة Lyria", 502);
+      if (!res || !res.ok) {
+        const status = res?.status ?? 0;
+        const detail = res ? await res.text().catch(() => "") : "";
+        // الطبقة المجانية تعطي حصة صفرية لـ Lyria — نميّزها لعرض رسالة مفهومة للمستخدم
+        const needsBilling = status === 429 && /limit:\s*0/.test(detail);
+        throw new LyriaError(
+          needsBilling
+            ? "توليد الموسيقى بـ Lyria يتطلب تفعيل الفوترة في Google Cloud (غير متاح على الطبقة المجانية)"
+            : status === 503
+              ? "محرك Lyria مزدحم حالياً — جرّب بعد قليل"
+              : `Lyria ${status}: ${detail.slice(0, 300)}`,
+          status,
+          needsBilling
+        );
       }
 
-      return {
-        audio: Buffer.from(audioBlock.data, "base64"),
-        // الافتراضي MP3؛ يُحترم mime_type إن أعادته الواجهة
-        mimeType: audioBlock.mime_type ?? "audio/mpeg",
-        provider: id,
-      };
+      const json = await res.json();
+
+      // Lyria يعيد 200 بلا مرشّحين عندما يحجب مرشّح المحتوى الطلب
+      const blockReason = json?.promptFeedback?.blockReason;
+      if (blockReason) {
+        throw new LyriaError(
+          `رفض مرشّح المحتوى في Lyria هذه الكلمات (${blockReason}) — سيتولى المحرك البديل التوليد`,
+          400
+        );
+      }
+
+      const candidate = json?.candidates?.[0];
+      if (candidate?.finishReason === "SAFETY" || candidate?.finishReason === "PROHIBITED_CONTENT") {
+        throw new LyriaError("رفض المحرك توليد هذا المقطع — جرّب وصفاً مختلفاً", 400);
+      }
+
+      const found = extractAudio(candidate?.content?.parts ?? []);
+      if (!found) {
+        throw new LyriaError("لم تتضمن استجابة Lyria أي مقطع صوتي", 502);
+      }
+
+      return { audio: found.audio, mimeType: found.mimeType, provider: "lyria" };
     },
   };
 }

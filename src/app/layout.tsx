@@ -17,6 +17,17 @@ export const metadata: Metadata = {
   },
   description:
     "منصة عربية لتحويل النص إلى صوت بجودة عالية، وكتابة وتلحين الأغاني حسب المقامات الصوتية بالذكاء الاصطناعي.",
+  openGraph: {
+    title: "مقام — استوديو الصوتيات بالذكاء الاصطناعي",
+    description:
+      "حوّل كلماتك إلى صوتٍ وأغنية: نص إلى صوت بالفصحى واللهجات، وأغانٍ ملحّنة على المقامات العربية.",
+    type: "website",
+    locale: "ar_AR",
+  },
+};
+
+export const viewport = {
+  themeColor: "#0a0e1a",
 };
 
 export default function RootLayout({
