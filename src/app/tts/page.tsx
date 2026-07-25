@@ -257,6 +257,20 @@ export default function TTSStudio() {
       setCloning(false);
     }
   }
+  // المستشار الصوتي: تشكيل كامل + تطبيع + اقتراح الصوت والإعدادات
+  const [advising, setAdvising] = useState(false);
+  const [advice, setAdvice] = useState<{
+    enhanced: string;
+    contentType: string;
+    changes: string;
+    recommendedVoiceId: string;
+    voiceReason: string;
+    stability: number;
+    speed: number;
+  } | null>(null);
+  const [adviceError, setAdviceError] = useState("");
+  const [originalText, setOriginalText] = useState<string | null>(null);
+
   const [speed, setSpeed] = useState(1);
   const [stability, setStability] = useState(0.5);
   const [format, setFormat] = useState<"mp3" | "wav">("mp3");
@@ -294,6 +308,47 @@ export default function TTSStudio() {
     () => (dialect === "الكل" ? voices : voices.filter((v) => v.dialect === dialect)),
     [dialect, voices]
   );
+
+  async function runAdvisor() {
+    if (!text.trim()) return;
+    setAdviceError("");
+    setAdvising(true);
+    try {
+      const res = await fetch("/api/enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, dialect }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "تعذّر تحليل النص");
+
+      setAdvice(data);
+      setOriginalText(text);
+      setText(data.enhanced);
+    } catch (e) {
+      setAdviceError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally {
+      setAdvising(false);
+    }
+  }
+
+  /** تطبيق الصوت والإعدادات التي اقترحها المستشار */
+  function applyAdvice() {
+    if (!advice) return;
+    setVoiceId(advice.recommendedVoiceId);
+    setStability(advice.stability);
+    setSpeed(advice.speed);
+    const v = VOICES.find((x) => x.id === advice.recommendedVoiceId);
+    if (v) setDialect(v.dialect);
+  }
+
+  /** التراجع عن التشكيل والعودة للنص الأصلي */
+  function undoAdvice() {
+    if (originalText === null) return;
+    setText(originalText);
+    setOriginalText(null);
+    setAdvice(null);
+  }
 
   async function generate() {
     if (!text.trim()) {
@@ -344,6 +399,68 @@ export default function TTSStudio() {
             placeholder={"اكتب النص هنا...\nمثال: أهلاً بكم في منصة مقام، حيث تتحول الكلمات إلى صوتٍ نابضٍ بالحياة."}
             className="min-h-72 w-full resize-y rounded-2xl border border-border-soft bg-surface-card p-5 leading-relaxed outline-none transition-colors focus:border-primary"
           />
+          {/* المستشار الصوتي */}
+          <div className="rounded-2xl border border-accent/30 bg-accent/5 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-bold">🧭 المستشار الصوتي</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted">
+                  يشكّل نصك تشكيلاً كاملاً ويحوّل الأرقام والاختصارات لصيغتها المنطوقة،
+                  ثم يقترح الصوت والإعدادات الأنسب. أكبر قفزة في جودة النطق العربي.
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                {originalText !== null && (
+                  <button
+                    onClick={undoAdvice}
+                    className="rounded-lg border border-border-soft px-3 py-2 text-xs text-muted transition-colors hover:text-body"
+                  >
+                    ↩ النص الأصلي
+                  </button>
+                )}
+                <button
+                  onClick={runAdvisor}
+                  disabled={advising || !text.trim()}
+                  className="rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-surface transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {advising ? "جارٍ التحليل..." : "✨ حلّل وشكّل النص"}
+                </button>
+              </div>
+            </div>
+
+            {adviceError && (
+              <p className="mt-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                {adviceError}
+              </p>
+            )}
+
+            {advice && (
+              <div className="mt-3 rounded-xl border border-accent/40 bg-surface p-3 text-xs">
+                <p className="font-semibold text-accent">
+                  نوع المحتوى: {advice.contentType}
+                </p>
+                <p className="mt-1.5 leading-relaxed text-muted">{advice.changes}</p>
+                <p className="mt-2 leading-relaxed">
+                  <span className="text-muted">الصوت المقترح:</span>{" "}
+                  <span className="font-semibold">
+                    {VOICES.find((v) => v.id === advice.recommendedVoiceId)?.name ?? advice.recommendedVoiceId}
+                  </span>{" "}
+                  <span className="text-muted">— {advice.voiceReason}</span>
+                </p>
+                <p className="mt-1 text-muted">
+                  الإعدادات المقترحة: ثبات {Math.round(advice.stability * 100)}% · سرعة{" "}
+                  {advice.speed.toFixed(2)}×
+                </p>
+                <button
+                  onClick={applyAdvice}
+                  className="mt-3 w-full rounded-lg border border-accent px-3 py-2 text-xs font-semibold text-accent transition-colors hover:bg-accent/10"
+                >
+                  ✓ طبّق الصوت والإعدادات المقترحة
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center justify-between text-xs text-muted">
             <span>{text.length} / 20000 حرف</span>
             <span>النصوص الطويلة تُقسَّم عند حدود الجمل وتُدمج تلقائياً</span>
