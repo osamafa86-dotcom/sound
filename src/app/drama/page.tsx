@@ -6,6 +6,7 @@ import SaveToLibrary from "@/components/SaveToLibrary";
 import { MAQAMAT } from "@/lib/maqamat";
 import { VOICES } from "@/lib/voices";
 import { authHeaders } from "@/lib/supabase";
+import { ANY_DIALECT, DIALECT_OPTIONS } from "@/lib/dialects";
 import { DRAMA_LIMITS, type DramaScript } from "@/lib/drama/types";
 
 const SAMPLE = `كان جدّي يجلس كل مساء على عتبة البيت، يلفّ سيجارته ببطء ويحدّق في أشجار الزيتون.
@@ -22,6 +23,7 @@ const SAMPLE = `كان جدّي يجلس كل مساء على عتبة البي�
 
 export default function DramaStudio() {
   const [text, setText] = useState("");
+  const [dialect, setDialect] = useState<string>(ANY_DIALECT);
   const [script, setScript] = useState<DramaScript | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [rendering, setRendering] = useState(false);
@@ -37,7 +39,7 @@ export default function DramaStudio() {
       const res = await fetch("/api/drama/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, dialect }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error ?? "تعذّر تحليل النص");
@@ -104,6 +106,30 @@ export default function DramaStudio() {
           placeholder="الصق قصتك أو حوارك هنا..."
           className="min-h-56 w-full resize-y rounded-2xl border border-border-soft bg-surface-card p-5 leading-loose outline-none transition-colors focus:border-gold"
         />
+        {/* لهجة الكتابة والإلقاء */}
+        <div className="rounded-2xl border border-border-soft bg-surface-card p-4">
+          <label className="mb-1 block text-sm font-bold">🗣️ لهجة الكتابة والإلقاء</label>
+          <p className="mb-3 text-xs leading-relaxed text-muted">
+            تحكم اللهجةُ أمرين معاً: بأي لهجة يُكتب الحوار، ومن أي لهجة تُختار أصوات
+            الشخصيات — فلا يخرج نصٌّ فلسطيني بصوتٍ مصري.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {DIALECT_OPTIONS.map((d) => (
+              <button
+                key={d}
+                onClick={() => setDialect(d)}
+                className={`rounded-full border px-4 py-1.5 text-sm transition-colors ${
+                  dialect === d
+                    ? "border-gold bg-gold/10 font-semibold text-gold"
+                    : "border-border-soft text-muted hover:text-body"
+                }`}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
           <span>
             {text.length} / {DRAMA_LIMITS.maxInputChars} حرف · حتى {DRAMA_LIMITS.maxLines} سطراً
@@ -206,7 +232,7 @@ export default function DramaStudio() {
             <AudioPlayer
               src={result.url}
               title={`${script.title} — ${result.voices} أصوات · ${Math.round(Number(result.duration))} ثانية`}
-              filename={`${script.title}.wav`}
+              filename={`${script.title}.mp3`}
               note="عمل مسموع متعدد الأصوات، بوقفات محسوبة بين الأسطر والمشاهد."
             >
               <SaveToLibrary

@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     await logUsage("drama", user?.id ?? null, script.lines.length);
     return new NextResponse(new Uint8Array(audio), {
       headers: {
-        "Content-Type": "audio/wav",
+        "Content-Type": "audio/mpeg",
         "X-Duration": durationSec.toFixed(1),
         "X-Lines": String(script.lines.length),
         "X-Voices": String(new Set(script.characters.map((c) => c.voiceId)).size),
