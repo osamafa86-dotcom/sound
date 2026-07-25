@@ -29,6 +29,10 @@ export type AudioResult = {
   provider: string;
   /** true عندما يكون الناتج من الوضع التجريبي وليس من محرك فعلي */
   mock?: boolean;
+  /** معرّف المزوّد المفضّل الذي تعذّر، عند الرجوع إلى مزوّد بديل */
+  fallbackFrom?: string;
+  /** سبب تعذّر المزوّد المفضّل */
+  fallbackReason?: string;
 };
 
 export interface TTSProvider {

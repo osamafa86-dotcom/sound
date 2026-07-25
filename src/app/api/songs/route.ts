@@ -49,13 +49,17 @@ export async function POST(req: NextRequest) {
     result = await mockMusic.generate(request);
   }
 
+  // سبب الرجوع قد يأتي من داخل سلسلة المزوّدين (Lyria ← Eleven Music) أو من الفشل الكامل
+  const reason = fallbackReason || result.fallbackReason || "";
+
   return new NextResponse(new Uint8Array(result.audio), {
     headers: {
       "Content-Type": result.mimeType,
       "X-Provider": result.provider,
       "X-Mock": result.mock ? "1" : "0",
       "X-Style-Prompt": encodeURIComponent(stylePrompt),
-      ...(fallbackReason && { "X-Fallback": encodeURIComponent(fallbackReason.slice(0, 200)) }),
+      ...(reason && { "X-Fallback": encodeURIComponent(reason.slice(0, 200)) }),
+      ...(result.fallbackFrom && { "X-Fallback-From": result.fallbackFrom }),
     },
   });
 }

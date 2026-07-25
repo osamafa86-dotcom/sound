@@ -41,20 +41,24 @@ function renderNotes(notes: Note[]): Float32Array {
   return out;
 }
 
-/** تغليف بيانات PCM خام (16-bit LE mono) بترويسة WAV — يُستخدم مع مخرجات pcm_44100 من ElevenLabs */
-export function pcm16ToWav(pcm: Buffer, sampleRate = 44100): Buffer {
+/**
+ * تغليف بيانات PCM خام (16-bit little-endian) بترويسة WAV.
+ * يُستخدم مع مخرجات pcm_44100 من ElevenLabs ومخرجات audio/L16 من Lyria.
+ */
+export function pcm16ToWav(pcm: Buffer, sampleRate = 44100, channels = 1): Buffer {
+  const byteRate = sampleRate * channels * 2;
   const header = Buffer.alloc(44);
   header.write("RIFF", 0);
   header.writeUInt32LE(36 + pcm.length, 4);
   header.write("WAVE", 8);
   header.write("fmt ", 12);
   header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20);
-  header.writeUInt16LE(1, 22);
+  header.writeUInt16LE(1, 20); // PCM
+  header.writeUInt16LE(channels, 22);
   header.writeUInt32LE(sampleRate, 24);
-  header.writeUInt32LE(sampleRate * 2, 28);
-  header.writeUInt16LE(2, 32);
-  header.writeUInt16LE(16, 34);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(channels * 2, 32); // block align
+  header.writeUInt16LE(16, 34); // bits per sample
   header.write("data", 36);
   header.writeUInt32LE(pcm.length, 40);
   return Buffer.concat([header, pcm]);
