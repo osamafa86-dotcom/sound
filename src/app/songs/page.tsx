@@ -4,6 +4,7 @@ import { useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
 import SaveButton from "@/components/SaveButton";
 import { DIALECTS, INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
+import { authHeaders } from "@/lib/supabase";
 import type { AssistMode, AssistResult } from "@/lib/assistant/types";
 
 const STEPS = ["الكلمات", "المقام والأسلوب", "التوليد"] as const;
@@ -35,7 +36,7 @@ export default function SongsStudio() {
   const [durationSec, setDurationSec] = useState<number>(60);
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState("");
-  const [result, setResult] = useState<{ url: string; blob: Blob; mock: boolean; prompt: string; ext: string; fellBack: boolean } | null>(null);
+  const [result, setResult] = useState<{ url: string; blob: Blob; jobId: string; mock: boolean; prompt: string; ext: string; fellBack: boolean } | null>(null);
   const [error, setError] = useState("");
 
   const [idea, setIdea] = useState("");
@@ -59,7 +60,7 @@ export default function SongsStudio() {
     try {
       const res = await fetch("/api/lyrics", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({ mode, idea, lyrics, dialectId, styleId }),
       });
       const data = await res.json().catch(() => null);
@@ -84,7 +85,7 @@ export default function SongsStudio() {
     try {
       const res = await fetch("/api/songs", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({
           lyrics,
           maqamId,
@@ -131,6 +132,7 @@ export default function SongsStudio() {
       setResult({
         url: URL.createObjectURL(blob),
         blob,
+        jobId,
         mock: !!status.mock,
         prompt: status.stylePrompt ?? "",
         ext,
@@ -469,6 +471,7 @@ export default function SongsStudio() {
                 <SaveButton
                   key={result.url}
                   blob={result.blob}
+                  jobId={result.jobId}
                   kind="song"
                   title={
                     tier === "preview"

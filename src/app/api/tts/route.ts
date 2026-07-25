@@ -1,8 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTTSProvider, mockTTS } from "@/lib/providers";
+import { consumeRateLimit, rateLimitFor, rateLimitKey } from "@/lib/rateLimit";
+import { clientIp, getUserFromRequest } from "@/lib/serverAuth";
 import type { AudioResult, TTSRequest } from "@/lib/providers/types";
 
+/** النصوص الطويلة تستغرق وقتاً لدى المحرك — مهلة موسّعة على Vercel */
+export const maxDuration = 120;
+
 export async function POST(req: NextRequest) {
+  const user = await getUserFromRequest(req);
+  const allowed = await consumeRateLimit(
+    rateLimitKey("tts", user?.id ?? null, clientIp(req)),
+    rateLimitFor("tts", !!user)
+  );
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "تجاوزت الحد المسموح من التوليدات مؤقتاً — حاول بعد قليل" + (user ? "" : "، أو سجّل الدخول لحدود أعلى") },
+      { status: 429 }
+    );
+  }
+
   const body = await req.json().catch(() => null);
   const text: string = body?.text?.trim();
 

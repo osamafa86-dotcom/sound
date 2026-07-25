@@ -1,13 +1,15 @@
 import { randomUUID } from "crypto";
+import { getSupabaseAdmin } from "./supabaseAdmin";
 import type { AudioResult, MusicRequest } from "./providers/types";
 
 /**
- * نظام المهام الطويلة — توليد الأغنية يستغرق وقتاً، فيُنشأ Job ويستعلم
- * العميل عن حالته دورياً بدل انتظار طلب HTTP واحد طويل.
+ * نظام المهام الطويلة — توليد الأغنية يستغرق وقتاً، فتُنشأ مهمة ويستعلم
+ * العميل عن حالتها دورياً بدل انتظار طلب HTTP واحد طويل.
  *
- * المخزن حالياً داخل الذاكرة (يكفي للتطوير والاستضافة على خادم واحد)،
- * وينتقل إلى جدول Jobs في Supabase ضمن المرحلة 4 لأن الاستضافة
- * Serverless لا تضمن بقاء الذاكرة بين الطلبات.
+ * مخزنان خلف واجهة واحدة:
+ * - Supabase (جدول song_jobs + حاوية jobs): الوضع الدائم للإنتاج على Vercel،
+ *   حيث لا تتشارك نسخ الخادم Serverless أي ذاكرة.
+ * - الذاكرة: بيئة التطوير أو عند غياب مفتاح الخدمة.
  */
 
 export type GenerationTier = "preview" | "full";
@@ -18,58 +20,217 @@ export type SongJob = {
   status: JobStatus;
   /** وصف المرحلة الحالية بالعربية للعرض في الواجهة */
   stage: string;
-  createdAt: number;
-  updatedAt: number;
   tier: GenerationTier;
+  userId: string | null;
   request: MusicRequest;
-  result?: AudioResult;
-  error?: string;
+  provider?: string;
+  mimeType?: string;
+  mock?: boolean;
   /** سبب الرجوع للوضع التجريبي إن حدث */
   fellBack?: string;
+  error?: string;
+  createdAt: number;
+  updatedAt: number;
 };
 
-// globalThis ليصمد المخزن أمام إعادة التحميل الساخن أثناء التطوير
-const globalStore = globalThis as unknown as { __songJobs?: Map<string, SongJob> };
-const jobs = (globalStore.__songJobs ??= new Map<string, SongJob>());
+export type JobPatch = Partial<
+  Pick<SongJob, "status" | "stage" | "provider" | "mimeType" | "mock" | "fellBack" | "error">
+>;
+
+export interface JobsStore {
+  readonly id: "memory" | "supabase";
+  create(tier: GenerationTier, request: MusicRequest, userId?: string | null): Promise<SongJob>;
+  get(id: string): Promise<SongJob | undefined>;
+  update(id: string, patch: JobPatch): Promise<void>;
+  /** يخزّن الناتج الصوتي ويعلّم المهمة مكتملة */
+  complete(id: string, result: AudioResult, extra?: Pick<JobPatch, "stage" | "fellBack">): Promise<void>;
+  getAudio(id: string): Promise<{ audio: Buffer; mimeType: string } | undefined>;
+}
+
+/* ------------------------- مخزن الذاكرة (تطوير) ------------------------- */
 
 const JOB_TTL_MS = 30 * 60 * 1000;
 const MAX_JOBS = 200;
 
-function prune() {
+type MemoryEntry = { job: SongJob; audio?: Buffer };
+
+// globalThis ليصمد المخزن أمام إعادة التحميل الساخن أثناء التطوير
+const globalStore = globalThis as unknown as { __songJobs?: Map<string, MemoryEntry> };
+const memoryJobs = (globalStore.__songJobs ??= new Map<string, MemoryEntry>());
+
+function pruneMemory() {
   const now = Date.now();
-  for (const [id, job] of jobs) {
-    if (now - job.updatedAt > JOB_TTL_MS) jobs.delete(id);
+  for (const [id, entry] of memoryJobs) {
+    if (now - entry.job.updatedAt > JOB_TTL_MS) memoryJobs.delete(id);
   }
-  // حماية من التضخم: حذف الأقدم عند تجاوز الحد
-  if (jobs.size > MAX_JOBS) {
-    const oldest = [...jobs.values()].sort((a, b) => a.createdAt - b.createdAt);
-    for (const job of oldest.slice(0, jobs.size - MAX_JOBS)) jobs.delete(job.id);
+  if (memoryJobs.size > MAX_JOBS) {
+    const oldest = [...memoryJobs.values()].sort((a, b) => a.job.createdAt - b.job.createdAt);
+    for (const entry of oldest.slice(0, memoryJobs.size - MAX_JOBS)) {
+      memoryJobs.delete(entry.job.id);
+    }
   }
 }
 
-export function createJob(tier: GenerationTier, request: MusicRequest): SongJob {
-  prune();
-  const now = Date.now();
-  const job: SongJob = {
-    id: randomUUID(),
-    status: "pending",
-    stage: "بانتظار البدء",
-    createdAt: now,
-    updatedAt: now,
-    tier,
-    request,
+export const memoryJobsStore: JobsStore = {
+  id: "memory",
+  async create(tier, request, userId = null) {
+    pruneMemory();
+    const now = Date.now();
+    const job: SongJob = {
+      id: randomUUID(),
+      status: "pending",
+      stage: "بانتظار البدء",
+      tier,
+      userId,
+      request,
+      createdAt: now,
+      updatedAt: now,
+    };
+    memoryJobs.set(job.id, { job });
+    return job;
+  },
+  async get(id) {
+    return memoryJobs.get(id)?.job;
+  },
+  async update(id, patch) {
+    const entry = memoryJobs.get(id);
+    if (entry) Object.assign(entry.job, patch, { updatedAt: Date.now() });
+  },
+  async complete(id, result, extra) {
+    const entry = memoryJobs.get(id);
+    if (!entry) return;
+    entry.audio = result.audio;
+    Object.assign(entry.job, {
+      status: "done" as const,
+      stage: extra?.stage ?? "اكتمل التوليد",
+      provider: result.provider,
+      mimeType: result.mimeType,
+      mock: !!result.mock,
+      ...(extra?.fellBack && { fellBack: extra.fellBack }),
+      updatedAt: Date.now(),
+    });
+  },
+  async getAudio(id) {
+    const entry = memoryJobs.get(id);
+    if (!entry?.audio || !entry.job.mimeType) return undefined;
+    return { audio: entry.audio, mimeType: entry.job.mimeType };
+  },
+};
+
+/* ------------------------ مخزن Supabase (إنتاج) ------------------------ */
+
+const TABLE = "song_jobs";
+const BUCKET = "jobs";
+
+type JobRow = {
+  id: string;
+  status: JobStatus;
+  stage: string;
+  tier: GenerationTier;
+  user_id: string | null;
+  request: MusicRequest;
+  provider: string | null;
+  mime_type: string | null;
+  mock: boolean;
+  fell_back: string | null;
+  error: string | null;
+  audio_path: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function rowToJob(row: JobRow): SongJob {
+  return {
+    id: row.id,
+    status: row.status,
+    stage: row.stage,
+    tier: row.tier,
+    userId: row.user_id,
+    request: row.request,
+    provider: row.provider ?? undefined,
+    mimeType: row.mime_type ?? undefined,
+    mock: row.mock,
+    fellBack: row.fell_back ?? undefined,
+    error: row.error ?? undefined,
+    createdAt: new Date(row.created_at).getTime(),
+    updatedAt: new Date(row.updated_at).getTime(),
   };
-  jobs.set(job.id, job);
-  return job;
 }
 
-export function getJob(id: string): SongJob | undefined {
-  return jobs.get(id);
+function patchToRow(patch: JobPatch): Record<string, unknown> {
+  return {
+    ...(patch.status !== undefined && { status: patch.status }),
+    ...(patch.stage !== undefined && { stage: patch.stage }),
+    ...(patch.provider !== undefined && { provider: patch.provider }),
+    ...(patch.mimeType !== undefined && { mime_type: patch.mimeType }),
+    ...(patch.mock !== undefined && { mock: patch.mock }),
+    ...(patch.fellBack !== undefined && { fell_back: patch.fellBack }),
+    ...(patch.error !== undefined && { error: patch.error }),
+    updated_at: new Date().toISOString(),
+  };
 }
 
-export function updateJob(id: string, patch: Partial<Omit<SongJob, "id" | "createdAt">>): SongJob | undefined {
-  const job = jobs.get(id);
-  if (!job) return undefined;
-  Object.assign(job, patch, { updatedAt: Date.now() });
-  return job;
+export const supabaseJobsStore: JobsStore = {
+  id: "supabase",
+  async create(tier, request, userId = null) {
+    const admin = getSupabaseAdmin()!;
+    const id = randomUUID();
+    const { data, error } = await admin
+      .from(TABLE)
+      .insert({ id, status: "pending", stage: "بانتظار البدء", tier, user_id: userId, request })
+      .select()
+      .single();
+    if (error) throw new Error(`تعذّر إنشاء المهمة: ${error.message}`);
+    return rowToJob(data as JobRow);
+  },
+  async get(id) {
+    const admin = getSupabaseAdmin()!;
+    const { data, error } = await admin.from(TABLE).select("*").eq("id", id).maybeSingle();
+    if (error || !data) return undefined;
+    return rowToJob(data as JobRow);
+  },
+  async update(id, patch) {
+    const admin = getSupabaseAdmin()!;
+    await admin.from(TABLE).update(patchToRow(patch)).eq("id", id);
+  },
+  async complete(id, result, extra) {
+    const admin = getSupabaseAdmin()!;
+    const path = `${id}.${result.mimeType === "audio/mpeg" ? "mp3" : "wav"}`;
+    const upload = await admin.storage.from(BUCKET).upload(path, result.audio, {
+      contentType: result.mimeType,
+      upsert: true,
+    });
+    if (upload.error) throw new Error(`تعذّر تخزين الناتج: ${upload.error.message}`);
+    await admin
+      .from(TABLE)
+      .update({
+        ...patchToRow({
+          status: "done",
+          stage: extra?.stage ?? "اكتمل التوليد",
+          provider: result.provider,
+          mimeType: result.mimeType,
+          mock: !!result.mock,
+          ...(extra?.fellBack && { fellBack: extra.fellBack }),
+        }),
+        audio_path: path,
+      })
+      .eq("id", id);
+  },
+  async getAudio(id) {
+    const admin = getSupabaseAdmin()!;
+    const { data: row } = await admin
+      .from(TABLE)
+      .select("audio_path, mime_type")
+      .eq("id", id)
+      .maybeSingle();
+    if (!row?.audio_path || !row.mime_type) return undefined;
+    const { data, error } = await admin.storage.from(BUCKET).download(row.audio_path);
+    if (error || !data) return undefined;
+    return { audio: Buffer.from(await data.arrayBuffer()), mimeType: row.mime_type };
+  },
+};
+
+/** اختيار المخزن: Supabase عند توفر مفتاح الخدمة (الإنتاج)، وإلا الذاكرة (التطوير) */
+export function getJobsStore(): JobsStore {
+  return getSupabaseAdmin() ? supabaseJobsStore : memoryJobsStore;
 }

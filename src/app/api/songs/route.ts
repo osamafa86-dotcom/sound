@@ -1,11 +1,29 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { MAQAMAT, INSTRUMENTS, SONG_STYLES } from "@/lib/maqamat";
-import { createJob, type GenerationTier } from "@/lib/jobs";
+import { getJobsStore, type GenerationTier } from "@/lib/jobs";
 import { runSongJob } from "@/lib/songWorker";
+import { buildStylePrompt } from "@/lib/stylePrompt";
+import { consumeRateLimit, rateLimitFor, rateLimitKey } from "@/lib/rateLimit";
+import { clientIp, getUserFromRequest } from "@/lib/serverAuth";
 import type { MusicRequest } from "@/lib/providers/types";
+
+/** توليد الأغنية قد يطول — نمنح الدالة مهلة كاملة على Vercel (يشمل التنفيذ الخلفي) */
+export const maxDuration = 300;
 
 /** إنشاء مهمة توليد أغنية — يعيد jobId فوراً ويستعلم العميل عن الحالة دورياً */
 export async function POST(req: NextRequest) {
+  const user = await getUserFromRequest(req);
+  const allowed = await consumeRateLimit(
+    rateLimitKey("songs", user?.id ?? null, clientIp(req)),
+    rateLimitFor("songs", !!user)
+  );
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "تجاوزت الحد المسموح من التوليدات مؤقتاً — حاول بعد قليل" + (user ? "" : "، أو سجّل الدخول لحدود أعلى") },
+      { status: 429 }
+    );
+  }
+
   const body = await req.json().catch(() => null);
   const maqam = MAQAMAT.find((m) => m.id === body?.maqamId);
   const style = SONG_STYLES.find((s) => s.id === body?.styleId);
@@ -18,16 +36,12 @@ export async function POST(req: NextRequest) {
   const instrumentIds: string[] = Array.isArray(body.instrumentIds) ? body.instrumentIds : [];
   const instruments = INSTRUMENTS.filter((i) => instrumentIds.includes(i.id));
 
-  // بناء البرومبت الموسيقي — برومبت Claude الاحترافي (من مساعد الكلمات) إن توفر،
-  // وإلا تركيب محلي من بيانات المقام والأسلوب
-  const aiStylePrompt = typeof body.aiStylePrompt === "string" ? body.aiStylePrompt.trim().slice(0, 700) : "";
-  const stylePrompt = [
-    ...(aiStylePrompt ? [aiStylePrompt] : [maqam.stylePrompt, style.en]),
-    instruments.map((i) => i.en).join(", "),
-    "high quality studio production",
-  ]
-    .filter(Boolean)
-    .join(", ");
+  const stylePrompt = buildStylePrompt({
+    maqam,
+    styleEn: style.en,
+    instrumentsEn: instruments.map((i) => i.en),
+    aiStylePrompt: typeof body.aiStylePrompt === "string" ? body.aiStylePrompt : undefined,
+  });
 
   // المعاينة دائماً ~30 ثانية؛ الأغنية الكاملة بين 30 و180 ثانية
   const requestedSec = Number.isFinite(body.durationSec) ? Number(body.durationSec) : 60;
@@ -42,9 +56,9 @@ export async function POST(req: NextRequest) {
     durationSec,
   };
 
-  const job = createJob(tier, request);
-  // تنفيذ في الخلفية دون انتظار — العميل يتابع عبر GET /api/songs/{jobId}
-  void runSongJob(job.id);
+  const job = await getJobsStore().create(tier, request, user?.id ?? null);
+  // التنفيذ بعد إرسال الاستجابة — after() تضمن إكمال العمل على Vercel Serverless
+  after(() => runSongJob(job.id));
 
   return NextResponse.json({ jobId: job.id, stylePrompt }, { status: 202 });
 }

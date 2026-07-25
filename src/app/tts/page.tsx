@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
 import SaveButton from "@/components/SaveButton";
 import { DIALECTS, VOICES } from "@/lib/voices";
+import { authHeaders } from "@/lib/supabase";
 
 export default function TTSStudio() {
   const [text, setText] = useState("");
@@ -32,7 +33,7 @@ export default function TTSStudio() {
     try {
       const res = await fetch("/api/tts", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({ text, voiceId, speed, stability, format }),
       });
       if (!res.ok) {

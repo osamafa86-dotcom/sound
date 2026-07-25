@@ -51,3 +51,25 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 ```
 
 فتظهر صفحات الدخول/التسجيل تلقائياً، ويُحفظ كل توليد في مكتبة المستخدم السحابية.
+
+## النشر على Vercel
+
+1. من [vercel.com](https://vercel.com) اختر **Add New → Project** واستورد مستودع GitHub هذا — يتعرف على Next.js تلقائياً بلا أي إعداد.
+2. في **Environment Variables** أضف المفاتيح من `.env.example`، وأهمها للإنتاج:
+   - `ELEVENLABS_API_KEY` و`ANTHROPIC_API_KEY` و`GEMINI_API_KEY` (محركات التوليد)
+   - `NEXT_PUBLIC_SUPABASE_URL` و`NEXT_PUBLIC_SUPABASE_ANON_KEY` (الحسابات والمكتبة)
+   - `SUPABASE_SERVICE_ROLE_KEY` — **إلزامي على Vercel**: يشغّل نظام المهام الدائم وتحديد معدل الاستخدام (بيئة Serverless لا تحتفظ بالذاكرة بين الطلبات)
+3. اضغط **Deploy** — كل دفعة لاحقة إلى الفرع الرئيسي تُنشر تلقائياً، وكل فرع يحصل على رابط معاينة.
+
+### ربط نطاق من جودادي
+
+في Vercel: **Settings → Domains → Add** واكتب نطاقك. ثم في لوحة جودادي (DNS Management) أضف السجلين اللذين تعرضهما Vercel — عادةً سجل `A` باسم `@` إلى `76.76.21.21` وسجل `CNAME` باسم `www` إلى `cname.vercel-dns.com` — وتُصدر شهادة HTTPS تلقائياً خلال دقائق.
+
+## التطوير والجودة
+
+```bash
+npm test        # اختبارات Vitest (بيانات المقامات، البرومبت، المهام، حدود الاستخدام، المزوّدات التجريبية)
+npm run lint    # الفحص الثابت
+```
+
+يعمل فحص CI تلقائياً على GitHub (lint + اختبارات + بناء) عند كل دفعة.

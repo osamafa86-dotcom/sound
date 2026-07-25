@@ -1,4 +1,4 @@
-import { getJob, updateJob } from "./jobs";
+import { getJobsStore } from "./jobs";
 import { getMusicProvider, mockMusic } from "./providers";
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -8,41 +8,40 @@ const PROVIDER_LABELS: Record<string, string> = {
   mock: "الوضع التجريبي",
 };
 
-/** تنفيذ مهمة توليد أغنية في الخلفية — يُستدعى بدون انتظار من مسار الإنشاء */
+/** تنفيذ مهمة توليد أغنية في الخلفية — يُستدعى عبر after() بعد إرسال الاستجابة */
 export async function runSongJob(jobId: string): Promise<void> {
-  const job = getJob(jobId);
+  const store = getJobsStore();
+  const job = await store.get(jobId);
   if (!job || job.status !== "pending") return;
 
   const provider = getMusicProvider({
     tier: job.tier,
     instrumental: job.request.styleId === "instrumental",
   });
-  updateJob(jobId, {
+  await store.update(jobId, {
     status: "running",
     stage: `جارٍ التلحين والتوليد عبر ${PROVIDER_LABELS[provider.id] ?? provider.id}...`,
   });
 
   try {
     const result = await provider.generate(job.request);
-    updateJob(jobId, { status: "done", stage: "اكتمل التوليد", result });
+    await store.complete(jobId, result);
   } catch (e) {
     const reason = e instanceof Error ? e.message : "unknown";
     if (provider.id === "mock") {
-      updateJob(jobId, { status: "failed", stage: "فشل التوليد", error: reason });
+      await store.update(jobId, { status: "failed", stage: "فشل التوليد", error: reason });
       return;
     }
     // المحرك الحقيقي غير متاح (شبكة/باقة/إعداد) — نرجع لمعاينة سلّم المقام
     console.error("Music provider failed, falling back to mock:", reason);
     try {
       const result = await mockMusic.generate(job.request);
-      updateJob(jobId, {
-        status: "done",
+      await store.complete(jobId, result, {
         stage: "اكتمل التوليد (وضع تجريبي)",
-        result,
         fellBack: reason.slice(0, 200),
       });
     } catch (mockError) {
-      updateJob(jobId, {
+      await store.update(jobId, {
         status: "failed",
         stage: "فشل التوليد",
         error: mockError instanceof Error ? mockError.message : "unknown",

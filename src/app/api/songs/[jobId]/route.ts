@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getJob } from "@/lib/jobs";
+import { getJobsStore } from "@/lib/jobs";
 
 /** حالة مهمة التوليد — يستعلم عنها العميل دورياً حتى الاكتمال أو الفشل */
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ jobId: string }> }) {
   const { jobId } = await ctx.params;
-  const job = getJob(jobId);
+  const job = await getJobsStore().get(jobId);
   if (!job) {
     return NextResponse.json({ error: "المهمة غير موجودة أو انتهت صلاحيتها" }, { status: 404 });
   }
@@ -15,11 +15,9 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ jobId: str
     stage: job.stage,
     tier: job.tier,
     stylePrompt: job.request.stylePrompt,
-    ...(job.result && {
-      provider: job.result.provider,
-      mock: !!job.result.mock,
-      mimeType: job.result.mimeType,
-    }),
+    ...(job.provider && { provider: job.provider }),
+    ...(job.mimeType && { mimeType: job.mimeType }),
+    ...(job.mock !== undefined && { mock: job.mock }),
     ...(job.fellBack && { fellBack: job.fellBack }),
     ...(job.error && { error: job.error }),
   });
