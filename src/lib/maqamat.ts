@@ -98,6 +98,7 @@ export const DIALECTS = [
   { id: "egyptian", name: "مصرية", en: "Egyptian Arabic dialect" },
   { id: "gulf", name: "خليجية", en: "Gulf Arabic dialect" },
   { id: "levantine", name: "شامية", en: "Levantine Arabic dialect" },
+  { id: "palestinian", name: "فلسطينية", en: "Palestinian Arabic dialect" },
   { id: "iraqi", name: "عراقية", en: "Iraqi Arabic dialect" },
   { id: "maghrebi", name: "مغربية", en: "Maghrebi Arabic dialect" },
 ] as const;

@@ -21,6 +21,8 @@ export const VOICES: Voice[] = [
   { id: "v-saudi-m1", name: "فهد", gender: "male", dialect: "سعودية", provider: "elevenlabs", tone: "شبابي قريب — محتوى تواصل اجتماعي", elevenVoiceId: "IKne3meq5aSn9XLyUdCD" },
   { id: "v-egy-f1", name: "سلمى", gender: "female", dialect: "مصرية", provider: "elevenlabs", tone: "حيوي وودود — إعلانات وترفيه", elevenVoiceId: "cgSgspJ2msm6clMCkdW9" },
   { id: "v-jor-m1", name: "عمر", gender: "male", dialect: "أردنية", provider: "elevenlabs", tone: "هادئ وواثق — بودكاست", elevenVoiceId: "JBFqnCBsd6RMkjVDRZzb" },
+  { id: "v-pal-m1", name: "وسيم", gender: "male", dialect: "فلسطينية", provider: "elevenlabs", tone: "دافئ صادق — قصص ومحتوى اجتماعي", elevenVoiceId: "bIHbv24MWmeRgasZH58o" },
+  { id: "v-pal-f1", name: "دارين", gender: "female", dialect: "فلسطينية", provider: "elevenlabs", tone: "حنون واضح — تعليم وسرد", elevenVoiceId: "XrExE9yKIg1WjnnlVkGX" },
   { id: "v-uae-f1", name: "موزة", gender: "female", dialect: "إماراتية", provider: "elevenlabs", tone: "رسمي أنيق — أخبار وشركات", elevenVoiceId: "Xb7hH8MSUJpSbSDYk0k2" },
   { id: "v-leb-f1", name: "ريما", gender: "female", dialect: "لبنانية", provider: "elevenlabs", tone: "ناعم عصري — إعلانات ولايف ستايل", elevenVoiceId: "pFZP5JQG7iQjIQuC4Bku" },
 ];
