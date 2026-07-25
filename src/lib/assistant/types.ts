@@ -5,6 +5,12 @@
 
 export type AssistMode = "write" | "improve";
 
+/** برومبت موسيقي سابق نال أعلى تقييم من المستخدمين — يُحقن كمثال يحتذي به المساعد */
+export type StyleExemplar = {
+  maqamId: string | null;
+  stylePrompt: string;
+};
+
 export type AssistRequest = {
   mode: AssistMode;
   /** فكرة الأغنية (مطلوبة في وضع الكتابة) */
@@ -15,6 +21,8 @@ export type AssistRequest = {
   dialectId: string;
   /** الأسلوب الغنائي المختار من SONG_STYLES */
   styleId: string;
+  /** أمثلة ناجحة من عقل المنصة (اختيارية) */
+  exemplars?: StyleExemplar[];
 };
 
 export type AssistResult = {

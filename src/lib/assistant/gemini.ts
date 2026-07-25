@@ -26,7 +26,20 @@ const RESULT_SCHEMA = {
   propertyOrdering: ["title", "lyrics", "maqamId", "maqamReason", "stylePromptEn"],
 };
 
-function buildSystemPrompt(): string {
+/** حقن أمثلة عقل المنصة: برومبتات سبق أن أنتجت أغاني نالت أعلى رضا المستخدمين */
+function exemplarsBlock(exemplars?: AssistRequest["exemplars"]): string {
+  if (!exemplars?.length) return "";
+  const lines = exemplars.map((e) => {
+    const maqam = MAQAMAT.find((m) => m.id === e.maqamId);
+    return `- ${maqam ? `(مقام ${maqam.name}) ` : ""}${e.stylePrompt}`;
+  });
+  return `
+
+برومبتات موسيقية سابقة نالت أعلى تقييم من مستخدمي المنصة — احتذِ ببنيتها ومستوى تفصيلها دون نسخها حرفياً:
+${lines.join("\n")}`;
+}
+
+function buildSystemPrompt(exemplars?: AssistRequest["exemplars"]): string {
   const maqamList = MAQAMAT.map(
     (m) => `- ${m.id}: مقام ${m.name} — الطابع: ${m.mood}. ${m.description}`
   ).join("\n");
@@ -39,7 +52,7 @@ function buildSystemPrompt(): string {
 ${maqamList}
 3. صياغة برومبت موسيقي احترافي بالإنجليزية لمحرك توليد الموسيقى، يصف المقام وأرباع النغمات إن وُجدت والآلات الشرقية المناسبة والإيقاع والسرعة والمزاج وبنية الأغنية.
 
-قواعد الكتابة: التزم باللهجة المطلوبة بدقة، وراعِ الوزن والقافية وقابلية الغناء، وتجنّب الحشو والتكرار غير المقصود.`;
+قواعد الكتابة: التزم باللهجة المطلوبة بدقة، وراعِ الوزن والقافية وقابلية الغناء، وتجنّب الحشو والتكرار غير المقصود.${exemplarsBlock(exemplars)}`;
 }
 
 function buildUserPrompt(req: AssistRequest): string {
@@ -65,7 +78,7 @@ export function geminiAssistant(apiKey: string): LyricsAssistant {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: buildSystemPrompt() }] },
+          systemInstruction: { parts: [{ text: buildSystemPrompt(req.exemplars) }] },
           contents: [{ role: "user", parts: [{ text: buildUserPrompt(req) }] }],
           generationConfig: {
             responseMimeType: "application/json",

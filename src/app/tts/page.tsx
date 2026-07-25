@@ -8,8 +8,14 @@ import { authHeaders } from "@/lib/supabase";
 
 type CustomVoice = { id: string; name: string };
 
+/** صوت الكتالوج مُثرى بإشارات عقل المنصة: تقييم المستخدمين وإعدادات متعلمة */
+type CatalogVoice = Voice & {
+  rating?: { avg: number; count: number };
+  learned?: { stability: number; speed: number };
+};
+
 export default function TTSStudio() {
-  const [voices, setVoices] = useState<Voice[]>(VOICES);
+  const [voices, setVoices] = useState<CatalogVoice[]>(VOICES);
   const [text, setText] = useState("");
   const [dialect, setDialect] = useState<string>("الكل");
   const [voiceId, setVoiceId] = useState(VOICES[0].id);
@@ -272,7 +278,7 @@ export default function TTSStudio() {
         const res = await fetch("/api/voices/catalog");
         const data = await res.json().catch(() => null);
         if (cancelled || !res.ok || !data) return;
-        const all: Voice[] = data.voices ?? [];
+        const all: CatalogVoice[] = data.voices ?? [];
         if (all.length) {
           setVoices(all);
           setVoiceId((prev) =>
@@ -288,6 +294,15 @@ export default function TTSStudio() {
       cancelled = true;
     };
   }, []);
+
+  /** اختيار صوت مع تطبيق إعداداته المتعلمة من تقييمات المستخدمين إن وُجدت */
+  function selectVoice(v: CatalogVoice) {
+    setVoiceId(v.id);
+    if (v.learned) {
+      setSpeed(Math.min(1.5, Math.max(0.5, v.learned.speed)));
+      setStability(Math.min(1, Math.max(0, v.learned.stability)));
+    }
+  }
 
   const dialects = useMemo(() => [...new Set(voices.map((v) => v.dialect))], [voices]);
   const shownVoices = useMemo(
@@ -696,7 +711,7 @@ export default function TTSStudio() {
               onChange={(e) => {
                 setDialect(e.target.value);
                 const first = e.target.value === "الكل" ? voices[0] : voices.find((v) => v.dialect === e.target.value);
-                if (first) setVoiceId(first.id);
+                if (first) selectVoice(first);
               }}
               className="w-full rounded-xl border border-border-soft bg-surface-raised px-3 py-2.5 outline-none focus:border-primary"
             >
@@ -713,7 +728,7 @@ export default function TTSStudio() {
               {shownVoices.map((v) => (
                 <button
                   key={v.id}
-                  onClick={() => setVoiceId(v.id)}
+                  onClick={() => selectVoice(v)}
                   className={`rounded-xl border px-3 py-2.5 text-start transition-colors ${
                     voiceId === v.id
                       ? "border-primary bg-primary/10"
@@ -726,6 +741,16 @@ export default function TTSStudio() {
                       <span className="mx-2 rounded-full bg-surface-raised px-2 py-0.5 text-xs text-muted">
                         {v.dialect}
                       </span>
+                    </span>
+                    <span className="flex items-center gap-1.5 text-xs">
+                      {v.learned && (
+                        <span title="إعدادات متعلمة من تقييمات المستخدمين — تُطبَّق تلقائياً عند الاختيار">🧠</span>
+                      )}
+                      {v.rating && (
+                        <span className="text-gold" title={`متوسط ${v.rating.avg} من ${v.rating.count} تقييماً`}>
+                          ★ {v.rating.avg.toFixed(1)}
+                        </span>
+                      )}
                     </span>
                   </span>
                   <span className="mt-1 block text-xs text-muted">{v.tone}</span>

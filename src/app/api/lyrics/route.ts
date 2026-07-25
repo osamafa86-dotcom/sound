@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DIALECTS, SONG_STYLES } from "@/lib/maqamat";
 import { getLyricsAssistant, mockAssistant } from "@/lib/assistant";
+import { getPromptExemplars } from "@/lib/brain";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
 import type { AssistRequest, AssistResult } from "@/lib/assistant/types";
@@ -34,6 +35,8 @@ export async function POST(req: NextRequest) {
     lyrics,
     dialectId: DIALECTS.some((d) => d.id === body.dialectId) ? body.dialectId : DIALECTS[0].id,
     styleId: SONG_STYLES.some((s) => s.id === body.styleId) ? body.styleId : SONG_STYLES[0].id,
+    // عقل المنصة: أمثلة برومبتات نالت أعلى تقييم تُحقن في سياق المساعد
+    exemplars: await getPromptExemplars().catch(() => []),
   };
 
   const assistant = getLyricsAssistant();

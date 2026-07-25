@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTTSProvider, mockTTS } from "@/lib/providers";
+import { getVoiceTuning } from "@/lib/brain";
 import { getCustomVoice } from "@/lib/customVoices";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
@@ -44,6 +45,15 @@ export async function POST(req: NextRequest) {
     speed: body.speed,
     format: body.format,
   };
+
+  // عقل المنصة: عند غياب الإعدادات تُطبَّق القيم المتعلمة من التوليدات عالية التقييم
+  if (request.stability === undefined || request.speed === undefined) {
+    const learned = (await getVoiceTuning()).get(voiceId);
+    if (learned) {
+      request.stability ??= learned.stability;
+      request.speed ??= learned.speed;
+    }
+  }
 
   const provider = getTTSProvider(voiceId);
   let result: AudioResult;
