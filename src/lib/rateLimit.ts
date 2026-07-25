@@ -35,6 +35,7 @@ export const LIMITS = {
   voiceClone: { perVisitor: envInt("RATE_LIMIT_CLONE", 3), global: 20, windowSec: 24 * 3600 },
   voiceDesign: { perVisitor: envInt("RATE_LIMIT_DESIGN", 5), global: 40, windowSec: 3600 },
   pronunciation: { perVisitor: envInt("RATE_LIMIT_PRONUNCIATION", 30), global: 200, windowSec: 3600 },
+  enhance: { perVisitor: envInt("RATE_LIMIT_ENHANCE", 30), global: 400, windowSec: 3600 },
 } satisfies Record<string, LimitRule>;
 
 export type LimitScope = keyof typeof LIMITS;
