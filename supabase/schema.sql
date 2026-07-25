@@ -5,7 +5,7 @@
 create table if not exists public.generations (
   id uuid primary key,
   user_id uuid not null references auth.users (id) on delete cascade,
-  kind text not null check (kind in ('tts', 'song')),
+  kind text not null check (kind in ('tts', 'song', 'recording')),
   title text not null,
   details text,
   mime_type text not null,
@@ -122,3 +122,25 @@ revoke execute on function public.consume_rate_limit(text, int, int) from anon, 
 -- تنظيف دوري اختياري للمهام القديمة (فعّله من Dashboard → Database → Extensions → pg_cron):
 -- select cron.schedule('cleanup-song-jobs', '0 * * * *',
 --   $$delete from public.song_jobs where created_at < now() - interval '1 day'$$);
+
+-- ============================================================
+-- المرحلة 7: الأصوات المستنسخة (معمل الصوت)
+-- ============================================================
+
+-- الأصوات المستنسخة — id هو معرّف الصوت لدى ElevenLabs، وكل صوت مربوط بمالكه
+create table if not exists public.custom_voices (
+  id text primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists custom_voices_user_idx on public.custom_voices (user_id, created_at desc);
+
+-- RLS مفعّلة بلا سياسات: الإدارة عبر مفتاح الخدمة من الخادم حصراً
+-- (الإنشاء يتطلب موافقة صريحة تُتحقق خادمياً في مسار الاستنساخ)
+alter table public.custom_voices enable row level security;
+
+-- ملاحظة: نفّذ هذا السطر إن كنت أنشأت الجدول قبل المرحلة 7 لتحديث قيد الأنواع:
+-- alter table public.generations drop constraint generations_kind_check;
+-- alter table public.generations add constraint generations_kind_check check (kind in ('tts','song','recording'));

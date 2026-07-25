@@ -5,7 +5,7 @@
 
 export type LocalItem = {
   id: string;
-  kind: "tts" | "song";
+  kind: "tts" | "song" | "recording";
   title: string;
   details: string;
   mimeType: string;

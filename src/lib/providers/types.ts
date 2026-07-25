@@ -6,6 +6,8 @@
 export type TTSRequest = {
   text: string;
   voiceId: string;
+  /** معرّف صوت ElevenLabs مباشر — للأصوات المستنسخة غير الموجودة في الكتالوج */
+  elevenVoiceId?: string;
   /** 0..1 — ثبات الأداء مقابل التعبير العاطفي */
   stability?: number;
   /** سرعة النطق (1 = طبيعي) */

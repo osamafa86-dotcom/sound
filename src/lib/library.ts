@@ -8,7 +8,7 @@ import { localList, localRemove, localSave, type LocalItem } from "./localLibrar
 
 export type LibraryItem = {
   id: string;
-  kind: "tts" | "song";
+  kind: "tts" | "song" | "recording";
   title: string;
   details: string;
   mimeType: string;
@@ -19,7 +19,7 @@ export type LibraryItem = {
 };
 
 export type SaveInput = {
-  kind: "tts" | "song";
+  kind: "tts" | "song" | "recording";
   title: string;
   details: string;
   blob: Blob;
@@ -31,7 +31,7 @@ const TABLE = "generations";
 
 type GenerationRow = {
   id: string;
-  kind: "tts" | "song";
+  kind: "tts" | "song" | "recording";
   title: string;
   details: string | null;
   mime_type: string;

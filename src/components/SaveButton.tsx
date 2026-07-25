@@ -14,7 +14,7 @@ export default function SaveButton({
   jobId,
 }: {
   blob: Blob;
-  kind: "tts" | "song";
+  kind: "tts" | "song" | "recording";
   title: string;
   details: string;
   /** عند توفره: يُحفظ خادمياً مباشرة من مخزن المهام دون رفع من المتصفح */

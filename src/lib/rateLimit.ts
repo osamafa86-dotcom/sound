@@ -16,6 +16,9 @@ export const RATE_LIMITS = {
   tts: envInt("RATE_LIMIT_TTS", 10),
   songs: envInt("RATE_LIMIT_SONGS", 6),
   lyrics: envInt("RATE_LIMIT_LYRICS", 12),
+  stt: envInt("RATE_LIMIT_STT", 8),
+  sts: envInt("RATE_LIMIT_STS", 6),
+  clone: envInt("RATE_LIMIT_CLONE", 2),
 } as const;
 
 /** مضاعف حدود المستخدمين المسجلين */

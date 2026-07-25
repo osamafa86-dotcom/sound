@@ -6,7 +6,7 @@ import AudioPlayer from "@/components/AudioPlayer";
 import { listLibrary, removeFromLibrary, type LibraryItem } from "@/lib/library";
 import { getSupabase, supabaseConfigured } from "@/lib/supabase";
 
-const KIND_LABELS = { tts: "🎙️ نص إلى صوت", song: "🎼 أغنية" } as const;
+const KIND_LABELS = { tts: "🎙️ نص إلى صوت", song: "🎼 أغنية", recording: "🎤 تسجيل" } as const;
 
 export default function Library() {
   const [items, setItems] = useState<LibraryItem[] | null>(null);

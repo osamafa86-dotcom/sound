@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
 import SaveButton from "@/components/SaveButton";
-import { DIALECTS, VOICES } from "@/lib/voices";
+import { VOICES, type Voice } from "@/lib/voices";
 import { authHeaders } from "@/lib/supabase";
 
 export default function TTSStudio() {
+  const [voices, setVoices] = useState<Voice[]>(VOICES);
   const [text, setText] = useState("");
   const [dialect, setDialect] = useState<string>("الكل");
   const [voiceId, setVoiceId] = useState(VOICES[0].id);
@@ -17,9 +18,33 @@ export default function TTSStudio() {
   const [result, setResult] = useState<{ url: string; blob: Blob; mock: boolean; ext: string; fellBack: boolean } | null>(null);
   const [error, setError] = useState("");
 
+  // الكتالوج الفعلي من الخادم: الأصوات المتاحة حسب المفاتيح + الأصوات المستنسخة للمستخدم
+  useEffect(() => {
+    let cancelled = false;
+    async function loadVoices() {
+      try {
+        const res = await fetch("/api/voices", { headers: await authHeaders() });
+        const data = await res.json().catch(() => null);
+        if (cancelled || !res.ok || !data) return;
+        const all: Voice[] = [...(data.custom ?? []), ...(data.voices ?? [])];
+        if (all.length) {
+          setVoices(all);
+          setVoiceId((prev) => (all.some((v) => v.id === prev) ? prev : all[0].id));
+        }
+      } catch {
+        /* الكتالوج الثابت يبقى بديلاً */
+      }
+    }
+    loadVoices();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const dialects = useMemo(() => [...new Set(voices.map((v) => v.dialect))], [voices]);
   const shownVoices = useMemo(
-    () => (dialect === "الكل" ? VOICES : VOICES.filter((v) => v.dialect === dialect)),
-    [dialect]
+    () => (dialect === "الكل" ? voices : voices.filter((v) => v.dialect === dialect)),
+    [dialect, voices]
   );
 
   async function generate() {
@@ -67,13 +92,13 @@ export default function TTSStudio() {
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            maxLength={5000}
+            maxLength={20000}
             placeholder={"اكتب النص هنا...\nمثال: أهلاً بكم في منصة مقام، حيث تتحول الكلمات إلى صوتٍ نابضٍ بالحياة."}
             className="min-h-72 w-full resize-y rounded-2xl border border-border-soft bg-surface-card p-5 leading-relaxed outline-none transition-colors focus:border-primary"
           />
           <div className="flex items-center justify-between text-xs text-muted">
-            <span>{text.length} / 5000 حرف</span>
-            <span>تدعم الفصحى واللهجات</span>
+            <span>{text.length} / 20000 حرف</span>
+            <span>النصوص الطويلة تُقسَّم عند حدود الجمل وتُدمج تلقائياً</span>
           </div>
 
           {error && (
@@ -122,13 +147,13 @@ export default function TTSStudio() {
               value={dialect}
               onChange={(e) => {
                 setDialect(e.target.value);
-                const first = e.target.value === "الكل" ? VOICES[0] : VOICES.find((v) => v.dialect === e.target.value);
+                const first = e.target.value === "الكل" ? voices[0] : voices.find((v) => v.dialect === e.target.value);
                 if (first) setVoiceId(first.id);
               }}
               className="w-full rounded-xl border border-border-soft bg-surface-raised px-3 py-2.5 outline-none focus:border-primary"
             >
               <option>الكل</option>
-              {DIALECTS.map((d) => (
+              {dialects.map((d) => (
                 <option key={d}>{d}</option>
               ))}
             </select>

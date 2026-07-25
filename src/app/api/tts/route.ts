@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTTSProvider, mockTTS } from "@/lib/providers";
+import { getCustomVoice } from "@/lib/customVoices";
 import { consumeRateLimit, rateLimitFor, rateLimitKey } from "@/lib/rateLimit";
 import { clientIp, getUserFromRequest } from "@/lib/serverAuth";
 import type { AudioResult, TTSRequest } from "@/lib/providers/types";
@@ -26,19 +27,33 @@ export async function POST(req: NextRequest) {
   if (!text) {
     return NextResponse.json({ error: "النص مطلوب" }, { status: 400 });
   }
-  if (text.length > 5000) {
-    return NextResponse.json({ error: "الحد الأقصى 5000 حرف" }, { status: 400 });
+  // النصوص الطويلة تُقسَّم عند حدود الجمل وتُدمج تلقائياً — يدعم الكتب الصوتية
+  if (text.length > 20000) {
+    return NextResponse.json({ error: "الحد الأقصى 20000 حرف" }, { status: 400 });
+  }
+
+  const voiceId: string = body?.voiceId ?? "";
+
+  // الأصوات المستنسخة (clone-xxx): تُحل من سجل المستخدم وتمرر معرّفها مباشرة
+  let elevenVoiceId: string | undefined;
+  if (voiceId.startsWith("clone-")) {
+    const custom = await getCustomVoice(voiceId.replace(/^clone-/, ""), user?.id ?? null);
+    if (!custom) {
+      return NextResponse.json({ error: "الصوت المستنسخ غير موجود أو ليس ملكك" }, { status: 404 });
+    }
+    elevenVoiceId = custom.id;
   }
 
   const request: TTSRequest = {
     text,
-    voiceId: body.voiceId ?? "",
+    voiceId,
+    elevenVoiceId,
     stability: body.stability,
     speed: body.speed,
     format: body.format,
   };
 
-  const provider = getTTSProvider();
+  const provider = getTTSProvider(voiceId);
   let result: AudioResult;
   let fallbackReason = "";
 
