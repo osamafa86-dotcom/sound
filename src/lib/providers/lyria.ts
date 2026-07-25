@@ -47,27 +47,36 @@ export function lyriaMusic(apiKey: string): MusicProvider {
           : `Sung vocals performing these Arabic lyrics:\n${req.lyrics!.trim()}`,
       ].join("\n");
 
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-          body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: { responseModalities: ["AUDIO"] },
-          }),
-        }
-      );
+      // النموذج يعيد 503 عند الازدحام المؤقت — نعيد المحاولة قبل الرجوع للمزوّد البديل
+      let res: Response | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+            body: JSON.stringify({
+              contents: [{ role: "user", parts: [{ text: prompt }] }],
+              generationConfig: { responseModalities: ["AUDIO"] },
+            }),
+          }
+        );
+        if (res.status !== 503) break;
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 4000 * (attempt + 1)));
+      }
 
-      if (!res.ok) {
-        const detail = await res.text().catch(() => "");
+      if (!res || !res.ok) {
+        const status = res?.status ?? 0;
+        const detail = res ? await res.text().catch(() => "") : "";
         // الطبقة المجانية تعطي حصة صفرية لـ Lyria — نميّزها لعرض رسالة مفهومة للمستخدم
-        const needsBilling = res.status === 429 && /limit:\s*0/.test(detail);
+        const needsBilling = status === 429 && /limit:\s*0/.test(detail);
         throw new LyriaError(
           needsBilling
             ? "توليد الموسيقى بـ Lyria يتطلب تفعيل الفوترة في Google Cloud (غير متاح على الطبقة المجانية)"
-            : `Lyria ${res.status}: ${detail.slice(0, 300)}`,
-          res.status,
+            : status === 503
+              ? "محرك Lyria مزدحم حالياً — جرّب بعد قليل"
+              : `Lyria ${status}: ${detail.slice(0, 300)}`,
+          status,
           needsBilling
         );
       }
