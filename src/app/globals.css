@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+:root {
+  --surface: #0a0e1a;
+  --surface-raised: #111827;
+  --surface-card: #141c2e;
+  --border-soft: #23304a;
+  --body: #dbe2ef;
+  --muted: #8b96ad;
+  --primary: #8b5cf6;
+  --primary-strong: #7c3aed;
+  --accent: #22d3ee;
+  --gold: #e0b354;
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-card: var(--surface-card);
+  --color-border-soft: var(--border-soft);
+  --color-body: var(--body);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-accent: var(--accent);
+  --color-gold: var(--gold);
+  --font-sans: var(--font-plex-arabic), "Segoe UI", "Noto Naskh Arabic", Tahoma, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--primary) 45%, transparent);
+}
+
+.text-gradient {
+  background: linear-gradient(120deg, var(--accent), var(--primary) 55%, var(--gold));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.glow-card {
+  background:
+    radial-gradient(60% 80% at 80% 0%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 70%),
+    var(--surface-card);
+}
+
+input[type="range"] {
+  accent-color: var(--primary);
+}
