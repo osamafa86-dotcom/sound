@@ -10,6 +10,7 @@ const links = [
   { href: "/tts", label: "النص إلى صوت" },
   { href: "/songs", label: "استوديو الأغاني" },
   { href: "/drama", label: "الاستوديو الدرامي" },
+  { href: "/podcast", label: "البودكاست" },
   { href: "/library", label: "مكتبتي" },
   { href: "/pricing", label: "الأسعار" },
 ];
