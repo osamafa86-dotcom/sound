@@ -26,16 +26,3 @@ export const mockMusic: MusicProvider = {
     };
   },
 };
-
-/**
- * اختيار المزوّد الفعلي حسب المفاتيح المتوفرة في البيئة.
- * عند إضافة ELEVENLABS_API_KEY / GEMINI_API_KEY لاحقاً تُستبدل هذه الدوال
- * بوحدات elevenlabs.ts / lyria.ts دون تغيير أي شيء في الواجهة أو المسارات.
- */
-export function getTTSProvider(): TTSProvider {
-  return mockTTS;
-}
-
-export function getMusicProvider(): MusicProvider {
-  return mockMusic;
-}

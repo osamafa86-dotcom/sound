@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { MAQAMAT, INSTRUMENTS, SONG_STYLES } from "@/lib/maqamat";
-import { getMusicProvider } from "@/lib/providers/mock";
+import { getMusicProvider, mockMusic } from "@/lib/providers";
+import type { AudioResult, MusicRequest } from "@/lib/providers/types";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -24,14 +25,28 @@ export async function POST(req: NextRequest) {
     .filter(Boolean)
     .join(", ");
 
-  const provider = getMusicProvider();
-  const result = await provider.generate({
+  const request: MusicRequest = {
     lyrics: body.lyrics,
     maqamId: maqam.id,
     styleId: style.id,
     instrumentIds,
     stylePrompt,
-  });
+    durationSec: body.durationSec,
+  };
+
+  const provider = getMusicProvider();
+  let result: AudioResult;
+  let fallbackReason = "";
+
+  try {
+    result = await provider.generate(request);
+  } catch (e) {
+    // المحرك الحقيقي غير متاح (شبكة/باقة/إعداد) — نرجع لمعاينة سلّم المقام
+    if (provider.id === "mock") throw e;
+    fallbackReason = e instanceof Error ? e.message : "unknown";
+    console.error("Music provider failed, falling back to mock:", fallbackReason);
+    result = await mockMusic.generate(request);
+  }
 
   return new NextResponse(new Uint8Array(result.audio), {
     headers: {
@@ -39,6 +54,7 @@ export async function POST(req: NextRequest) {
       "X-Provider": result.provider,
       "X-Mock": result.mock ? "1" : "0",
       "X-Style-Prompt": encodeURIComponent(stylePrompt),
+      ...(fallbackReason && { "X-Fallback": encodeURIComponent(fallbackReason.slice(0, 200)) }),
     },
   });
 }

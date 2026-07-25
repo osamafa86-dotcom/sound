@@ -13,7 +13,7 @@ export default function SongsStudio() {
   const [styleId, setStyleId] = useState<string>(SONG_STYLES[0].id);
   const [instrumentIds, setInstrumentIds] = useState<string[]>(["oud", "darbuka"]);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ url: string; mock: boolean; prompt: string } | null>(null);
+  const [result, setResult] = useState<{ url: string; mock: boolean; prompt: string; ext: string; fellBack: boolean } | null>(null);
   const [error, setError] = useState("");
 
   const maqam = MAQAMAT.find((m) => m.id === maqamId)!;
@@ -40,9 +40,11 @@ export default function SongsStudio() {
         throw new Error(data?.error ?? "تعذّر التوليد، حاول مجدداً");
       }
       const mock = res.headers.get("X-Mock") === "1";
+      const fellBack = res.headers.has("X-Fallback");
       const prompt = decodeURIComponent(res.headers.get("X-Style-Prompt") ?? "");
       const blob = await res.blob();
-      setResult({ url: URL.createObjectURL(blob), mock, prompt });
+      const ext = blob.type === "audio/mpeg" ? "mp3" : "wav";
+      setResult({ url: URL.createObjectURL(blob), mock, prompt, ext, fellBack });
     } catch (e) {
       setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
     } finally {
@@ -232,8 +234,18 @@ export default function SongsStudio() {
               <div className="flex flex-col gap-4">
                 <AudioPlayer
                   src={result.url}
-                  title={`معاينة مقام ${maqam.name} (سلّم المقام بأرباع النغمات)`}
+                  title={
+                    result.mock
+                      ? `معاينة مقام ${maqam.name} (سلّم المقام بأرباع النغمات)`
+                      : `أغنيتك بمقام ${maqam.name}`
+                  }
                   mock={result.mock}
+                  filename={`maqam-song.${result.ext}`}
+                  note={
+                    result.fellBack
+                      ? "تعذّر الوصول لمحرك التوليد من هذه البيئة (أو تتطلب الميزة باقة مدفوعة)، فعُرض سلّم المقام التجريبي بدلاً منه."
+                      : undefined
+                  }
                 />
                 {result.prompt && (
                   <div className="rounded-2xl border border-border-soft bg-surface-card p-4">

@@ -12,7 +12,7 @@ export default function TTSStudio() {
   const [stability, setStability] = useState(0.5);
   const [format, setFormat] = useState<"mp3" | "wav">("mp3");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ url: string; mock: boolean } | null>(null);
+  const [result, setResult] = useState<{ url: string; mock: boolean; ext: string; fellBack: boolean } | null>(null);
   const [error, setError] = useState("");
 
   const shownVoices = useMemo(
@@ -39,8 +39,10 @@ export default function TTSStudio() {
         throw new Error(data?.error ?? "تعذّر التوليد، حاول مجدداً");
       }
       const mock = res.headers.get("X-Mock") === "1";
+      const fellBack = res.headers.has("X-Fallback");
       const blob = await res.blob();
-      setResult({ url: URL.createObjectURL(blob), mock });
+      const ext = blob.type === "audio/mpeg" ? "mp3" : "wav";
+      setResult({ url: URL.createObjectURL(blob), mock, ext, fellBack });
     } catch (e) {
       setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
     } finally {
@@ -86,7 +88,19 @@ export default function TTSStudio() {
             {loading ? "جارٍ التوليد..." : "🎙️ توليد الصوت"}
           </button>
 
-          {result && <AudioPlayer src={result.url} title="الناتج الصوتي" mock={result.mock} />}
+          {result && (
+            <AudioPlayer
+              src={result.url}
+              title="الناتج الصوتي"
+              mock={result.mock}
+              filename={`maqam-tts.${result.ext}`}
+              note={
+                result.fellBack
+                  ? "تعذّر الوصول لمحرك ElevenLabs من هذه البيئة، فعُرضت نغمة تجريبية بدلاً منه."
+                  : undefined
+              }
+            />
+          )}
         </div>
 
         {/* الإعدادات */}
