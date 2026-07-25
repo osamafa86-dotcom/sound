@@ -24,6 +24,70 @@ export default function TTSStudio() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
+  // تصميم صوت جديد من وصف نصي
+  const [designOpen, setDesignOpen] = useState(false);
+  const [designDesc, setDesignDesc] = useState("");
+  const [designName, setDesignName] = useState("");
+  const [designing, setDesigning] = useState(false);
+  const [savingDesign, setSavingDesign] = useState("");
+  const [designError, setDesignError] = useState("");
+  const [previews, setPreviews] = useState<{ generatedVoiceId: string; url: string }[]>([]);
+
+  async function designVoice() {
+    setDesignError("");
+    setPreviews([]);
+    setDesigning(true);
+    try {
+      const res = await fetch("/api/voices/design", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: designDesc }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "تعذّر تصميم الصوت");
+
+      setPreviews(
+        (data.previews ?? []).map((p: { generatedVoiceId: string; audio: string; mediaType: string }) => ({
+          generatedVoiceId: p.generatedVoiceId,
+          url: `data:${p.mediaType};base64,${p.audio}`,
+        }))
+      );
+    } catch (e) {
+      setDesignError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally {
+      setDesigning(false);
+    }
+  }
+
+  async function saveDesign(generatedVoiceId: string) {
+    if (!designName.trim()) {
+      setDesignError("اكتب اسماً للصوت قبل الحفظ");
+      return;
+    }
+    setDesignError("");
+    setSavingDesign(generatedVoiceId);
+    try {
+      const res = await fetch("/api/voices/design", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: designName.trim(), description: designDesc, generatedVoiceId }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "تعذّر حفظ الصوت");
+
+      setCustomVoices((prev) => [{ id: data.voiceId, name: data.name }, ...prev]);
+      setVoiceId(`custom:${data.voiceId}`);
+      setPreviews([]);
+      setDesignName("");
+      setDesignDesc("");
+      setCloneSuccess(`تم حفظ صوت «${data.name}» — اخترناه لك، اكتب نصاً وجرّبه!`);
+    } catch (e) {
+      setDesignError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally {
+      setSavingDesign("");
+    }
+  }
+
   useEffect(() => {
     fetch("/api/voices")
       .then((r) => r.json())
@@ -261,6 +325,75 @@ export default function TTSStudio() {
                 >
                   {cloning ? "جارٍ الاستنساخ..." : "🧬 استنسخ الصوت"}
                 </button>
+              </div>
+            )}
+          </div>
+
+          {/* تصميم صوت من وصف */}
+          <div className="rounded-xl border border-gold/30 bg-gold/5 p-4">
+            <button
+              onClick={() => setDesignOpen(!designOpen)}
+              className="flex w-full items-center justify-between text-sm font-bold"
+            >
+              <span>🎨 صمّم صوتاً جديداً</span>
+              <span className={`text-muted transition-transform ${designOpen ? "rotate-180" : ""}`}>⌄</span>
+            </button>
+
+            {designOpen && (
+              <div className="mt-3 flex flex-col gap-3">
+                <p className="text-xs leading-relaxed text-muted">
+                  صف الصوت الذي تريده بالعربية — العمر، الجنس، اللهجة، النبرة — وسيصنعه الذكاء
+                  الاصطناعي من الصفر. مثالي لإنشاء أصوات فلسطينية بتنويعات غير متوفرة في المكتبة.
+                </p>
+
+                <textarea
+                  value={designDesc}
+                  onChange={(e) => setDesignDesc(e.target.value)}
+                  maxLength={800}
+                  rows={3}
+                  placeholder="مثال: امرأة فلسطينية في الثلاثينات من نابلس، صوت دافئ وحنون بلهجة شامية، نبرة هادئة مناسبة لسرد القصص"
+                  className="resize-y rounded-lg border border-border-soft bg-surface px-3 py-2 text-sm leading-relaxed outline-none focus:border-gold"
+                />
+
+                <button
+                  onClick={designVoice}
+                  disabled={designing || designDesc.trim().length < 20}
+                  className="rounded-lg bg-gold px-3 py-2 text-sm font-semibold text-surface transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {designing ? "جارٍ التصميم..." : "🎨 صمّم 3 معاينات"}
+                </button>
+
+                {designError && (
+                  <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                    {designError}
+                  </p>
+                )}
+
+                {previews.length > 0 && (
+                  <div className="flex flex-col gap-3">
+                    <input
+                      value={designName}
+                      onChange={(e) => setDesignName(e.target.value)}
+                      maxLength={60}
+                      placeholder="اسم الصوت... مثال: نور الفلسطينية"
+                      className="rounded-lg border border-border-soft bg-surface px-3 py-2 text-sm outline-none focus:border-gold"
+                    />
+                    <p className="text-xs text-muted">استمع للثلاثة واحفظ الأفضل:</p>
+                    {previews.map((p, i) => (
+                      <div key={p.generatedVoiceId} className="rounded-lg border border-border-soft bg-surface p-3">
+                        <p className="mb-2 text-xs font-semibold">المعاينة {i + 1}</p>
+                        <audio controls src={p.url} className="w-full" preload="none" />
+                        <button
+                          onClick={() => saveDesign(p.generatedVoiceId)}
+                          disabled={!!savingDesign}
+                          className="mt-2 w-full rounded-lg border border-gold px-3 py-1.5 text-xs font-semibold text-gold transition-colors hover:bg-gold/10 disabled:opacity-40"
+                        >
+                          {savingDesign === p.generatedVoiceId ? "جارٍ الحفظ..." : "✓ احفظ هذا الصوت"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
