@@ -1,6 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { emitSignal } from "@/lib/signalClient";
+
+/** سياق الإشارة الضمنية: من يُنسب له الاستماع الكامل/الإعادة/التنزيل */
+export type SignalContext = {
+  voiceId?: string;
+  maqamId?: string;
+  settings?: Record<string, unknown>;
+};
 
 /** عدد أعمدة شكل الموجة المرسومة */
 const BARS = 160;
@@ -47,6 +55,7 @@ export default function AudioPlayer({
   filename = "maqam-audio.wav",
   note,
   onTime,
+  signal,
   children,
 }: {
   src: string;
@@ -56,6 +65,8 @@ export default function AudioPlayer({
   note?: string;
   /** يُستدعى بموضع التشغيل الحالي بالثواني — للكاريوكي والمزامنات */
   onTime?: (sec: number) => void;
+  /** سياق إشارات التعلم الضمنية — يفعّل إشارات الاستماع الكامل والإعادة والتنزيل */
+  signal?: SignalContext;
   /** إجراءات إضافية أسفل المشغّل — مثل زر الحفظ في المكتبة */
   children?: React.ReactNode;
 }) {
@@ -86,7 +97,13 @@ export default function AudioPlayer({
     setDuration(0);
   }
 
+  // إشارة واحدة لكل ملف: استماع كامل، ثم إعادة واحدة كحد أقصى
+  const endedOnceRef = useRef(false);
+  const replayedRef = useRef(false);
+
   useEffect(() => {
+    endedOnceRef.current = false;
+    replayedRef.current = false;
     let cancelled = false;
     extractPeaks(src)
       .then((p) => {
@@ -190,11 +207,21 @@ export default function AudioPlayer({
         controls={failed}
         className={failed ? "w-full" : "hidden"}
         preload="auto"
-        onPlay={() => setPlaying(true)}
+        onPlay={() => {
+          setPlaying(true);
+          if (signal && endedOnceRef.current && !replayedRef.current) {
+            replayedRef.current = true;
+            emitSignal({ kind: "replayed", ...signal });
+          }
+        }}
         onPause={() => setPlaying(false)}
         onEnded={() => {
           setPlaying(false);
           setProgress(1);
+          if (signal && !endedOnceRef.current) {
+            endedOnceRef.current = true;
+            emitSignal({ kind: "played_to_end", ...signal });
+          }
         }}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
         onTimeUpdate={(e) => {
@@ -234,6 +261,7 @@ export default function AudioPlayer({
       <a
         href={src}
         download={filename}
+        onClick={() => signal && emitSignal({ kind: "downloaded", ...signal })}
         className="mt-3 inline-block rounded-lg border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:text-body"
       >
         ⬇ تنزيل الملف

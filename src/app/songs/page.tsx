@@ -5,6 +5,7 @@ import AudioPlayer from "@/components/AudioPlayer";
 import Karaoke from "@/components/Karaoke";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import { findActiveWord, type KaraokeWord } from "@/lib/karaoke";
+import { emitSignal } from "@/lib/signalClient";
 import { DIALECTS, INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
 import { authHeaders } from "@/lib/supabase";
 import {
@@ -301,6 +302,19 @@ export default function SongsStudio() {
   }
 
   async function generate(extras?: Record<string, unknown>) {
+    // إشارات نفور ضمنية: طلب نسخة أخرى أو إعادة مقطع = عدم رضا عن السابقة
+    if (result && !result.mock) {
+      if (extras?.regenerateSectionIndex !== undefined) {
+        emitSignal({
+          kind: "section_regen",
+          maqamId,
+          settings: { stylePrompt: result.prompt },
+          meta: { sectionIndex: extras.regenerateSectionIndex },
+        });
+      } else {
+        emitSignal({ kind: "regenerated", maqamId, settings: { stylePrompt: result.prompt } });
+      }
+    }
     setError("");
     setLoading(true);
     setStage("جارٍ إنشاء المهمة...");
@@ -449,6 +463,8 @@ export default function SongsStudio() {
     try {
       await navigator.clipboard.writeText(`${location.origin}/share/${result.jobId}`);
       setShareCopied(true);
+      // المشاركة أعلى إشارات الرضا
+      emitSignal({ kind: "shared", maqamId, settings: { stylePrompt: result.prompt } });
     } catch {
       setError("تعذّر نسخ الرابط — انسخه يدوياً من شريط العنوان بعد فتح الصفحة");
     }
@@ -1059,6 +1075,7 @@ export default function SongsStudio() {
                   }
                   mock={result.mock}
                   onTime={handlePlayerTime}
+                  signal={result.mock ? undefined : { maqamId, settings: { stylePrompt: result.prompt } }}
                   filename={`maqam-song-v${versions.length}.${result.ext}`}
                   note={
                     result.fellBack
@@ -1082,6 +1099,16 @@ export default function SongsStudio() {
                       singer: instrumental ? undefined : singer,
                       bpm: bpm ?? undefined,
                       sectionsCount: sections?.length,
+                    }}
+                    onSaved={() => {
+                      if (versions.length > 1) {
+                        emitSignal({
+                          kind: "version_chosen",
+                          maqamId,
+                          settings: { stylePrompt: result.prompt },
+                          meta: { jobId: result.jobId, of: versions.length },
+                        });
+                      }
                     }}
                   />
                 </AudioPlayer>
@@ -1198,6 +1225,7 @@ export default function SongsStudio() {
                         src={v.url}
                         title={`«${v.title}» — النسخة ${versions.length - 1 - i}`}
                         mock={v.mock}
+                        signal={v.mock ? undefined : { maqamId, settings: { stylePrompt: v.prompt } }}
                         filename={`maqam-song-v${versions.length - 1 - i}.${v.ext}`}
                       >
                         <SaveToLibrary
@@ -1209,6 +1237,15 @@ export default function SongsStudio() {
                           styleId={styleId}
                           provider={v.provider}
                           settings={{ instrumentIds, tier, durationSec, stylePrompt: v.prompt }}
+                          onSaved={() =>
+                            // حفظ نسخة من بين عدة نسخ = تفضيل صريح لها على أخواتها
+                            emitSignal({
+                              kind: "version_chosen",
+                              maqamId,
+                              settings: { stylePrompt: v.prompt },
+                              meta: { jobId: v.jobId, of: versions.length },
+                            })
+                          }
                         />
                       </AudioPlayer>
                     ))}

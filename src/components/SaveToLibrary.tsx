@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { emitSignal } from "@/lib/signalClient";
 
 type Props = {
   /** رابط blob الناتج من التوليد */
@@ -15,6 +16,8 @@ type Props = {
   styleId?: string;
   provider?: string;
   settings?: Record<string, unknown>;
+  /** يُستدعى بعد نجاح الحفظ — لإشارات تعلم إضافية لدى الصفحة الأم */
+  onSaved?: () => void;
 };
 
 export default function SaveToLibrary(props: Props) {
@@ -66,6 +69,14 @@ export default function SaveToLibrary(props: Props) {
       if (!res.ok) throw new Error(data?.error ?? "تعذّر الحفظ");
 
       setState("saved");
+      // الحفظ أقوى إشارات الرضا الضمنية — يغذي ترتيب الأصوات والإعدادات المتعلمة
+      emitSignal({
+        kind: "saved",
+        voiceId: props.voiceId,
+        maqamId: props.maqamId,
+        settings: props.settings,
+      });
+      props.onSaved?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "حدث خطأ");
       setState("idle");

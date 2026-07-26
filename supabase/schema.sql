@@ -263,6 +263,84 @@ create index if not exists custom_voices_user_idx on public.custom_voices (user_
 -- الإدارة عبر مفتاح الخدمة من الخادم حصراً (الإنشاء يتطلب موافقة صريحة تُتحقق خادمياً)
 alter table public.custom_voices enable row level security;
 
+-- ============================================================
+-- 10) عقل المنصة المتقدم — الإشارات الضمنية والتقييم الآلي وسلالات البرومبتات
+-- ============================================================
+
+-- الإشارات الضمنية: كل تفاعل ذي معنى (استماع كامل، حفظ، تنزيل، مشاركة،
+-- إعادة توليد، اختيار نسخة) يتحول وقود تعلم — الوزن موجب رضاً وسالب نفوراً
+create table if not exists public.signals (
+  id bigserial primary key,
+  user_id uuid references auth.users (id) on delete set null,
+  kind text not null,
+  weight real not null,
+  voice_id text,
+  maqam_id text,
+  settings jsonb,
+  meta jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists signals_voice_idx on public.signals (voice_id, created_at desc);
+create index if not exists signals_maqam_idx on public.signals (maqam_id, created_at desc);
+
+alter table public.signals enable row level security;
+-- الكتابة والقراءة عبر مفتاح الخدمة من الخادم حصراً
+
+-- ملخص إشارات كل صوت — يُدمج مع نجوم التقييم في ترتيب الكتالوج
+create or replace view public.voice_signal_scores as
+select
+  voice_id,
+  count(*)::int          as signals_count,
+  round(avg(weight)::numeric, 3) as avg_weight
+from public.signals
+where voice_id is not null
+group by voice_id;
+
+-- التقييم الآلي: العقل ينقد نفسه — دقة نطق الأصوات والتزام الأغاني بالمقام
+create table if not exists public.auto_evals (
+  id bigserial primary key,
+  kind text not null,          -- tts | song
+  voice_id text,
+  maqam_id text,
+  variant_id bigint,
+  score real not null,         -- 0..1
+  meta jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists auto_evals_voice_idx on public.auto_evals (voice_id, created_at desc);
+create index if not exists auto_evals_variant_idx on public.auto_evals (variant_id);
+
+alter table public.auto_evals enable row level security;
+
+-- ملخص التقييم الآلي لكل صوت
+create or replace view public.voice_auto_scores as
+select
+  voice_id,
+  count(*)::int as evals_count,
+  round(avg(score)::numeric, 3) as avg_auto
+from public.auto_evals
+where kind = 'tts' and voice_id is not null
+group by voice_id;
+
+-- سلالات البرومبتات المتنافسة لكل مقام — أساس التطور الذاتي
+create table if not exists public.prompt_variants (
+  id bigserial primary key,
+  maqam_id text not null,
+  prompt text not null,
+  source text not null default 'seed',   -- seed | reflection
+  active boolean not null default true,
+  uses int not null default 0,
+  score_sum real not null default 0,
+  score_count int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists prompt_variants_maqam_idx on public.prompt_variants (maqam_id, active);
+
+alter table public.prompt_variants enable row level security;
+
 -- تنظيف دوري اختياري للمهام القديمة (Dashboard → Database → Extensions → pg_cron):
 -- select cron.schedule('cleanup-song-jobs', '0 * * * *',
 --   $$delete from public.song_jobs where created_at < now() - interval '1 day'$$);

@@ -500,6 +500,7 @@ export default function TTSStudio() {
               src={result.url}
               title="الناتج الصوتي"
               mock={result.mock}
+              signal={result.mock ? undefined : { voiceId, settings: { stability, speed } }}
               filename={`maqam-tts.${result.ext}`}
               note={
                 result.fellBack

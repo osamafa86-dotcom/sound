@@ -39,6 +39,7 @@ export const LIMITS = {
   imageBrief: { perVisitor: envInt("RATE_LIMIT_IMAGE_BRIEF", 10), global: 120, windowSec: 3600 },
   drama: { perVisitor: envInt("RATE_LIMIT_DRAMA", 5), global: 50, windowSec: 3600 },
   cover: { perVisitor: envInt("RATE_LIMIT_COVER", 8), global: 80, windowSec: 3600 },
+  signals: { perVisitor: envInt("RATE_LIMIT_SIGNALS", 120), global: 3000, windowSec: 3600 },
 } satisfies Record<string, LimitRule>;
 
 export type LimitScope = keyof typeof LIMITS;
