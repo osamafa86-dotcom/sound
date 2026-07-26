@@ -28,6 +28,9 @@ export async function GET(req: NextRequest) {
     JSON.stringify({
       owner,
       enabled,
+      // عدد المالكين المضبوطين فقط — بلا أي بريد، ويكشف فوراً هل سرى
+      // تعديل المتغير على النشرة الحالية أم أنها ما زالت على القيمة القديمة
+      ownerCount: ownerEmails().length,
       signedIn: !!user,
       ...(user && { email: user.email }),
       ...(reason && { reason }),
