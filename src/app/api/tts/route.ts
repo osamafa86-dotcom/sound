@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { getTTSProvider, mockTTS } from "@/lib/providers";
 import { getVoiceTuning } from "@/lib/brain";
+import { TTS_SAMPLE_ONE_IN, autoEvalTTS, sampleOneIn } from "@/lib/autoEval";
 import { getCustomVoice } from "@/lib/customVoices";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
@@ -62,7 +63,17 @@ export async function POST(req: NextRequest) {
 
   try {
     result = await provider.synthesize(request);
-    if (provider.id !== "mock") await logUsage("tts", user?.id ?? null);
+    if (provider.id !== "mock") {
+      await logUsage("tts", user?.id ?? null);
+      // النقد الذاتي بالعينات: تفريغ الناتج ومقارنته بالنص — بعد إرسال الاستجابة
+      const evalKey = process.env.ELEVENLABS_API_KEY;
+      if (evalKey && sampleOneIn(TTS_SAMPLE_ONE_IN)) {
+        const snapshot = { audio: result.audio, mimeType: result.mimeType };
+        after(() =>
+          autoEvalTTS({ apiKey: evalKey, text, voiceId, audio: snapshot.audio, mimeType: snapshot.mimeType })
+        );
+      }
+    }
   } catch (e) {
     // المحرك الحقيقي غير متاح (شبكة/رصيد/إعداد) — نرجع للوضع التجريبي بدل كسر التجربة
     if (provider.id === "mock") throw e;

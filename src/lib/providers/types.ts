@@ -37,6 +37,8 @@ export type MusicRequest = {
   sourceSongId?: string;
   /** يُكتب بعد اكتمال المهمة: معرّف الناتج لدى المحرك ليُعاد التوليد الجزئي منه لاحقاً */
   elevenSongId?: string;
+  /** سلالة برومبت المقام المستخدمة — ليُنسب لها التقييم الآلي (التطور الذاتي) */
+  variantId?: number;
 };
 
 export type AudioResult = {
