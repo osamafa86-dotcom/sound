@@ -3,6 +3,7 @@ import { MAQAMAT, INSTRUMENTS, SONG_STYLES } from "@/lib/maqamat";
 import { getJobsStore, type GenerationTier } from "@/lib/jobs";
 import { runSongJob } from "@/lib/songWorker";
 import { buildStylePrompt } from "@/lib/stylePrompt";
+import { pickMaqamPrompt } from "@/lib/promptVariants";
 import { SECTION_MIN_SEC, sanitizeSections, sectionsTotalSec } from "@/lib/songSections";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
@@ -55,11 +56,15 @@ export async function POST(req: NextRequest) {
   const variation =
     Number.isInteger(body.variation) && body.variation > 0 ? Math.min(9, body.variation) : 0;
 
+  // سلالة برومبت المقام من العقل — تُستخدم فقط حين لا يوجد برومبت مساعد يحل محلها
+  const aiStylePrompt = typeof body.aiStylePrompt === "string" ? body.aiStylePrompt : undefined;
+  const picked = aiStylePrompt ? null : await pickMaqamPrompt(maqam.id);
+
   const stylePrompt = buildStylePrompt({
-    maqam,
+    maqam: picked?.prompt ? { ...maqam, stylePrompt: picked.prompt } : maqam,
     styleEn: style.en,
     instrumentsEn: instruments.map((i) => i.en),
-    aiStylePrompt: typeof body.aiStylePrompt === "string" ? body.aiStylePrompt : undefined,
+    aiStylePrompt,
     variation,
   });
 
@@ -117,6 +122,7 @@ export async function POST(req: NextRequest) {
     sections,
     singer,
     bpm,
+    ...(picked?.variantId && { variantId: picked.variantId }),
     ...(sourceSongId && { regenerateIndex, sourceSongId }),
   };
 
