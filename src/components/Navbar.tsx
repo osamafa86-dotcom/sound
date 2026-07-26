@@ -21,6 +21,7 @@ export default function Navbar() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -31,6 +32,23 @@ export default function Navbar() {
     );
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // رابط لوحة النظام يظهر لمالك المنصة وحده — الخادم وحده يقرر ذلك
+  useEffect(() => {
+    if (!email) return;
+    let cancelled = false;
+    fetch("/api/admin/me")
+      .then((r) => r.json())
+      .then((d) => !cancelled && setIsOwner(!!d.owner))
+      .catch(() => !cancelled && setIsOwner(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [email]);
+
+  // اشتراط البريد أيضاً يخفي الرابط فور الخروج بلا انتظار جواب الخادم
+  const visibleLinks =
+    isOwner && email ? [...links, { href: "/admin", label: "لوحة النظام" }] : links;
 
   async function signOut() {
     await createClient()?.auth.signOut();
@@ -56,7 +74,7 @@ export default function Navbar() {
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">
-          {links.map((link) => (
+          {visibleLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
@@ -107,7 +125,7 @@ export default function Navbar() {
       {open && (
         <nav className="border-t border-border-soft bg-surface px-4 py-3 md:hidden">
           <div className="flex flex-col gap-1">
-            {links.map((link) => (
+            {visibleLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}

@@ -3,6 +3,7 @@ import { IBM_Plex_Sans_Arabic } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import SiteBanner from "@/components/SiteBanner";
 
 const plexArabic = IBM_Plex_Sans_Arabic({
   variable: "--font-plex-arabic",
@@ -38,6 +39,7 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" className={`${plexArabic.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-surface text-body">
+        <SiteBanner />
         <Navbar />
         <main className="flex-1">{children}</main>
         <Footer />
