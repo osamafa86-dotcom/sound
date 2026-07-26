@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, after } from "next/server";
-import { MAQAMAT, INSTRUMENTS, SONG_STYLES } from "@/lib/maqamat";
+import { DIALECTS, MAQAMAT, INSTRUMENTS, SONG_STYLES } from "@/lib/maqamat";
+import { applyPronunciationRules, listRules } from "@/lib/pronunciation";
 import { getJobsStore, type GenerationTier } from "@/lib/jobs";
 import { runSongJob } from "@/lib/songWorker";
 import { buildStylePrompt } from "@/lib/stylePrompt";
@@ -112,8 +113,25 @@ export async function POST(req: NextRequest) {
         ? sectionsTotalSec(sections)
         : Math.min(180, Math.max(30, requestedSec));
 
+  // ذاكرة النطق تُطبَّق نصياً على كلمات الغناء — كل كلمة علّمها المستخدمون
+  // للعقل تُغنى بصيغتها الصحيحة في كل أغنية قادمة تلقائياً
+  let lyrics = typeof body.lyrics === "string" ? body.lyrics.slice(0, 3000) : undefined;
+  const elevenKey = process.env.ELEVENLABS_API_KEY;
+  if (elevenKey && (lyrics || sections)) {
+    const rules = await listRules(elevenKey).catch(() => []);
+    if (rules.length) {
+      if (lyrics) lyrics = applyPronunciationRules(lyrics, rules);
+      if (sections) {
+        sections = sections.map((s) => ({ ...s, lyrics: applyPronunciationRules(s.lyrics, rules) }));
+      }
+    }
+  }
+
+  // لهجة الأداء الغنائي — توجّه المحرك لنطق أصيل باللهجة المختارة
+  const deliveryDialect = DIALECTS.find((d) => d.id === body.dialectId);
+
   const request: MusicRequest = {
-    lyrics: typeof body.lyrics === "string" ? body.lyrics.slice(0, 3000) : undefined,
+    lyrics,
     maqamId: maqam.id,
     styleId: style.id,
     instrumentIds,
@@ -122,6 +140,7 @@ export async function POST(req: NextRequest) {
     sections,
     singer,
     bpm,
+    dialectEn: deliveryDialect?.en,
     ...(picked?.variantId && { variantId: picked.variantId }),
     ...(sourceSongId && { regenerateIndex, sourceSongId }),
   };

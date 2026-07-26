@@ -74,6 +74,13 @@ export function buildCompositionPlan(req: MusicRequest): ElevenCompositionPlan |
         : req.singer === "female"
           ? ["female Arabic lead vocals"]
           : []),
+    // لهجة الأداء: نطق أصيل كالمتحدث الأصلي، والكلمات تُغنى كما كُتبت بتشكيلها
+    ...(!instrumental && req.dialectEn
+      ? [
+          `authentic ${req.dialectEn} Arabic dialect vocals, native-speaker pronunciation`,
+          "sing the lyrics exactly as written including diacritics",
+        ]
+      : []),
   ].filter(Boolean);
 
   const negative_global_styles = [

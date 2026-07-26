@@ -224,9 +224,12 @@ export function elevenLabsMusic(apiKey: string): MusicProvider {
         req.stylePrompt,
         ...(req.bpm ? [`${req.bpm} BPM`] : []),
         ...(req.singer && !instrumentalOnly ? [`${req.singer} Arabic lead vocals`] : []),
+        ...(req.dialectEn && !instrumentalOnly
+          ? [`authentic ${req.dialectEn} Arabic dialect, native-speaker pronunciation`]
+          : []),
         instrumentalOnly
           ? "instrumental only, no vocals"
-          : `Arabic vocals singing these lyrics:\n${req.lyrics!.trim()}`,
+          : `Arabic vocals singing these lyrics exactly as written:\n${req.lyrics!.trim()}`,
       ].join("\n");
 
       const { audio, songId } = await musicCall(apiKey, {

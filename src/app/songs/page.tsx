@@ -175,6 +175,96 @@ export default function SongsStudio() {
   const [sections, setSections] = useState<SongSection[] | null>(null);
   const [singer, setSinger] = useState<"female" | "male">("female");
   const [bpm, setBpm] = useState<number | null>(null);
+  /** لهجة الأداء الغنائي — تتبع لهجة الكتابة افتراضياً وتُغيَّر في خطوة التوليد */
+  const [deliveryDialectId, setDeliveryDialectId] = useState<string>(DIALECTS[0].id);
+
+  // المدقق اللغوي: إملاء + تشكيل تام حسب اللهجة
+  const [proofing, setProofing] = useState(false);
+  const [proofIssues, setProofIssues] = useState<{ original: string; fixed: string; reason: string }[] | null>(null);
+
+  async function proofread() {
+    if (proofing) return;
+    setProofing(true);
+    setAssistError("");
+    try {
+      const res = await fetch("/api/lyrics/proofread", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({
+          sections: sections ?? undefined,
+          lyrics: sections ? undefined : lyrics,
+          dialectId,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "تعذّر التدقيق");
+      if (sections && data.sections) {
+        applySections(data.sections);
+      } else {
+        setLyrics(data.lyrics ?? lyrics);
+      }
+      setProofIssues(data.issues ?? []);
+    } catch (e) {
+      setAssistError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally {
+      setProofing(false);
+    }
+  }
+
+  // التصحيح الموضعي المتعلم: علّم العقل النطق وأعد غناء المقطع المتأثر فقط
+  const [fixWord, setFixWord] = useState("");
+  const [fixAlias, setFixAlias] = useState("");
+  const [fixBusy, setFixBusy] = useState(false);
+  const [fixMsg, setFixMsg] = useState("");
+
+  async function fixPronunciation() {
+    const word = fixWord.trim();
+    const alias = fixAlias.trim();
+    if (!word || !alias || fixBusy || !result) return;
+    setFixBusy(true);
+    setFixMsg("");
+    setError("");
+    try {
+      // ١) تعليم العقل — يُطبَّق تلقائياً على كل توليد قادم (أصواتاً وأغانيَ)
+      const learn = await fetch("/api/pronunciation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ word, alias }),
+      });
+      const learnData = await learn.json().catch(() => null);
+      if (!learn.ok) throw new Error(learnData?.error ?? "تعذّر حفظ النطق");
+
+      // ٢) تصحيح الكلمات محلياً
+      const replaceIn = (text: string) => text.split(word).join(alias);
+      const nextSections = sections?.map((s) => ({ ...s, lyrics: replaceIn(s.lyrics) })) ?? null;
+      const affected = sections?.findIndex((s) => s.lyrics.includes(word)) ?? -1;
+      if (nextSections) applySections(nextSections);
+      else setLyrics(replaceIn(lyrics));
+
+      // ٣) إعادة غناء المقطع المتأثر وحده إن أمكن — وإلا نسخة كاملة مصححة
+      const canInpaint =
+        affected >= 0 && nextSections && result.elevenSongId && tier === "full" && !result.mock;
+      setFixWord("");
+      setFixAlias("");
+      if (canInpaint) {
+        setFixMsg(
+          `✓ تعلّم العقل نطق «${word}» — نعيد غناء ${SECTION_LABELS[nextSections[affected].kind]} وحده الآن`
+        );
+        await generate({
+          sections: nextSections,
+          regenerateSectionIndex: affected,
+          sourceSongId: result.elevenSongId,
+        });
+      } else {
+        setFixMsg(`✓ تعلّم العقل نطق «${word}» — نولّد نسخة مصححة كاملة`);
+        await generate(nextSections ? { sections: nextSections } : undefined);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally {
+      setFixBusy(false);
+    }
+  }
 
   /** تحديث المقاطع مع إبقاء النص الكامل متزامناً (هو ما يُحفظ ويُعدّ كلماته) */
   function applySections(next: SongSection[] | null) {
@@ -357,6 +447,8 @@ export default function SongsStudio() {
           sections: tier === "full" && sections?.length ? sections : undefined,
           singer: instrumental ? undefined : singer,
           bpm: bpm ?? undefined,
+          // لهجة الأداء: نطق أصيل باللهجة المختارة
+          dialectId: instrumental ? undefined : deliveryDialectId,
           // «نسخة أخرى»: رقم النسخة يدفع المحرك للتنويع بدل تكرار التوزيع
           variation: versions.length,
           ...extras,
@@ -559,7 +651,11 @@ export default function SongsStudio() {
                 />
                 <select
                   value={dialectId}
-                  onChange={(e) => setDialectId(e.target.value)}
+                  onChange={(e) => {
+                    setDialectId(e.target.value);
+                    // لهجة الأداء الغنائي تتبع لهجة الكتابة حتى يغيّرها المستخدم بنفسه
+                    setDeliveryDialectId(e.target.value);
+                  }}
                   className="rounded-xl border border-border-soft bg-surface p-3 text-sm outline-none transition-colors focus:border-gold"
                 >
                   {DIALECTS.map((d) => (
@@ -675,12 +771,22 @@ export default function SongsStudio() {
                       {String(sectionsTotalSec(sections) % 60).padStart(2, "0")} دقيقة
                     </span>
                   </h2>
-                  <button
-                    onClick={() => applySections(null)}
-                    className="rounded-lg border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:text-body"
-                  >
-                    ✍️ العودة للنص الحر
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={proofread}
+                      disabled={proofing}
+                      title="إملاء + تشكيل تام لكل كلمة كما تُنطق باللهجة — أعلى رافعة لسلامة الغناء"
+                      className="rounded-lg border border-accent px-3 py-1.5 text-xs font-semibold text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"
+                    >
+                      {proofing ? "جارٍ التدقيق..." : "✅ دقق وشكّل باللهجة"}
+                    </button>
+                    <button
+                      onClick={() => applySections(null)}
+                      className="rounded-lg border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:text-body"
+                    >
+                      ✍️ العودة للنص الحر
+                    </button>
+                  </div>
                 </div>
                 <p className="mt-1 text-sm text-muted">
                   كل مقطع يصل محرك التوليد باسمه ومدته وكلماته — فتأتي اللازمة لازمةً فعلاً والمقدمة آليةً كما رسمتها.
@@ -785,17 +891,48 @@ export default function SongsStudio() {
                   placeholder={"اكتب كلمات أغنيتك هنا (فصحى أو لهجة)...\nأو استخدم المساعد بالأعلى ليكتبها لك من فكرة."}
                   className="min-h-72 w-full resize-y rounded-2xl border border-border-soft bg-surface-card p-5 leading-loose outline-none transition-colors focus:border-gold"
                 />
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs text-muted">{lyrics.length} / 3000 حرف</span>
-                  <button
-                    onClick={() => applySections(parseSections(lyrics))}
-                    disabled={!lyrics.trim()}
-                    className="rounded-lg border border-gold px-3 py-1.5 text-xs font-semibold text-gold transition-colors hover:bg-gold/10 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    🧩 قسّم إلى مقاطع مُهيكلة
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={proofread}
+                      disabled={proofing || !lyrics.trim()}
+                      title="إملاء + تشكيل تام لكل كلمة كما تُنطق باللهجة — أعلى رافعة لسلامة الغناء"
+                      className="rounded-lg border border-accent px-3 py-1.5 text-xs font-semibold text-accent transition-colors hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {proofing ? "جارٍ التدقيق..." : "✅ دقق وشكّل باللهجة"}
+                    </button>
+                    <button
+                      onClick={() => applySections(parseSections(lyrics))}
+                      disabled={!lyrics.trim()}
+                      className="rounded-lg border border-gold px-3 py-1.5 text-xs font-semibold text-gold transition-colors hover:bg-gold/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      🧩 قسّم إلى مقاطع مُهيكلة
+                    </button>
+                  </div>
                 </div>
               </>
+            )}
+
+            {proofIssues && (
+              <div className="rounded-2xl border border-accent/40 bg-accent/5 p-4 text-sm">
+                <p className="font-semibold text-accent">
+                  ✅ تم التدقيق والتشكيل حسب اللهجة
+                  {proofIssues.length ? ` — ${proofIssues.length} تصحيحاً بارزاً:` : " — الكلمات كانت سليمة، أضفنا التشكيل الكامل فقط."}
+                </p>
+                {proofIssues.length > 0 && (
+                  <ul className="mt-2 flex flex-col gap-1 text-xs">
+                    {proofIssues.map((issue, i) => (
+                      <li key={i} className="rounded-lg bg-surface px-3 py-1.5">
+                        <span className="text-red-300 line-through">{issue.original}</span>
+                        {" ← "}
+                        <span className="font-semibold text-accent">{issue.fixed}</span>
+                        <span className="ms-2 text-muted">({issue.reason})</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
             <button
               onClick={() => setStep(1)}
@@ -997,6 +1134,22 @@ export default function SongsStudio() {
                           {g.label}
                         </button>
                       ))}
+                    </div>
+                  )}
+                  {!instrumental && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted">لهجة الأداء:</span>
+                      <select
+                        value={deliveryDialectId}
+                        onChange={(e) => setDeliveryDialectId(e.target.value)}
+                        className="rounded-xl border border-border-soft bg-surface-raised px-3 py-2 text-sm outline-none focus:border-primary"
+                      >
+                        {DIALECTS.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   )}
                   <div className="flex flex-wrap items-center gap-2">
@@ -1225,6 +1378,41 @@ export default function SongsStudio() {
                     ))}
                   </div>
                 ) : null}
+
+                {!result.mock && !instrumental && (
+                  <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+                    <p className="text-sm font-semibold">🩹 سمعت كلمة منطوقة خطأ؟ صححها هنا:</p>
+                    <p className="mt-1 text-xs text-muted">
+                      يتعلم العقل النطق الصحيح للأبد (لكل الأصوات والأغاني القادمة)، ويُعاد غناء
+                      المقطع المتأثر وحده — لا الأغنية كلها.
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <input
+                        value={fixWord}
+                        onChange={(e) => setFixWord(e.target.value)}
+                        maxLength={100}
+                        placeholder="الكلمة كما كتبتها"
+                        className="w-40 rounded-xl border border-border-soft bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+                      />
+                      <span className="text-muted">←</span>
+                      <input
+                        value={fixAlias}
+                        onChange={(e) => setFixAlias(e.target.value)}
+                        maxLength={200}
+                        placeholder="نطقها الصحيح مشكّلة، مثل: مَدْرَسِة"
+                        className="w-56 rounded-xl border border-border-soft bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+                      />
+                      <button
+                        onClick={fixPronunciation}
+                        disabled={fixBusy || loading || !fixWord.trim() || !fixAlias.trim()}
+                        className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-strong disabled:opacity-50"
+                      >
+                        {fixBusy ? "جارٍ التعليم..." : "🧠 علّم وصحّح"}
+                      </button>
+                    </div>
+                    {fixMsg && <p className="mt-2 text-xs text-accent">{fixMsg}</p>}
+                  </div>
+                )}
 
                 {result.prompt && (
                   <div className="rounded-2xl border border-border-soft bg-surface-card p-4">

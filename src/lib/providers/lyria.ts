@@ -55,7 +55,10 @@ export function lyriaMusic(apiKey: string): MusicProvider {
           ? "Instrumental only, no vocals."
           : [
               req.singer ? `${req.singer} Arabic lead vocals.` : "",
-              `Sung vocals performing these Arabic lyrics:\n${req.lyrics!.trim()}`,
+              req.dialectEn
+                ? `Authentic ${req.dialectEn} Arabic dialect, native-speaker pronunciation.`
+                : "",
+              `Sung vocals performing these Arabic lyrics exactly as written:\n${req.lyrics!.trim()}`,
             ]
               .filter(Boolean)
               .join("\n"),
