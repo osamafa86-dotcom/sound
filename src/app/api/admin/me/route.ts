@@ -22,11 +22,16 @@ export async function GET(req: NextRequest) {
         ? "لست مسجّل الدخول في هذا المتصفح"
         : "بريدك المسجّل ليس ضمن OWNER_EMAILS";
 
-  return NextResponse.json({
-    owner,
-    enabled,
-    signedIn: !!user,
-    ...(user && { email: user.email }),
-    ...(reason && { reason }),
-  });
+  // charset صريح: هذه النقطة تُفتح في المتصفح مباشرة للتشخيص، وبدونه
+  // تخمّن بعض المتصفحات ترميزاً محلياً فيظهر النص العربي مشوّهاً.
+  return new NextResponse(
+    JSON.stringify({
+      owner,
+      enabled,
+      signedIn: !!user,
+      ...(user && { email: user.email }),
+      ...(reason && { reason }),
+    }),
+    { headers: { "Content-Type": "application/json; charset=utf-8" } }
+  );
 }
