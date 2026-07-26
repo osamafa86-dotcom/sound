@@ -97,6 +97,12 @@ export const SONG_STYLES = [
   { id: "tarab", name: "طرب كلاسيكي", en: "classical Arabic tarab" },
   { id: "pop", name: "بوب عربي عصري", en: "modern Arabic pop" },
   { id: "muwashah", name: "موشح / تراثي", en: "traditional muwashah" },
+  // قوالب التراث الفلسطيني — حمضها الموسيقي الكامل في lib/heritage/palestinian
+  { id: "dal3ona", name: "🇵🇸 دلعونا", en: "Palestinian Dal'ona folk song" },
+  { id: "ataba", name: "🇵🇸 عتابا وميجانا", en: "Palestinian Ataba and Mijana sung poetry" },
+  { id: "zarif", name: "🇵🇸 زريف الطول", en: "Palestinian Zarif al-Tul folk song" },
+  { id: "dabke", name: "🇵🇸 دبكة شعبية", en: "Palestinian dabke line-dance song" },
+  { id: "watani-ps", name: "🇵🇸 وطنية فلسطينية", en: "Palestinian patriotic anthem" },
   { id: "instrumental", name: "موسيقى آلية (بدون غناء)", en: "instrumental only, no vocals" },
 ] as const;
 

@@ -1,4 +1,5 @@
 import { DIALECTS } from "./maqamat";
+import { PALESTINIAN_PRONUNCIATION_GUIDE } from "./heritage/palestinian";
 import { sanitizeSections, type SongSection } from "./songSections";
 
 /**
@@ -67,7 +68,7 @@ function buildPrompt(sections: SongSection[], dialectId: string): string {
 ٢. **شكّل كل كلمة تشكيلاً تاماً كما تُنطق باللهجة ${dialect.name} لا بالفصحى** — هذه أهم مهمة: القاف تصير همزة في العامية الشامية تُكتب حركتها كما تنطق، والسكون العامي في نهايات الكلمات يُثبت، وهكذا. اكتب الحركات التي تجعل قارئاً آلياً ينطق الكلمة كأهل اللهجة.
 ٣. **حافظ حرفياً** على: عدد المقاطع وأنواعها ومددها وترتيبها، عدد الأسطر، الوزن والقافية، والمعنى. لا تضف ولا تحذف ولا تعِد صياغة.
 ٤. أدرج في issues أبرز ما صححته (إملاء أو تشكيل يغيّر المعنى) مع السبب — حتى ١٠ فقط.
-
+${dialect.id === "palestinian" ? `\n${PALESTINIAN_PRONUNCIATION_GUIDE}\n` : ""}
 المقاطع (JSON):
 ${JSON.stringify(sections, null, 1)}`;
 }

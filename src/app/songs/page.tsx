@@ -5,6 +5,7 @@ import AudioPlayer from "@/components/AudioPlayer";
 import Karaoke from "@/components/Karaoke";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import { findActiveWord, type KaraokeWord } from "@/lib/karaoke";
+import { HERITAGE_STYLE_IDS, heritageStyle } from "@/lib/heritage/palestinian";
 import { emitSignal } from "@/lib/signalClient";
 import { DIALECTS, INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
 import { authHeaders } from "@/lib/supabase";
@@ -996,15 +997,32 @@ export default function SongsStudio() {
 
             <div>
               <h2 className="mb-4 text-xl font-bold">الأسلوب الغنائي</h2>
+              {heritageStyle(styleId) && (
+                <p className="mb-3 rounded-xl border border-accent/40 bg-accent/5 px-4 py-2.5 text-sm">
+                  🇵🇸 قالب من ذاكرة التراث الفلسطيني — ضُبطت اللهجة والأداء والمقام الأليف
+                  تلقائياً، وسيكتب المساعد ببنية {heritageStyle(styleId)!.name} الأصيلة.
+                </p>
+              )}
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {SONG_STYLES.map((s) => (
                   <button
                     key={s.id}
-                    onClick={() => setStyleId(s.id)}
+                    onClick={() => {
+                      setStyleId(s.id);
+                      // قالب تراثي فلسطيني: اللهجة والأداء والمقام الأليف تلقائياً
+                      const h = heritageStyle(s.id);
+                      if (h) {
+                        setDialectId("palestinian");
+                        setDeliveryDialectId("palestinian");
+                        if (!h.maqamIds.includes(maqamId)) setMaqamId(h.maqamIds[0]);
+                      }
+                    }}
                     className={`rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${
                       styleId === s.id
                         ? "border-primary bg-primary/10"
-                        : "border-border-soft bg-surface-card hover:border-primary/50"
+                        : HERITAGE_STYLE_IDS.includes(s.id)
+                          ? "border-border-soft bg-surface-card hover:border-accent/60"
+                          : "border-border-soft bg-surface-card hover:border-primary/50"
                     }`}
                   >
                     {s.name}

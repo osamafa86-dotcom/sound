@@ -4,6 +4,7 @@ import { applyPronunciationRules, listRules } from "@/lib/pronunciation";
 import { getJobsStore, type GenerationTier } from "@/lib/jobs";
 import { runSongJob } from "@/lib/songWorker";
 import { buildStylePrompt } from "@/lib/stylePrompt";
+import { heritageDeliveryEn, heritageStyle } from "@/lib/heritage/palestinian";
 import { pickMaqamPrompt } from "@/lib/promptVariants";
 import { SECTION_MIN_SEC, sanitizeSections, sectionsTotalSec } from "@/lib/songSections";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
@@ -61,13 +62,23 @@ export async function POST(req: NextRequest) {
   const aiStylePrompt = typeof body.aiStylePrompt === "string" ? body.aiStylePrompt : undefined;
   const picked = aiStylePrompt ? null : await pickMaqamPrompt(maqam.id);
 
-  const stylePrompt = buildStylePrompt({
+  const baseStylePrompt = buildStylePrompt({
     maqam: picked?.prompt ? { ...maqam, stylePrompt: picked.prompt } : maqam,
     styleEn: style.en,
     instrumentsEn: instruments.map((i) => i.en),
     aiStylePrompt,
     variation,
   });
+
+  // ذاكرة التراث: الحمض الموسيقي للقالب الفلسطيني + توجيه الأداء باللهجة
+  const heritage = heritageStyle(style.id);
+  const heritageDelivery = heritageDeliveryEn(
+    typeof body.dialectId === "string" ? body.dialectId : undefined,
+    style.id
+  );
+  const stylePrompt = [baseStylePrompt, heritage?.dna, heritageDelivery]
+    .filter(Boolean)
+    .join(". ");
 
   // المقاطع المُهيكلة (النسخة الكاملة فقط) — المعاينة تبقى مقطعاً سريعاً واحداً
   let sections = tier === "full" ? sanitizeSections(body.sections) : undefined;
