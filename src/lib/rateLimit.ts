@@ -1,9 +1,11 @@
 import { getSupabaseAdmin } from "./supabaseAdmin";
+import { gateFor, getPlatformSettings } from "./platformSettings";
 
 /**
  * حماية الاستهلاك — سياج يمنع استنزاف أرصدة المزوّدين المدفوعة.
  *
- * طبقتان لكل مسار:
+ * ثلاث طبقات لكل مسار:
+ * 0. مفتاح إيقاف يملكه صاحب النظام من لوحة المالك (صيانة أو إيقاف مسار بعينه)
  * 1. سقف عام للمنصة (حماية المحفظة من الإساءة الجماعية)
  * 2. حد لكل زائر (IP) أو مستخدم — المسجلون يحصلون على أضعاف الحد
  *
@@ -103,15 +105,23 @@ export function rateLimitFor(scope: LimitScope, signedIn: boolean): number {
   return signedIn ? LIMITS[scope].perVisitor * SIGNED_IN_MULTIPLIER : LIMITS[scope].perVisitor;
 }
 
-export type LimitVerdict = { allowed: boolean; message: string };
+export type LimitVerdict = { allowed: boolean; message: string; status?: number };
 
-/** فحص واستهلاك طلب واحد: السقف العام أولاً ثم حد الزائر/المستخدم */
+/**
+ * فحص واستهلاك طلب واحد: أمر المالك أولاً، ثم السقف العام، ثم حد الزائر/المستخدم.
+ * تحديث لقطة الإعدادات هنا يجعلها جاهزة لبقية الطلب (اختيار المزوّد مثلاً).
+ */
 export async function checkLimit(
   req: Request,
   scope: LimitScope,
   userId: string | null = null
 ): Promise<LimitVerdict> {
   const rule = LIMITS[scope];
+
+  const gate = gateFor(await getPlatformSettings(), scope);
+  if (gate.blocked) {
+    return { allowed: false, message: gate.message, status: 503 };
+  }
 
   const globalOk = await consumeRateLimit(`${scope}:global`, rule.global, rule.windowSec);
   if (!globalOk) {
@@ -132,10 +142,10 @@ export async function checkLimit(
   };
 }
 
-/** استجابة 429 موحّدة */
+/** استجابة الرفض الموحّدة — 429 لتجاوز الحد و503 لإيقاف من المالك */
 export function limitResponse(verdict: LimitVerdict): Response {
   return new Response(JSON.stringify({ error: verdict.message }), {
-    status: 429,
+    status: verdict.status ?? 429,
     headers: { "Content-Type": "application/json" },
   });
 }

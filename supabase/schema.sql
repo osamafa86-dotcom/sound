@@ -266,3 +266,44 @@ alter table public.custom_voices enable row level security;
 -- تنظيف دوري اختياري للمهام القديمة (Dashboard → Database → Extensions → pg_cron):
 -- select cron.schedule('cleanup-song-jobs', '0 * * * *',
 --   $$delete from public.song_jobs where created_at < now() - interval '1 day'$$);
+
+
+-- ============================================================
+-- 10) لوحة مالك النظام — إعدادات حيّة وسجل تدقيق
+-- ============================================================
+
+-- إعدادات المنصة: مفاتيح يغيّرها المالك من اللوحة فتسري خلال ثوانٍ بلا إعادة نشر
+-- (وضع الصيانة، إيقاف خدمة بعينها، الوضع التجريبي القسري، لافتة الموقع)
+create table if not exists public.platform_settings (
+  key text primary key,
+  value jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+-- RLS مفعّلة بلا سياسات: لا وصول من المتصفح — القراءة والكتابة بمفتاح الخدمة حصراً
+alter table public.platform_settings enable row level security;
+
+insert into public.platform_settings (key, value)
+values ('platform', '{"maintenance": false, "forceMock": false, "disabledRoutes": [], "banner": ""}'::jsonb)
+on conflict (key) do nothing;
+
+-- سجل التدقيق: من فعل ماذا ومتى (تغيير رصيد، إيقاف مسار، تصفير حد، تنظيف مهام)
+create table if not exists public.admin_audit (
+  id bigserial primary key,
+  actor_id uuid references auth.users (id) on delete set null,
+  actor_email text not null,
+  action text not null,
+  target text,
+  details jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists admin_audit_time_idx on public.admin_audit (created_at desc);
+
+alter table public.admin_audit enable row level security;
+
+-- فهرس زمني على سجل الاستهلاك — تقارير اللوحة تقرأ بنطاق تاريخ لكل المستخدمين
+create index if not exists usage_time_idx on public.usage_events (created_at desc);
+
+-- ملاحظة: صلاحية المالك لا تُخزَّن في القاعدة بل في متغير البيئة OWNER_EMAILS،
+-- فلا يمكن منح أحدٍ نفسه صلاحية المالك بتعديل صف في الجدول.
