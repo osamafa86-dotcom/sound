@@ -3,14 +3,17 @@ import { azureTTS } from "./azure";
 import { lyriaMusic } from "./lyria";
 import { mockMusic, mockTTS } from "./mock";
 import { VOICES } from "@/lib/voices";
+import { settingsSnapshot } from "@/lib/platformSettings";
 import type { AudioResult, MusicProvider, MusicRequest, TTSProvider } from "./types";
 
 /**
  * اختيار مزوّد النطق حسب الصوت المطلوب والمفاتيح المتوفرة:
  * أصوات Azure تتطلب مفتاحها، والبقية عبر ElevenLabs، وبلا مفاتيح يعود الوضع التجريبي.
  * المسارات (routes) تتكفل بالرجوع للوضع التجريبي إذا فشل المحرك الحقيقي.
+ * ومفتاح «الوضع التجريبي القسري» في لوحة المالك يعطّل كل كلفة فوراً.
  */
 export function getTTSProvider(voiceId?: string): TTSProvider {
+  if (settingsSnapshot().forceMock) return mockTTS;
   const eleven = process.env.ELEVENLABS_API_KEY;
   const azureKey = process.env.AZURE_SPEECH_KEY;
   const azureRegion = process.env.AZURE_SPEECH_REGION;
@@ -39,6 +42,7 @@ export function availableVoices() {
  * (مستوى المعاينة يتحكم بالمدة عبر durationSec في الطلب نفسه)
  */
 export function getMusicProvider(_opts?: { tier?: "preview" | "full"; instrumental?: boolean }): MusicProvider {
+  if (settingsSnapshot().forceMock) return mockMusic;
   const elevenKey = process.env.ELEVENLABS_API_KEY;
   const geminiKey = process.env.GEMINI_API_KEY;
   const forced = process.env.MUSIC_PROVIDER;
