@@ -125,11 +125,13 @@ export default function SongsStudio() {
 
   // عينات المقامات: اختر بأذنك — سلّم المقام بأرباع نغماته
   const [playingMaqam, setPlayingMaqam] = useState("");
+  const [sampleError, setSampleError] = useState("");
   function toggleMaqamSample(id: string) {
     let audio = document.getElementById("maqam-sample") as HTMLAudioElement | null;
     if (!audio) {
       audio = document.createElement("audio");
       audio.id = "maqam-sample";
+      audio.preload = "auto";
       document.body.appendChild(audio);
     }
     if (playingMaqam === id) {
@@ -137,10 +139,21 @@ export default function SongsStudio() {
       setPlayingMaqam("");
       return;
     }
+    setSampleError("");
     audio.src = `/api/maqamat/${id}/sample`;
     audio.onended = () => setPlayingMaqam("");
-    audio.play().catch(() => setPlayingMaqam(""));
-    setPlayingMaqam(id);
+    // فشل التحميل أو التشغيل لا يبقى صامتاً — يُطفأ الزر وتظهر رسالة
+    audio.onerror = () => {
+      setPlayingMaqam("");
+      setSampleError("تعذّر تحميل عينة المقام — حدّث الصفحة وجرّب مجدداً");
+    };
+    audio
+      .play()
+      .then(() => setPlayingMaqam(id))
+      .catch(() => {
+        setPlayingMaqam("");
+        setSampleError("منع المتصفح تشغيل الصوت — اضغط الزر مرة أخرى");
+      });
   }
 
   // بنية الأغنية المُهيكلة + التحكم الغنائي
@@ -768,6 +781,11 @@ export default function SongsStudio() {
           <div className="flex flex-col gap-8">
             <div>
               <h2 className="mb-4 text-xl font-bold">اختر المقام</h2>
+              {sampleError && (
+                <p className="mb-3 rounded-xl border border-gold/40 bg-gold/10 px-4 py-2.5 text-sm">
+                  {sampleError}
+                </p>
+              )}
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {MAQAMAT.map((m) => (
                   <div
