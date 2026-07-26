@@ -111,12 +111,26 @@ export default function SongsStudio() {
 
   // سجل «توليداتي» — مهام المستخدم المحفوظة على الخادم
   const [recentJobs, setRecentJobs] = useState<RecentJob[]>([]);
+  // الشخصنة: مقام المستخدم المفضل يتقدم افتراضياً
+  const [personalMaqam, setPersonalMaqam] = useState("");
   useEffect(() => {
     let cancelled = false;
     fetch("/api/songs")
       .then((r) => r.json())
       .then((d) => {
         if (!cancelled) setRecentJobs(d.jobs ?? []);
+      })
+      .catch(() => {});
+    fetch("/api/me/profile")
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const topMaqamId = d?.profile?.topMaqamId;
+        const maqamName = MAQAMAT.find((m) => m.id === topMaqamId)?.name;
+        if (topMaqamId && maqamName) {
+          setMaqamId(topMaqamId);
+          setPersonalMaqam(maqamName);
+        }
       })
       .catch(() => {});
     return () => {
@@ -797,6 +811,11 @@ export default function SongsStudio() {
           <div className="flex flex-col gap-8">
             <div>
               <h2 className="mb-4 text-xl font-bold">اختر المقام</h2>
+              {personalMaqam && (
+                <p className="mb-3 rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary">
+                  ✨ بدأنا لك بمقام {personalMaqam} — الأقرب لذوقك المتعلم
+                </p>
+              )}
               {sampleError && (
                 <p className="mb-3 rounded-xl border border-gold/40 bg-gold/10 px-4 py-2.5 text-sm">
                   {sampleError}

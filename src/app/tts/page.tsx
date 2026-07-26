@@ -284,6 +284,9 @@ export default function TTSStudio() {
   const [result, setResult] = useState<{ url: string; blob: Blob; mock: boolean; ext: string; fellBack: boolean } | null>(null);
   const [error, setError] = useState("");
 
+  // الشخصنة: الافتراضات من ذوق المستخدم المتعلم لا من ترتيب القائمة
+  const [personalized, setPersonalized] = useState("");
+
   // كتالوج المنصة الفعلي من الخادم — الأصوات المتاحة حسب المفاتيح المضبوطة (ElevenLabs / Azure)
   useEffect(() => {
     let cancelled = false;
@@ -298,6 +301,21 @@ export default function TTSStudio() {
           setVoiceId((prev) =>
             prev.startsWith("custom:") || all.some((v) => v.id === prev) ? prev : all[0].id
           );
+        }
+
+        // ملف الذوق: صوت المستخدم المفضل يتقدم افتراضياً مع إعداداته المريحة
+        const pres = await fetch("/api/me/profile");
+        const pdata = await pres.json().catch(() => null);
+        const profile = pdata?.profile;
+        if (cancelled || !profile) return;
+        const favorite = (profile.topVoices ?? [])
+          .map((t: { voiceId: string }) => all.find((v) => v.id === t.voiceId))
+          .find(Boolean) as CatalogVoice | undefined;
+        if (favorite) {
+          setVoiceId(favorite.id);
+          if (Number.isFinite(profile.avgStability)) setStability(profile.avgStability);
+          if (Number.isFinite(profile.avgSpeed)) setSpeed(Math.min(1.5, Math.max(0.5, profile.avgSpeed)));
+          setPersonalized(favorite.name);
         }
       } catch {
         /* الكتالوج الثابت يبقى بديلاً */
@@ -842,6 +860,11 @@ export default function TTSStudio() {
 
           <div>
             <label className="mb-2 block text-sm font-semibold">الصوت</label>
+            {personalized && (
+              <p className="mb-2 rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary">
+                ✨ اخترنا لك «{personalized}» وإعداداتك المريحة — من ذوقك المتعلم
+              </p>
+            )}
             <div className="flex flex-col gap-2">
               {shownVoices.map((v) => (
                 <button

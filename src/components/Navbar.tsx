@@ -12,6 +12,7 @@ const links = [
   { href: "/drama", label: "الاستوديو الدرامي" },
   { href: "/podcast", label: "البودكاست" },
   { href: "/library", label: "مكتبتي" },
+  { href: "/brain", label: "🧠 العقل" },
   { href: "/pricing", label: "الأسعار" },
 ];
 
