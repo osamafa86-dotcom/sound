@@ -39,7 +39,7 @@ const voiceName = (id: string) => VOICES.find((v) => v.id === id)?.name ?? id;
 export default function AdminDashboard() {
   const [tab, setTab] = useState<TabId>("overview");
   const [data, setData] = useState<Overview | null>(null);
-  const [error, setError] = useState<{ status: number; message: string } | null>(null);
+  const [error, setError] = useState<{ status: number; message: string; signedInAs?: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   // زيادة الرمز تعيد الجلب — زر التحديث يطلبه، لا التأثير نفسه
@@ -52,7 +52,12 @@ export default function AdminDashboard() {
         const res = await fetch("/api/admin/overview");
         const body = await res.json().catch(() => ({}));
         if (cancelled) return;
-        if (!res.ok) setError({ status: res.status, message: body.error ?? "تعذّر تحميل اللوحة" });
+        if (!res.ok)
+          setError({
+            status: res.status,
+            message: body.error ?? "تعذّر تحميل اللوحة",
+            signedInAs: body.signedInAs,
+          });
         else {
           setData(body);
           setError(null);
@@ -87,7 +92,11 @@ export default function AdminDashboard() {
                 ? "سجّل الدخول بحساب المالك"
                 : "اللوحة غير متاحة"
           }
-          note={error.message}
+          note={
+            error.signedInAs
+              ? `${error.message} — أنت داخل الآن بحساب ${error.signedInAs}، وهو ليس ضمن OWNER_EMAILS.`
+              : error.message
+          }
         />
         <div className="mt-6 flex justify-center gap-3">
           {error.status === 401 && (
