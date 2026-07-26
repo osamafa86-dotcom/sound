@@ -85,8 +85,8 @@ function buildUserPrompt(req: AssistRequest): string {
   } else {
     base.push(`حسّن كلمات الأغنية التالية مع الحفاظ على معناها وشخصيتها، واقترح المقام الأنسب لها:\n${req.lyrics}`);
   }
-  // ذاكرة التراث الفلسطيني: بنية القالب والمعجم عند السياق الفلسطيني
-  return base.join("\n\n") + heritageAssistBlock(req.dialectId, req.styleId);
+  // ذاكرة التراث: قالب الكتابة الصريح أو بنية الأسلوب + المعجم الفلسطيني
+  return base.join("\n\n") + heritageAssistBlock(req.dialectId, req.styleId, req.formId);
 }
 
 export function claudeAssistant(apiKey: string): LyricsAssistant {

@@ -23,6 +23,8 @@ export type AssistRequest = {
   dialectId: string;
   /** الأسلوب الغنائي المختار من SONG_STYLES */
   styleId: string;
+  /** قالب الكتابة الشعرية من LYRIC_FORMS (دلعونا/عتابا/حداية...) — يتقدم على الأسلوب */
+  formId?: string;
   /** أمثلة ناجحة من عقل المنصة (اختيارية) */
   exemplars?: StyleExemplar[];
 };

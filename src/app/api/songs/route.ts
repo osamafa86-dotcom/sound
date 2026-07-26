@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
-import { DIALECTS, MAQAMAT, INSTRUMENTS, SONG_STYLES } from "@/lib/maqamat";
+import { AMBIENCES, DIALECTS, MAQAMAT, INSTRUMENTS, SONG_STYLES } from "@/lib/maqamat";
 import { applyPronunciationRules, listRules } from "@/lib/pronunciation";
 import { getJobsStore, type GenerationTier } from "@/lib/jobs";
 import { runSongJob } from "@/lib/songWorker";
@@ -70,13 +70,16 @@ export async function POST(req: NextRequest) {
     variation,
   });
 
+  // الأجواء الجاهزة: طابع ترتيب كامل بضغطة (دف وطبل، إنشاد، بيانو...)
+  const ambience = AMBIENCES.find((a) => a.id === body.ambience);
+
   // ذاكرة التراث: الحمض الموسيقي للقالب الفلسطيني + توجيه الأداء باللهجة
   const heritage = heritageStyle(style.id);
   const heritageDelivery = heritageDeliveryEn(
     typeof body.dialectId === "string" ? body.dialectId : undefined,
     style.id
   );
-  const stylePrompt = [baseStylePrompt, heritage?.dna, heritageDelivery]
+  const stylePrompt = [baseStylePrompt, ambience?.en, heritage?.dna, heritageDelivery]
     .filter(Boolean)
     .join(". ");
 

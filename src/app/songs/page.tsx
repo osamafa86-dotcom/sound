@@ -5,9 +5,9 @@ import AudioPlayer from "@/components/AudioPlayer";
 import Karaoke from "@/components/Karaoke";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import { findActiveWord, type KaraokeWord } from "@/lib/karaoke";
-import { HERITAGE_STYLE_IDS, heritageStyle } from "@/lib/heritage/palestinian";
+import { HERITAGE_STYLE_IDS, LYRIC_FORMS, heritageStyle } from "@/lib/heritage/palestinian";
 import { emitSignal } from "@/lib/signalClient";
-import { DIALECTS, INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
+import { AMBIENCES, DIALECTS, INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
 import { authHeaders } from "@/lib/supabase";
 import {
   MAX_SECTIONS,
@@ -100,6 +100,10 @@ export default function SongsStudio() {
 
   const [idea, setIdea] = useState("");
   const [dialectId, setDialectId] = useState<string>(DIALECTS[0].id);
+  /** قالب الكتابة الشعرية (دلعونا/عتابا/حداية...) — مستقل عن الأسلوب الموسيقي */
+  const [lyricForm, setLyricForm] = useState("auto");
+  /** الأجواء الجاهزة للآلات — ضغطة تضبط الآلات وطابع الترتيب */
+  const [ambience, setAmbience] = useState<string | null>(null);
   const [assist, setAssist] = useState<AssistResponse | null>(null);
   const [assistLoading, setAssistLoading] = useState<"" | AssistMode>("");
   const [assistError, setAssistError] = useState("");
@@ -296,9 +300,22 @@ export default function SongsStudio() {
   const instrumental = styleId === "instrumental";
 
   function toggleInstrument(id: string) {
+    // تعديل يدوي للآلات يفك ارتباط الأجواء الجاهزة (تبقى الآلات كما اختار)
+    setAmbience(null);
     setInstrumentIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+  }
+
+  function pickAmbience(id: string) {
+    if (ambience === id) {
+      setAmbience(null);
+      return;
+    }
+    const preset = AMBIENCES.find((a) => a.id === id);
+    if (!preset) return;
+    setAmbience(id);
+    setInstrumentIds([...preset.instrumentIds]);
   }
 
   async function runAssist(mode: AssistMode) {
@@ -308,7 +325,7 @@ export default function SongsStudio() {
       const res = await fetch("/api/lyrics", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
-        body: JSON.stringify({ mode, idea, lyrics, dialectId, styleId }),
+        body: JSON.stringify({ mode, idea, lyrics, dialectId, styleId, formId: lyricForm }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
@@ -425,11 +442,13 @@ export default function SongsStudio() {
     setStage("جارٍ إنشاء المهمة...");
     setResult(null);
     try {
-      // أولوية البرومبت: موجز الصورة ثم المساعد — ما دام المستخدم باقياً على المقام المقترح
+      // تبديل المقام بضغطة: المقام الفعلي قد يصل تجاوزاً قبل تحديث الحالة
+      const effectiveMaqamId = (extras?.maqamId as string) ?? maqamId;
+      // أولوية البرومبت: موجز الصورة ثم المساعد — ما دام المقام الفعلي هو المقترح
       const aiStylePrompt =
-        imageBrief && imageBrief.maqamId === maqamId && styleId === "instrumental"
+        imageBrief && imageBrief.maqamId === effectiveMaqamId && styleId === "instrumental"
           ? imageBrief.stylePromptEn
-          : assist && assist.maqamId === maqamId
+          : assist && assist.maqamId === effectiveMaqamId
             ? assist.stylePromptEn
             : undefined;
 
@@ -438,8 +457,9 @@ export default function SongsStudio() {
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({
           lyrics,
-          maqamId,
+          maqamId: effectiveMaqamId,
           styleId,
+          ambience: ambience ?? undefined,
           instrumentIds,
           tier,
           durationSec,
@@ -460,7 +480,7 @@ export default function SongsStudio() {
         throw new Error(created?.error ?? "تعذّر التوليد، حاول مجدداً");
       }
 
-      const maqamName = MAQAMAT.find((m) => m.id === maqamId)?.name ?? "";
+      const maqamName = MAQAMAT.find((m) => m.id === effectiveMaqamId)?.name ?? "";
       await watchJob(created.jobId as string, {
         maqamName,
         title:
@@ -662,6 +682,18 @@ export default function SongsStudio() {
                   {DIALECTS.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={lyricForm}
+                  onChange={(e) => setLyricForm(e.target.value)}
+                  title="قالب الكتابة الشعرية — بنية النص بغض النظر عن اللحن"
+                  className="rounded-xl border border-border-soft bg-surface p-3 text-sm outline-none transition-colors focus:border-gold"
+                >
+                  {LYRIC_FORMS.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.id === "auto" ? f.name : `قالب: ${f.name}`}
                     </option>
                   ))}
                 </select>
@@ -1033,6 +1065,22 @@ export default function SongsStudio() {
 
             <div>
               <h2 className="mb-4 text-xl font-bold">الآلات</h2>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted">أجواء جاهزة:</span>
+                {AMBIENCES.map((a) => (
+                  <button
+                    key={a.id}
+                    onClick={() => pickAmbience(a.id)}
+                    className={`rounded-full border px-4 py-2 text-sm transition-colors ${
+                      ambience === a.id
+                        ? "border-gold bg-gold/10 text-gold"
+                        : "border-border-soft text-muted hover:border-gold/50 hover:text-body"
+                    }`}
+                  >
+                    {a.name}
+                  </button>
+                ))}
+              </div>
               <div className="flex flex-wrap gap-2">
                 {INSTRUMENTS.map((inst) => (
                   <button
@@ -1374,6 +1422,27 @@ export default function SongsStudio() {
                       alt={`غلاف ألبوم «${result.title}»`}
                       className="mx-auto mt-3 w-full max-w-sm rounded-2xl border border-border-soft"
                     />
+                  </div>
+                )}
+
+                {!result.mock && (
+                  <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border-soft bg-surface-card p-3">
+                    <span className="text-xs text-muted">
+                      🔄 نفس الأغنية بمقام آخر — بلا إعادة أي إعداد:
+                    </span>
+                    {MAQAMAT.filter((m) => m.id !== maqamId).map((m) => (
+                      <button
+                        key={m.id}
+                        disabled={loading}
+                        onClick={() => {
+                          setMaqamId(m.id);
+                          generate({ maqamId: m.id });
+                        }}
+                        className="rounded-full border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+                      >
+                        {m.name}
+                      </button>
+                    ))}
                   </div>
                 )}
 

@@ -94,14 +94,71 @@ export function heritageStyle(styleId?: string): HeritageStyle | null {
   return PALESTINIAN_STYLES.find((s) => s.id === styleId) ?? null;
 }
 
-/** كتلة تُحقن في مساعد الكلمات عند السياق الفلسطيني */
-export function heritageAssistBlock(dialectId?: string, styleId?: string): string {
+/** كتلة تُحقن في مساعد الكلمات عند السياق الفلسطيني — قالب الكتابة الصريح يتقدم */
+export function heritageAssistBlock(dialectId?: string, styleId?: string, formId?: string): string {
   const parts: string[] = [];
+  const explicitForm = lyricFormHint(formId);
   const style = heritageStyle(styleId);
-  if (style) parts.push(style.structureHint);
+  if (explicitForm) parts.push(explicitForm);
+  else if (style) parts.push(style.structureHint);
   if (dialectId === "palestinian") parts.push(PALESTINIAN_SONGWRITING_GUIDE);
   return parts.length ? `\n\n${parts.join("\n\n")}` : "";
 }
 
 /** معرّفات القوالب التراثية — لواجهة الاستوديو (اختيار اللهجة تلقائياً) */
 export const HERITAGE_STYLE_IDS = PALESTINIAN_STYLES.map((s) => s.id);
+
+/**
+ * قوالب الكتابة الشعرية — تُختار بجانب اللهجة في مساعد الكلمات،
+ * مستقلة عن الأسلوب الموسيقي: تحدد بنية النص الشعرية (لا اللحن).
+ */
+export type LyricForm = { id: string; name: string; hint: string };
+
+export const LYRIC_FORMS: LyricForm[] = [
+  {
+    id: "auto",
+    name: "حسب الأسلوب الغنائي",
+    hint: "",
+  },
+  {
+    id: "dal3ona",
+    name: "دلعونا",
+    hint: PALESTINIAN_STYLES.find((s) => s.id === "dal3ona")!.structureHint,
+  },
+  {
+    id: "ataba",
+    name: "عتابا",
+    hint: PALESTINIAN_STYLES.find((s) => s.id === "ataba")!.structureHint,
+  },
+  {
+    id: "mijana",
+    name: "ميجانا",
+    hint: "بنية الميجانا: تبدأ بلازمة «ميجانا ويا ميجانا ويا ميجانا» ثم أبيات غزلية أو وجدانية من بحر واحد، كل بيت يُختم بعودة اللازمة، بإيقاع هادئ متمايل.",
+  },
+  {
+    id: "hidaya",
+    name: "حداية (حداء)",
+    hint: "بنية الحداية: حداء بدوي فلسطيني بإيقاع مشي مهيب، شطرات قصيرة جازمة بقافية موحدة، ينشدها الحادي ويرد الجمع خلفه ردّة قصيرة (هلا هلا / يا هلا)، تليق بالفخر والكرامة واستقبال الضيوف والأعراس.",
+  },
+  {
+    id: "zajal",
+    name: "زجل",
+    hint: "بنية الزجل: قصيد عامي مرتجل الطابع بوزن وقافية محكمين، مقاطع من أربعة أشطر (أ أ أ ب) تصلح للمساجلة والمبارزة الشعرية، بخواتيم قوية لكل مقطع تستدعي رد الجوقة «أوف».",
+  },
+  {
+    id: "sahja",
+    name: "سحجة",
+    hint: "بنية السحجة: ردّات أعراس قصيرة حماسية يرددها صف الرجال مع التصفيق الإيقاعي الموحد، عبارات جازمة من شطرين بقافية واحدة تُعاد مرتين، بطابع الفزعة والفخر والفرح الجماعي.",
+  },
+  {
+    id: "zarif",
+    name: "زريف الطول",
+    hint: PALESTINIAN_STYLES.find((s) => s.id === "zarif")!.structureHint,
+  },
+];
+
+/** توجيه قالب الكتابة المختار — يتقدم على قالب الأسلوب عند اختياره صراحة */
+export function lyricFormHint(formId?: string): string {
+  if (!formId || formId === "auto") return "";
+  return LYRIC_FORMS.find((f) => f.id === formId)?.hint ?? "";
+}

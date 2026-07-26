@@ -90,7 +90,49 @@ export const INSTRUMENTS = [
   { id: "nay", name: "ناي", en: "nay flute" },
   { id: "violin", name: "كمان شرقي", en: "Arabic violin section" },
   { id: "darbuka", name: "دربكة وإيقاع", en: "darbuka percussion" },
+  { id: "daff", name: "دف", en: "daff frame drum" },
+  { id: "tabl", name: "طبل", en: "tabl baladi bass drum" },
+  { id: "mijwiz", name: "مجوز ويرغول", en: "mijwiz and yarghul double-reed" },
+  { id: "shubbabeh", name: "شبابة", en: "shubbabeh reed flute" },
+  { id: "piano", name: "بيانو", en: "piano" },
   { id: "strings", name: "وتريات حديثة", en: "modern strings and pads" },
+] as const;
+
+/**
+ * الأجواء الجاهزة — ضغطة واحدة تضبط الآلات وطابع الترتيب معاً.
+ * en يُضاف لبرومبت المحرك، وinstrumentIds تحل محل الاختيار اليدوي.
+ */
+export const AMBIENCES = [
+  {
+    id: "duff-tabl",
+    name: "🥁 دف وطبل تراثي",
+    en: "traditional percussion-forward arrangement: daff frame drum and tabl baladi leading, hand-clap accents, minimal melodic backing",
+    instrumentIds: ["daff", "tabl", "oud"],
+  },
+  {
+    id: "piano-calm",
+    name: "🎹 بيانو هادئ",
+    en: "intimate calm piano-led arrangement with soft strings, gentle and spacious, ballad mood",
+    instrumentIds: ["piano", "strings", "nay"],
+  },
+  {
+    id: "nasheed",
+    name: "🕌 إنشاد إسلامي",
+    en: "Islamic nasheed style: expressive vocals with daff percussion only, no melodic instruments, layered vocal harmonies, reverent devotional atmosphere",
+    instrumentIds: ["daff"],
+  },
+  {
+    id: "dabke-folk",
+    name: "🪘 مجوز ودبكة",
+    en: "Palestinian dabke folk band: screaming mijwiz lead over drone, pounding darbuka and tabl, stomping communal energy",
+    instrumentIds: ["mijwiz", "darbuka", "tabl"],
+  },
+  {
+    id: "orchestra",
+    name: "🎻 أوركسترا شرقية",
+    en: "full Arabic orchestra: lush violin sections, qanun and oud interplay, nay solos, golden-age cinematic production",
+    instrumentIds: ["violin", "qanun", "oud", "nay"],
+  },
 ] as const;
 
 export const SONG_STYLES = [

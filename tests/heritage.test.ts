@@ -53,4 +53,24 @@ describe("ذاكرة التراث الغنائي الفلسطيني", () => {
     expect(HERITAGE_STYLE_IDS).toHaveLength(5);
     expect(HERITAGE_STYLE_IDS).toContain("dal3ona");
   });
+
+  it("قالب الكتابة الصريح يتقدم على قالب الأسلوب", async () => {
+    const { LYRIC_FORMS, lyricFormHint } = await import("@/lib/heritage/palestinian");
+    expect(LYRIC_FORMS.some((f) => f.id === "hidaya")).toBe(true);
+    expect(lyricFormHint("hidaya")).toContain("الحادي");
+    expect(lyricFormHint("auto")).toBe("");
+    // اختار عتابا كتابةً فوق أسلوب دلعونا: بنية العتابا هي التي تصل المساعد
+    const block = heritageAssistBlock("palestinian", "dal3ona", "ataba");
+    expect(block).toContain("جناس");
+    expect(block).not.toContain("ع الدلعونا");
+  });
+
+  it("الأجواء الجاهزة: آلاتها موجودة في قائمة الآلات", async () => {
+    const { AMBIENCES, INSTRUMENTS } = await import("@/lib/maqamat");
+    for (const a of AMBIENCES) {
+      for (const id of a.instrumentIds) {
+        expect(INSTRUMENTS.some((i) => i.id === id)).toBe(true);
+      }
+    }
+  });
 });
