@@ -121,6 +121,29 @@ export async function elevenLabsTranscribe(apiKey: string, audio: Blob): Promise
   return data.text;
 }
 
+/** تفريغ موقوت: كل كلمة مع بدايتها ونهايتها بالثواني — وقود الكاريوكي */
+export async function elevenLabsTranscribeWords(
+  apiKey: string,
+  audio: Blob
+): Promise<{ text: string; words: { text: string; start: number; end: number }[] }> {
+  const form = new FormData();
+  form.append("model_id", "scribe_v1");
+  form.append("timestamps_granularity", "word");
+  form.append("file", audio, "song.mp3");
+  const res = await apiCallMultipart("/speech-to-text", apiKey, form);
+  const data = (await res.json()) as {
+    text?: string;
+    words?: { text: string; start: number; end: number; type?: string }[];
+  };
+  if (typeof data.text !== "string") {
+    throw new ElevenLabsError("استجابة تفريغ غير متوقعة", 502);
+  }
+  const words = (data.words ?? [])
+    .filter((w) => (w.type ?? "word") === "word" && Number.isFinite(w.start))
+    .map((w) => ({ text: w.text, start: w.start, end: w.end }));
+  return { text: data.text, words };
+}
+
 /** تحويل صوت إلى صوت (Speech-to-Speech) — يحافظ على الأداء والتوقيت بصوت آخر */
 export async function elevenLabsSpeechToSpeech(
   apiKey: string,

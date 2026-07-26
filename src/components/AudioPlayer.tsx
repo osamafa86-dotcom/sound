@@ -46,6 +46,7 @@ export default function AudioPlayer({
   mock,
   filename = "maqam-audio.wav",
   note,
+  onTime,
   children,
 }: {
   src: string;
@@ -53,12 +54,19 @@ export default function AudioPlayer({
   mock?: boolean;
   filename?: string;
   note?: string;
+  /** يُستدعى بموضع التشغيل الحالي بالثواني — للكاريوكي والمزامنات */
+  onTime?: (sec: number) => void;
   /** إجراءات إضافية أسفل المشغّل — مثل زر الحفظ في المكتبة */
   children?: React.ReactNode;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef(0);
+  // مرجع حي للمستمع كي لا تعلق حلقة rAF على نسخة قديمة منه
+  const onTimeRef = useRef(onTime);
+  useEffect(() => {
+    onTimeRef.current = onTime;
+  });
   const [peaks, setPeaks] = useState<number[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -139,6 +147,7 @@ export default function AudioPlayer({
       if (a && a.duration) {
         setCurrent(a.currentTime);
         setProgress(a.currentTime / a.duration);
+        onTimeRef.current?.(a.currentTime);
       }
       rafRef.current = requestAnimationFrame(tick);
     };
@@ -193,6 +202,7 @@ export default function AudioPlayer({
           if (a.duration) {
             setCurrent(a.currentTime);
             setProgress(a.currentTime / a.duration);
+            onTimeRef.current?.(a.currentTime);
           }
         }}
       />

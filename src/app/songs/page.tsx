@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
+import Karaoke from "@/components/Karaoke";
 import SaveToLibrary from "@/components/SaveToLibrary";
+import { findActiveWord, type KaraokeWord } from "@/lib/karaoke";
 import { DIALECTS, INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
 import { authHeaders } from "@/lib/supabase";
 import {
@@ -253,6 +255,14 @@ export default function SongsStudio() {
       maqamName: snapshot.maqamName,
       title: snapshot.title,
     };
+    // أدوات ما بعد التوليد تعود لنقطة الصفر مع كل ناتج جديد
+    setKaraokeWords(null);
+    setActiveWord(-1);
+    setShareCopied(false);
+    setCoverUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return "";
+    });
     setResult(song);
     setVersions((prev) => [song, ...prev]);
   }
@@ -334,6 +344,80 @@ export default function SongsStudio() {
     } finally {
       setLoading(false);
       setStage("");
+    }
+  }
+
+  // الكاريوكي والغلاف والمشاركة — أدوات ما بعد التوليد
+  const [karaokeWords, setKaraokeWords] = useState<KaraokeWord[] | null>(null);
+  const [karaokeBusy, setKaraokeBusy] = useState(false);
+  const [activeWord, setActiveWord] = useState(-1);
+  const [coverUrl, setCoverUrl] = useState("");
+  const [coverBusy, setCoverBusy] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+
+  /** موضع التشغيل يقود إضاءة كلمات الكاريوكي */
+  function handlePlayerTime(sec: number) {
+    if (!karaokeWords) return;
+    const idx = findActiveWord(karaokeWords, sec);
+    setActiveWord((prev) => (prev === idx ? prev : idx));
+  }
+
+  async function startKaraoke() {
+    if (!result || karaokeBusy) return;
+    setKaraokeBusy(true);
+    setError("");
+    try {
+      const fd = new FormData();
+      fd.append("audio", result.blob, `song.${result.ext}`);
+      const res = await fetch("/api/karaoke", {
+        method: "POST",
+        headers: await authHeaders(),
+        body: fd,
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "تعذّرت مزامنة الكلمات");
+      setKaraokeWords(data.words);
+      setActiveWord(-1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally {
+      setKaraokeBusy(false);
+    }
+  }
+
+  async function makeCover() {
+    if (!result || coverBusy) return;
+    setCoverBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/cover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ title: result.title, maqamId, stylePrompt: result.prompt }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(d?.error ?? "تعذّر توليد الغلاف");
+      }
+      const blob = await res.blob();
+      setCoverUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(blob);
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally {
+      setCoverBusy(false);
+    }
+  }
+
+  async function copyShareLink() {
+    if (!result) return;
+    try {
+      await navigator.clipboard.writeText(`${location.origin}/share/${result.jobId}`);
+      setShareCopied(true);
+    } catch {
+      setError("تعذّر نسخ الرابط — انسخه يدوياً من شريط العنوان بعد فتح الصفحة");
     }
   }
 
@@ -922,6 +1006,7 @@ export default function SongsStudio() {
                         : `«${result.title}»`
                   }
                   mock={result.mock}
+                  onTime={handlePlayerTime}
                   filename={`maqam-song-v${versions.length}.${result.ext}`}
                   note={
                     result.fellBack
@@ -967,7 +1052,61 @@ export default function SongsStudio() {
                       {result.mastered ? "✓ تم الماستر" : mastering ? "جارٍ المعالجة..." : "✨ لمسة الماستر"}
                     </button>
                   )}
+                  {!result.mock && !instrumental && (
+                    <button
+                      onClick={startKaraoke}
+                      disabled={karaokeBusy || !!karaokeWords}
+                      title="مزامنة الكلمات مع الغناء كلمةً كلمة + تصدير SRT/LRC"
+                      className="rounded-xl border border-primary px-5 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+                    >
+                      {karaokeWords ? "✓ الكاريوكي جاهز" : karaokeBusy ? "جارٍ المزامنة..." : "🎤 كاريوكي"}
+                    </button>
+                  )}
+                  {!result.mock && (
+                    <button
+                      onClick={makeCover}
+                      disabled={coverBusy}
+                      title="غلاف ألبوم مولّد من عنوان الأغنية ومقامها"
+                      className="rounded-xl border border-border-soft px-5 py-2.5 text-sm font-semibold transition-colors hover:border-gold hover:text-gold disabled:opacity-50"
+                    >
+                      {coverBusy ? "جارٍ الرسم..." : coverUrl ? "🎨 غلاف آخر" : "🎨 غلاف الألبوم"}
+                    </button>
+                  )}
+                  {!result.mock && (
+                    <button
+                      onClick={copyShareLink}
+                      title="رابط عام لصفحة استماع أنيقة — شاركه في أي مكان"
+                      className="rounded-xl border border-border-soft px-5 py-2.5 text-sm font-semibold transition-colors hover:border-primary hover:text-primary"
+                    >
+                      {shareCopied ? "✓ نُسخ الرابط" : "🔗 شارك برابط"}
+                    </button>
+                  )}
                 </div>
+
+                {karaokeWords && (
+                  <Karaoke words={karaokeWords} activeIndex={activeWord} title={result.title} />
+                )}
+
+                {coverUrl && (
+                  <div className="rounded-2xl border border-border-soft bg-surface-card p-5">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold">🎨 غلاف الألبوم</h3>
+                      <a
+                        href={coverUrl}
+                        download="maqam-cover.png"
+                        className="rounded-lg border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:text-body"
+                      >
+                        ⬇ تنزيل
+                      </a>
+                    </div>
+                    {/* eslint-disable-next-line @next/next/no-img-element -- صورة blob محلية */}
+                    <img
+                      src={coverUrl}
+                      alt={`غلاف ألبوم «${result.title}»`}
+                      className="mx-auto mt-3 w-full max-w-sm rounded-2xl border border-border-soft"
+                    />
+                  </div>
+                )}
 
                 {tier === "full" && sections?.length && result.elevenSongId && !result.mock ? (
                   <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border-soft bg-surface-card p-3">
