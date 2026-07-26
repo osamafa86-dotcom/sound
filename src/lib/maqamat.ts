@@ -16,7 +16,8 @@ export const MAQAMAT: Maqam[] = [
     mood: "دافئ، حنون، شعبي",
     description: "أكثر المقامات انتشاراً في الغناء العربي، يمتاز بدفء وقرب من الوجدان.",
     scale: [0, 1.5, 3, 5, 7, 8, 10, 12],
-    stylePrompt: "Arabic maqam Bayati, warm emotional tarab, quarter tones",
+    stylePrompt:
+      "Arabic maqam Bayati on D (jins Bayati root: D, E half-flat quarter tone, F, G), warm intimate folk tarab, tender vocal phrases descending to the tonic, maqsum and baladi rhythms",
   },
   {
     id: "hijaz",
@@ -24,7 +25,8 @@ export const MAQAMAT: Maqam[] = [
     mood: "شرقي، روحاني، شجي",
     description: "المقام الشرقي الأشهر بطابعه الروحاني، حاضر في الأذان والموشحات.",
     scale: [0, 1, 4, 5, 7, 8, 10, 12],
-    stylePrompt: "Arabic maqam Hijaz, spiritual oriental melody, expressive ornamentation",
+    stylePrompt:
+      "Arabic maqam Hijaz on D (jins Hijaz: half step then augmented second, D Eb F# G), spiritual devotional atmosphere of adhan and muwashahat, rich melisma and ornamentation, expressive long-breathed phrases",
   },
   {
     id: "rast",
@@ -32,7 +34,8 @@ export const MAQAMAT: Maqam[] = [
     mood: "فخم، متزن، أصيل",
     description: "«أبو المقامات» — أساس الغناء الطربي الكلاسيكي، متزن وفخم.",
     scale: [0, 2, 3.5, 5, 7, 9, 10.5, 12],
-    stylePrompt: "Arabic maqam Rast, classical tarab grandeur, quarter tones",
+    stylePrompt:
+      "Arabic maqam Rast on C (quarter tones: E half-flat and B half-flat), the father of maqamat, stately classical tarab grandeur, golden-age orchestra, samai and wahda rhythms, dignified noble melody",
   },
   {
     id: "saba",
@@ -40,7 +43,8 @@ export const MAQAMAT: Maqam[] = [
     mood: "حزين، عميق، مؤثر",
     description: "مقام الشجن والحزن العميق، يلمس القلب مباشرة.",
     scale: [0, 1.5, 3, 4, 6, 8, 10, 12],
-    stylePrompt: "Arabic maqam Saba, deep melancholic sorrowful melody, quarter tones",
+    stylePrompt:
+      "Arabic maqam Saba on D (jins Saba: D, E half-flat quarter tone, F, G-flat — its diminished fourth is the sound of grief), deep melancholic lament, weeping nay and violin, slow heavy phrases sinking downward",
   },
   {
     id: "kurd",
@@ -48,7 +52,8 @@ export const MAQAMAT: Maqam[] = [
     mood: "رومانسي، عصري، سلس",
     description: "مقام الأغنية العصرية والرومانسية، سلس وقريب من الأذن الحديثة.",
     scale: [0, 1, 3, 5, 7, 8, 10, 12],
-    stylePrompt: "Arabic maqam Kurd, modern romantic Arabic pop feel",
+    stylePrompt:
+      "Arabic maqam Kurd on D (jins Kurd, phrygian-like half step above tonic, no quarter tones), smooth modern romantic Arabic pop, contemporary production with oriental strings, flowing catchy melody",
   },
   {
     id: "nahawand",
@@ -56,7 +61,8 @@ export const MAQAMAT: Maqam[] = [
     mood: "عاطفي، درامي",
     description: "قريب من السلّم الصغير الغربي، مثالي للأغاني العاطفية والدرامية.",
     scale: [0, 2, 3, 5, 7, 8, 11, 12],
-    stylePrompt: "Arabic maqam Nahawand, dramatic emotional minor-like melody",
+    stylePrompt:
+      "Arabic maqam Nahawand on C (harmonic-minor-like with raised seventh), dramatic cinematic emotion, passionate rises and falls, orchestral Arabic ballad intensity, aching romantic climaxes",
   },
   {
     id: "ajam",
@@ -64,7 +70,8 @@ export const MAQAMAT: Maqam[] = [
     mood: "مشرق، احتفالي",
     description: "قريب من السلّم الكبير الغربي، مشرق ومناسب للأناشيد والأغاني الحماسية.",
     scale: [0, 2, 4, 5, 7, 9, 11, 12],
-    stylePrompt: "Arabic maqam Ajam, bright celebratory major-like anthem",
+    stylePrompt:
+      "Arabic maqam Ajam on Bb (major-like scale), bright celebratory anthem, triumphant uplifting energy, festive full arrangement with driving percussion, patriotic joyful chorus feel",
   },
   {
     id: "sikah",
@@ -72,7 +79,8 @@ export const MAQAMAT: Maqam[] = [
     mood: "تراثي، مميز",
     description: "مقام ذو شخصية فريدة يبدأ من ربع نغمة، حاضر بقوة في التراث والموشحات.",
     scale: [0, 2, 3.5, 5.5, 7, 8.5, 10.5, 12],
-    stylePrompt: "Arabic maqam Sikah, traditional heritage muwashah character, quarter tones",
+    stylePrompt:
+      "Arabic maqam Sikah (tonic on E half-flat quarter tone, jins Sikah trichord), distinctive floating heritage color of Andalusian muwashahat, samai thaqil 10/8 rhythm, ornamented traditional takht ensemble",
   },
 ];
 

@@ -123,6 +123,26 @@ export default function SongsStudio() {
     };
   }, []);
 
+  // عينات المقامات: اختر بأذنك — سلّم المقام بأرباع نغماته
+  const [playingMaqam, setPlayingMaqam] = useState("");
+  function toggleMaqamSample(id: string) {
+    let audio = document.getElementById("maqam-sample") as HTMLAudioElement | null;
+    if (!audio) {
+      audio = document.createElement("audio");
+      audio.id = "maqam-sample";
+      document.body.appendChild(audio);
+    }
+    if (playingMaqam === id) {
+      audio.pause();
+      setPlayingMaqam("");
+      return;
+    }
+    audio.src = `/api/maqamat/${id}/sample`;
+    audio.onended = () => setPlayingMaqam("");
+    audio.play().catch(() => setPlayingMaqam(""));
+    setPlayingMaqam(id);
+  }
+
   // بنية الأغنية المُهيكلة + التحكم الغنائي
   const [sections, setSections] = useState<SongSection[] | null>(null);
   const [singer, setSinger] = useState<"female" | "male">("female");
@@ -750,10 +770,10 @@ export default function SongsStudio() {
               <h2 className="mb-4 text-xl font-bold">اختر المقام</h2>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {MAQAMAT.map((m) => (
-                  <button
+                  <div
                     key={m.id}
                     onClick={() => setMaqamId(m.id)}
-                    className={`rounded-2xl border p-4 text-start transition-colors ${
+                    className={`cursor-pointer rounded-2xl border p-4 text-start transition-colors ${
                       maqamId === m.id
                         ? "border-gold bg-gold/10"
                         : "border-border-soft bg-surface-card hover:border-gold/50"
@@ -765,7 +785,21 @@ export default function SongsStudio() {
                     </span>
                     <span className="mt-1 block text-xs font-semibold text-accent">{m.mood}</span>
                     <span className="mt-2 block text-xs leading-relaxed text-muted">{m.description}</span>
-                  </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleMaqamSample(m.id);
+                      }}
+                      title="اسمع سلّم المقام بأرباع نغماته"
+                      className={`mt-3 rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                        playingMaqam === m.id
+                          ? "border-gold bg-gold/10 text-gold"
+                          : "border-border-soft text-muted hover:border-gold hover:text-gold"
+                      }`}
+                    >
+                      {playingMaqam === m.id ? "⏸ إيقاف" : "🔊 اسمع السلّم"}
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
