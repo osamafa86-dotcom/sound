@@ -50,4 +50,28 @@ describe("مخزن المهام في الذاكرة", () => {
   it("مهمة غير موجودة تعيد undefined", async () => {
     expect(await memoryJobsStore.get("00000000-0000-0000-0000-000000000000")).toBeUndefined();
   });
+
+  it("سجل «توليداتي»: مهام المستخدم وحده بالأحدث أولاً", async () => {
+    const uid = `u-${Math.random()}`;
+    const first = await memoryJobsStore.create("preview", request, uid);
+    const second = await memoryJobsStore.create("full", request, uid);
+    await memoryJobsStore.create("full", request, "غيره");
+
+    const jobs = await memoryJobsStore.listRecent(uid);
+    expect(jobs).toHaveLength(2);
+    expect(jobs.map((j) => j.id).sort()).toEqual([first.id, second.id].sort());
+    expect(jobs.every((j) => j.userId === uid)).toBe(true);
+  });
+
+  it("معرّف المحرك يُحفظ في الطلب عند الاكتمال — وقود إعادة التوليد الجزئي", async () => {
+    const job = await memoryJobsStore.create("full", { ...request }, "user-2");
+    await memoryJobsStore.complete(job.id, {
+      audio: Buffer.from("x"),
+      mimeType: "audio/mpeg",
+      provider: "eleven-music",
+      providerSongId: "song_xyz",
+    });
+    const done = await memoryJobsStore.get(job.id);
+    expect(done?.request.elevenSongId).toBe("song_xyz");
+  });
 });

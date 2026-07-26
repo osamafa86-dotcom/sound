@@ -12,6 +12,8 @@ export type ElevenSongSection = {
   negative_local_styles: string[];
   duration_ms: number;
   lines: string[];
+  /** استيراد المقطع من أغنية سابقة كما هو — أساس إعادة التوليد الجزئي */
+  source_from?: { song_id: string; range: { start_ms: number; end_ms: number } };
 };
 
 export type ElevenCompositionPlan = {
@@ -111,6 +113,26 @@ export function buildCompositionPlan(req: MusicRequest): ElevenCompositionPlan |
       lines,
     };
   });
+
+  // إعادة توليد جزئي: كل المقاطع تُستورد من الأصل كما هي عدا المقطع المستهدف
+  if (
+    req.sourceSongId &&
+    req.regenerateIndex !== undefined &&
+    req.regenerateIndex >= 0 &&
+    req.regenerateIndex < sections.length
+  ) {
+    let cursor = 0;
+    sections.forEach((section, i) => {
+      const start = cursor;
+      cursor += section.duration_ms;
+      if (i !== req.regenerateIndex) {
+        section.source_from = {
+          song_id: req.sourceSongId!,
+          range: { start_ms: start, end_ms: cursor },
+        };
+      }
+    });
+  }
 
   return { positive_global_styles, negative_global_styles, sections };
 }

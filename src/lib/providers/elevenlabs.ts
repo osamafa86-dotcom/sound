@@ -160,6 +160,28 @@ export async function elevenLabsCloneVoice(
   return data.voice_id;
 }
 
+/** نداء توليد موسيقى مع التقاط معرّف الأغنية من الترويسات — يفتح إعادة التوليد الجزئي */
+async function musicCall(
+  apiKey: string,
+  body: unknown
+): Promise<{ audio: Buffer; songId?: string }> {
+  const res = await fetch(`${API_BASE}/music`, {
+    method: "POST",
+    headers: { "xi-api-key": apiKey, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new ElevenLabsError(`ElevenLabs ${res.status}: ${detail.slice(0, 300)}`, res.status);
+  }
+
+  let songId: string | undefined;
+  res.headers.forEach((value, key) => {
+    if (/song[-_]?id/i.test(key)) songId = value;
+  });
+  return { audio: Buffer.from(await res.arrayBuffer()), songId };
+}
+
 export function elevenLabsMusic(apiKey: string): MusicProvider {
   return {
     id: "eleven-music",
@@ -167,11 +189,11 @@ export function elevenLabsMusic(apiKey: string): MusicProvider {
       // مقاطع مُهيكلة ← خطة تأليف كاملة: تحكم حقيقي في البنية والمدد لكل مقطع
       const plan = buildCompositionPlan(req);
       if (plan) {
-        const audio = await apiCall("/music", apiKey, {
+        const { audio, songId } = await musicCall(apiKey, {
           model_id: "music_v1",
           composition_plan: plan,
         });
-        return { audio, mimeType: "audio/mpeg", provider: "eleven-music" };
+        return { audio, mimeType: "audio/mpeg", provider: "eleven-music", providerSongId: songId };
       }
 
       const instrumentalOnly = req.styleId === "instrumental" || !req.lyrics?.trim();
@@ -184,7 +206,7 @@ export function elevenLabsMusic(apiKey: string): MusicProvider {
           : `Arabic vocals singing these lyrics:\n${req.lyrics!.trim()}`,
       ].join("\n");
 
-      const audio = await apiCall("/music", apiKey, {
+      const { audio, songId } = await musicCall(apiKey, {
         prompt,
         music_length_ms: Math.min(300_000, Math.max(10_000, (req.durationSec ?? 60) * 1000)),
       });
@@ -193,6 +215,7 @@ export function elevenLabsMusic(apiKey: string): MusicProvider {
         audio,
         mimeType: "audio/mpeg",
         provider: "eleven-music",
+        providerSongId: songId,
       };
     },
   };

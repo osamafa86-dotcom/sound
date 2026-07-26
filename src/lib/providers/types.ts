@@ -31,12 +31,20 @@ export type MusicRequest = {
   singer?: "male" | "female";
   /** سرعة الإيقاع (نبضة/دقيقة) */
   bpm?: number;
+  /** إعادة توليد مقطع بعينه: فهرس المقطع المستهدف والمقاطع الأخرى تُستورد من الأصل */
+  regenerateIndex?: number;
+  /** معرّف الأغنية الأصلية لدى المحرك — مصدر الاستيراد عند إعادة التوليد الجزئي */
+  sourceSongId?: string;
+  /** يُكتب بعد اكتمال المهمة: معرّف الناتج لدى المحرك ليُعاد التوليد الجزئي منه لاحقاً */
+  elevenSongId?: string;
 };
 
 export type AudioResult = {
   audio: Buffer;
   mimeType: string;
   provider: string;
+  /** معرّف الناتج لدى المحرك (Eleven Music) — يفتح إعادة التوليد الجزئي */
+  providerSongId?: string;
   /** true عندما يكون الناتج من الوضع التجريبي وليس من محرك فعلي */
   mock?: boolean;
   /** معرّف المزوّد المفضّل الذي تعذّر، عند الرجوع إلى مزوّد بديل */

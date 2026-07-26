@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import { DIALECTS, INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
@@ -31,6 +31,20 @@ type JobStatusResponse = {
   mock?: boolean;
   fellBack?: string;
   error?: string;
+  elevenSongId?: string;
+};
+
+type RecentJob = {
+  id: string;
+  status: "pending" | "running" | "done" | "failed";
+  stage: string;
+  tier: "preview" | "full";
+  maqamId: string;
+  styleId: string;
+  durationSec?: number;
+  provider?: string;
+  mock?: boolean;
+  createdAt: number;
 };
 
 const DURATIONS = [
@@ -51,6 +65,10 @@ type SongResult = {
   /** لقطة وقت التوليد — تسمح بعرض النسخ السابقة بعناوينها الصحيحة */
   maqamName: string;
   title: string;
+  /** معرّف الناتج لدى المحرك — يفتح إعادة التوليد الجزئي للمقاطع */
+  elevenSongId?: string;
+  /** مُعالج بلمسة الماستر (تطبيع + fade + قص صمت) */
+  mastered?: boolean;
 };
 
 type ImageBriefResponse = {
@@ -87,6 +105,21 @@ export default function SongsStudio() {
   const [imagePreview, setImagePreview] = useState("");
   const [imageAnalyzing, setImageAnalyzing] = useState(false);
   const [imageError, setImageError] = useState("");
+
+  // سجل «توليداتي» — مهام المستخدم المحفوظة على الخادم
+  const [recentJobs, setRecentJobs] = useState<RecentJob[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/songs")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled) setRecentJobs(d.jobs ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // بنية الأغنية المُهيكلة + التحكم الغنائي
   const [sections, setSections] = useState<SongSection[] | null>(null);
@@ -181,7 +214,50 @@ export default function SongsStudio() {
     }
   }
 
-  async function generate() {
+  /** متابعة مهمة حتى الاكتمال وجلب ناتجها — تخدم التوليد الجديد واستعادة المهام معاً */
+  async function watchJob(jobId: string, snapshot: { maqamName: string; title: string }) {
+    // استعلام دوري عن حالة المهمة حتى الاكتمال (مهلة قصوى ٢٠٠ محاولة × ١.٥ ثانية = ٥ دقائق)
+    let status: JobStatusResponse | null = null;
+    for (let attempt = 0; attempt < 200; attempt++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const sres = await fetch(`/api/songs/${jobId}`);
+      status = (await sres.json().catch(() => null)) as JobStatusResponse | null;
+      if (!sres.ok) {
+        throw new Error(status?.error ?? "تعذّر متابعة حالة المهمة");
+      }
+      setStage(status?.stage ?? "");
+      if (status?.status === "done") break;
+      if (status?.status === "failed") {
+        throw new Error(status.error ?? "فشل التوليد، حاول مجدداً");
+      }
+    }
+    if (status?.status !== "done") {
+      throw new Error("انتهت مهلة انتظار التوليد، حاول مجدداً");
+    }
+
+    const ares = await fetch(`/api/songs/${jobId}/audio`);
+    if (!ares.ok) {
+      throw new Error("تعذّر جلب الملف الصوتي");
+    }
+    const blob = await ares.blob();
+    const song: SongResult = {
+      url: URL.createObjectURL(blob),
+      blob,
+      jobId,
+      mock: !!status.mock,
+      prompt: status.stylePrompt ?? "",
+      ext: blob.type === "audio/mpeg" ? "mp3" : "wav",
+      fellBack: !!status.fellBack,
+      provider: status.provider,
+      elevenSongId: status.elevenSongId,
+      maqamName: snapshot.maqamName,
+      title: snapshot.title,
+    };
+    setResult(song);
+    setVersions((prev) => [song, ...prev]);
+  }
+
+  async function generate(extras?: Record<string, unknown>) {
     setError("");
     setLoading(true);
     setStage("جارٍ إنشاء المهمة...");
@@ -212,50 +288,16 @@ export default function SongsStudio() {
           bpm: bpm ?? undefined,
           // «نسخة أخرى»: رقم النسخة يدفع المحرك للتنويع بدل تكرار التوزيع
           variation: versions.length,
+          ...extras,
         }),
       });
       const created = await res.json().catch(() => null);
       if (!res.ok) {
         throw new Error(created?.error ?? "تعذّر التوليد، حاول مجدداً");
       }
-      const jobId: string = created.jobId;
 
-      // استعلام دوري عن حالة المهمة حتى الاكتمال (مهلة قصوى 5 دقائق)
-      const started = Date.now();
-      let status: JobStatusResponse | null = null;
-      while (Date.now() - started < 5 * 60_000) {
-        await new Promise((r) => setTimeout(r, 1500));
-        const sres = await fetch(`/api/songs/${jobId}`);
-        status = (await sres.json().catch(() => null)) as JobStatusResponse | null;
-        if (!sres.ok) {
-          throw new Error(status?.error ?? "تعذّر متابعة حالة المهمة");
-        }
-        setStage(status?.stage ?? "");
-        if (status?.status === "done") break;
-        if (status?.status === "failed") {
-          throw new Error(status.error ?? "فشل التوليد، حاول مجدداً");
-        }
-      }
-      if (status?.status !== "done") {
-        throw new Error("انتهت مهلة انتظار التوليد، حاول مجدداً");
-      }
-
-      const ares = await fetch(`/api/songs/${jobId}/audio`);
-      if (!ares.ok) {
-        throw new Error("تعذّر جلب الملف الصوتي");
-      }
-      const blob = await ares.blob();
-      const ext = blob.type === "audio/mpeg" ? "mp3" : "wav";
       const maqamName = MAQAMAT.find((m) => m.id === maqamId)?.name ?? "";
-      const song: SongResult = {
-        url: URL.createObjectURL(blob),
-        blob,
-        jobId,
-        mock: !!status.mock,
-        prompt: status.stylePrompt ?? "",
-        ext,
-        fellBack: !!status.fellBack,
-        provider: status.provider,
+      await watchJob(created.jobId as string, {
         maqamName,
         title:
           assist?.title && assist.title !== "مسودة تجريبية"
@@ -265,14 +307,57 @@ export default function SongsStudio() {
               : tier === "preview"
                 ? `معاينة بمقام ${maqamName}`
                 : `أغنية بمقام ${maqamName}`,
-      };
-      setResult(song);
-      setVersions((prev) => [song, ...prev]);
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
     } finally {
       setLoading(false);
       setStage("");
+    }
+  }
+
+  /** استعادة مهمة من سجل «توليداتي» — حتى بعد إغلاق الصفحة أثناء التوليد */
+  async function resumeJob(job: RecentJob) {
+    setStep(2);
+    setError("");
+    setLoading(true);
+    setStage("جارٍ الاستعادة...");
+    setResult(null);
+    try {
+      const maqamName = MAQAMAT.find((m) => m.id === job.maqamId)?.name ?? "";
+      await watchJob(job.id, {
+        maqamName,
+        title: job.tier === "preview" ? `معاينة بمقام ${maqamName}` : `أغنية بمقام ${maqamName}`,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally {
+      setLoading(false);
+      setStage("");
+    }
+  }
+
+  /** لمسة الماستر — معالجة نهائية في المتصفح: تطبيع + قص صمت + fade */
+  const [mastering, setMastering] = useState(false);
+  async function applyMaster() {
+    if (!result || result.mastered || mastering) return;
+    setMastering(true);
+    try {
+      const { masterAudio } = await import("@/lib/audioMaster");
+      const blob = await masterAudio(result.blob);
+      const song: SongResult = {
+        ...result,
+        blob,
+        url: URL.createObjectURL(blob),
+        ext: "wav",
+        mastered: true,
+      };
+      setResult(song);
+      setVersions((prev) => prev.map((v, i) => (i === 0 ? song : v)));
+    } catch {
+      setError("تعذّرت معالجة الماستر في هذا المتصفح — الملف الأصلي كما هو");
+    } finally {
+      setMastering(false);
     }
   }
 
@@ -814,7 +899,7 @@ export default function SongsStudio() {
             )}
 
             <button
-              onClick={generate}
+              onClick={() => generate()}
               disabled={loading}
               className="rounded-xl bg-gold px-6 py-3.5 font-semibold text-surface transition-opacity hover:opacity-90 disabled:opacity-50"
             >
@@ -864,13 +949,45 @@ export default function SongsStudio() {
                   />
                 </AudioPlayer>
 
-                <button
-                  onClick={generate}
-                  disabled={loading}
-                  className="self-start rounded-xl border border-gold px-5 py-2.5 text-sm font-semibold text-gold transition-colors hover:bg-gold/10 disabled:opacity-50"
-                >
-                  🔁 ولّد نسخة أخرى بنفس الإعدادات
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => generate()}
+                    disabled={loading}
+                    className="rounded-xl border border-gold px-5 py-2.5 text-sm font-semibold text-gold transition-colors hover:bg-gold/10 disabled:opacity-50"
+                  >
+                    🔁 ولّد نسخة أخرى بنفس الإعدادات
+                  </button>
+                  {!result.mock && (
+                    <button
+                      onClick={applyMaster}
+                      disabled={mastering || result.mastered}
+                      title="تطبيع علو الصوت + قص الصمت + دخول وخروج ناعمان — معالجة فورية في متصفحك"
+                      className="rounded-xl border border-accent px-5 py-2.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"
+                    >
+                      {result.mastered ? "✓ تم الماستر" : mastering ? "جارٍ المعالجة..." : "✨ لمسة الماستر"}
+                    </button>
+                  )}
+                </div>
+
+                {tier === "full" && sections?.length && result.elevenSongId && !result.mock ? (
+                  <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border-soft bg-surface-card p-3">
+                    <span className="text-xs text-muted">
+                      🎯 أعد توليد مقطعاً بعينه — يبقى باقي الأغنية كما هو:
+                    </span>
+                    {sections.map((s, i) => (
+                      <button
+                        key={i}
+                        disabled={loading}
+                        onClick={() =>
+                          generate({ regenerateSectionIndex: i, sourceSongId: result.elevenSongId })
+                        }
+                        className="rounded-full border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:border-gold hover:text-gold disabled:opacity-50"
+                      >
+                        {SECTION_LABELS[s.kind]} {i + 1}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
 
                 {result.prompt && (
                   <div className="rounded-2xl border border-border-soft bg-surface-card p-4">
@@ -906,6 +1023,57 @@ export default function SongsStudio() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {recentJobs.length > 0 && (
+              <div className="rounded-2xl border border-border-soft bg-surface-card p-5">
+                <h3 className="text-sm font-bold">🕘 توليداتك الأخيرة</h3>
+                <p className="mt-1 text-xs text-muted">
+                  مهامك محفوظة على الخادم — لو أغلقت الصفحة أثناء التوليد، استرجع النتيجة من هنا.
+                </p>
+                <div className="mt-3 flex flex-col gap-2">
+                  {recentJobs.map((j) => (
+                    <div
+                      key={j.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border-soft bg-surface px-3 py-2 text-sm"
+                    >
+                      <span className="min-w-0">
+                        {j.status === "done" ? "✅" : j.status === "failed" ? "❌" : "⏳"}{" "}
+                        {j.tier === "preview" ? "معاينة" : "أغنية"} بمقام{" "}
+                        {MAQAMAT.find((m) => m.id === j.maqamId)?.name ?? "—"}
+                        <span className="ms-2 text-xs text-muted">
+                          {new Date(j.createdAt).toLocaleString("ar", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          })}
+                          {j.durationSec ? ` · ${j.durationSec} ث` : ""}
+                        </span>
+                      </span>
+                      {j.status === "done" && (
+                        <button
+                          onClick={() => resumeJob(j)}
+                          disabled={loading}
+                          className="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+                        >
+                          ▶ استرجاع
+                        </button>
+                      )}
+                      {(j.status === "pending" || j.status === "running") && (
+                        <button
+                          onClick={() => resumeJob(j)}
+                          disabled={loading}
+                          className="rounded-lg border border-gold px-3 py-1.5 text-xs font-semibold text-gold transition-colors hover:bg-gold/10 disabled:opacity-50"
+                        >
+                          📡 تابع التوليد
+                        </button>
+                      )}
+                      {j.status === "failed" && (
+                        <span className="text-xs text-red-400">{j.stage || "فشل التوليد"}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

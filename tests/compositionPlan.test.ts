@@ -39,6 +39,29 @@ describe("مترجم خطة التأليف (Eleven Music)", () => {
     expect(plan.sections[3].duration_ms).toBe(3000);
   });
 
+  it("إعادة التوليد الجزئي: كل المقاطع تُستورد من الأصل بمداها الزمني عدا المستهدف", () => {
+    const plan = buildCompositionPlan({
+      ...base,
+      sourceSongId: "song_abc123",
+      regenerateIndex: 1,
+      sections: [
+        { kind: "intro", lyrics: "", durationSec: 10 },
+        { kind: "chorus", lyrics: "لازمة جديدة", durationSec: 20 },
+        { kind: "outro", lyrics: "", durationSec: 10 },
+      ],
+    })!;
+
+    expect(plan.sections[0].source_from).toEqual({
+      song_id: "song_abc123",
+      range: { start_ms: 0, end_ms: 10_000 },
+    });
+    expect(plan.sections[1].source_from).toBeUndefined();
+    expect(plan.sections[2].source_from).toEqual({
+      song_id: "song_abc123",
+      range: { start_ms: 30_000, end_ms: 40_000 },
+    });
+  });
+
   it("الموسيقى الآلية: بلا أسطر غنائية وvocals ضمن السلبيات العامة", () => {
     const plan = buildCompositionPlan({
       ...base,

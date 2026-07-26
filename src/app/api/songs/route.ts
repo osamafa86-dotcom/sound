@@ -11,6 +11,28 @@ import type { MusicRequest } from "@/lib/providers/types";
 /** توليد الأغنية قد يطول — نمنح الدالة مهلة كاملة على Vercel (يشمل التنفيذ الخلفي) */
 export const maxDuration = 300;
 
+/** سجل «توليداتي» — آخر مهام المستخدم ليستعيد ما ولّده حتى بعد إغلاق الصفحة */
+export async function GET(req: NextRequest) {
+  const user = await getUserFromRequest(req);
+  if (!user) return NextResponse.json({ jobs: [] });
+
+  const jobs = await getJobsStore().listRecent(user.id, 10);
+  return NextResponse.json({
+    jobs: jobs.map((j) => ({
+      id: j.id,
+      status: j.status,
+      stage: j.stage,
+      tier: j.tier,
+      maqamId: j.request.maqamId,
+      styleId: j.request.styleId,
+      durationSec: j.request.durationSec,
+      provider: j.provider,
+      mock: j.mock,
+      createdAt: j.createdAt,
+    })),
+  });
+}
+
 /** إنشاء مهمة توليد أغنية — يعيد jobId فوراً ويستعلم العميل عن الحالة دورياً */
 export async function POST(req: NextRequest) {
   const user = await getUserFromRequest(req);
@@ -61,6 +83,21 @@ export async function POST(req: NextRequest) {
     ? Math.min(200, Math.max(40, Math.round(Number(body.bpm))))
     : undefined;
 
+  // إعادة توليد مقطع بعينه: تتطلب المقاطع ومعرّف الأغنية الأصلية لدى المحرك
+  const regenerateIndex =
+    sections &&
+    Number.isInteger(body.regenerateSectionIndex) &&
+    body.regenerateSectionIndex >= 0 &&
+    body.regenerateSectionIndex < sections.length
+      ? (body.regenerateSectionIndex as number)
+      : undefined;
+  const sourceSongId =
+    regenerateIndex !== undefined &&
+    typeof body.sourceSongId === "string" &&
+    /^[A-Za-z0-9_-]{6,128}$/.test(body.sourceSongId)
+      ? (body.sourceSongId as string)
+      : undefined;
+
   // المعاينة دائماً ~30 ثانية؛ الأغنية الكاملة بين 30 و180 ثانية أو مجموع مقاطعها
   const requestedSec = Number.isFinite(body.durationSec) ? Number(body.durationSec) : 60;
   const durationSec =
@@ -80,6 +117,7 @@ export async function POST(req: NextRequest) {
     sections,
     singer,
     bpm,
+    ...(sourceSongId && { regenerateIndex, sourceSongId }),
   };
 
   const job = await getJobsStore().create(tier, request, user?.id ?? null);
