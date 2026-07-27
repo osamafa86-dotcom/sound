@@ -434,3 +434,67 @@ create policy "أعمالي فقط: تعديل" on public.generations
 drop policy if exists "المعرض العام: قراءة" on public.generations;
 create policy "المعرض العام: قراءة" on public.generations
   for select using (is_public);
+
+-- ------------------------------------------------------------
+-- 13) نظام الرصيد — خصم ذري مع تجديد شهري للباقة المجانية
+-- ------------------------------------------------------------
+alter table public.profiles
+  add column if not exists credits_month text;
+
+-- خصم رصيد ذري: يجدد الباقة الشهرية عند أول عملية في شهر جديد،
+-- يعيد الرصيد المتبقي بعد الخصم أو -1 عند عدم الكفاية.
+-- security definer: العملاء لا يعدلون أرصدتهم — الخادم فقط عبر مفتاح الخدمة.
+create or replace function public.consume_credits(
+  p_user_id uuid,
+  p_cost int,
+  p_monthly int
+) returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  cur_month text := to_char(now(), 'YYYY-MM');
+  bal int;
+begin
+  -- التجديد الشهري يرفع الرصيد لحد الباقة إن كان أدنى — ولا يمس رصيداً ممنوحاً أعلى
+  update public.profiles
+     set credits = greatest(credits, p_monthly),
+         credits_month = cur_month
+   where id = p_user_id
+     and credits_month is distinct from cur_month;
+
+  update public.profiles
+     set credits = credits - p_cost
+   where id = p_user_id
+     and credits >= p_cost
+   returning credits into bal;
+
+  if bal is null then
+    return -1;
+  end if;
+  return bal;
+end;
+$$;
+
+revoke all on function public.consume_credits(uuid, int, int) from public, anon, authenticated;
+
+-- ------------------------------------------------------------
+-- 14) تذاكر الدعم — تُدار عبر الخادم فقط (بلا سياسات وصول للعملاء)
+-- ------------------------------------------------------------
+create table if not exists public.support_tickets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete set null,
+  email text not null,
+  topic text not null,
+  message text not null,
+  status text not null default 'open' check (status in ('open', 'closed')),
+  -- رد المالك — يظهر في سجل التذكرة
+  reply text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists support_tickets_status_idx
+  on public.support_tickets (status, created_at desc);
+
+alter table public.support_tickets enable row level security;

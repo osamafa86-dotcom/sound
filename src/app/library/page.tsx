@@ -40,6 +40,7 @@ export default function Library() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [usage, setUsage] = useState<UsageSummary | null>(null);
+  const [credits, setCredits] = useState<number | null>(null);
 
   // الأرشيف الموحد: فلترة بالنوع وبحث بالنص وترتيب زمني
   const [kindFilter, setKindFilter] = useState<"الكل" | Generation["kind"]>("الكل");
@@ -91,12 +92,20 @@ export default function Library() {
         return;
       }
       try {
-        const [r, u] = await Promise.all([fetch("/api/generations"), fetch("/api/usage")]);
+        const [r, u, c] = await Promise.all([
+          fetch("/api/generations"),
+          fetch("/api/usage"),
+          fetch("/api/me/credits"),
+        ]);
         const d = await r.json();
         if (!cancelled) setItems(d.generations ?? []);
         if (u.ok) {
           const us = await u.json();
           if (!cancelled) setUsage(us);
+        }
+        if (c.ok) {
+          const cd = await c.json();
+          if (!cancelled && typeof cd.balance === "number") setCredits(cd.balance);
         }
       } catch {
         /* تجاهل */
@@ -185,8 +194,9 @@ export default function Library() {
       </div>
 
       {usage && (
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className={`mt-6 grid grid-cols-2 gap-3 ${credits !== null ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
           {[
+            ...(credits !== null ? [{ icon: "⚡", label: "رصيدي من النقاط", value: credits }] : []),
             { icon: "📚", label: "أعمال محفوظة", value: items.length },
             { icon: "🎙️", label: "أصوات هذا الشهر", value: usage.byRoute.tts ?? 0 },
             { icon: "🎼", label: "أغانٍ هذا الشهر", value: usage.byRoute.songs ?? 0 },

@@ -19,8 +19,10 @@ export default function Footer() {
           <nav className="flex flex-col gap-2 text-sm">
             <Link href="/tts" className="text-muted hover:text-body">استوديو النص إلى صوت</Link>
             <Link href="/songs" className="text-muted hover:text-body">استوديو الأغاني والمقامات</Link>
+            <Link href="/gallery" className="text-muted hover:text-body">معرض الإبداعات</Link>
             <Link href="/library" className="text-muted hover:text-body">مكتبتي</Link>
             <Link href="/pricing" className="text-muted hover:text-body">الأسعار</Link>
+            <Link href="/support" className="text-muted hover:text-body">الدعم والتواصل</Link>
           </nav>
         </div>
         <div>

@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "./supabaseAdmin";
+import { consumeCredits } from "./credits";
 import { gateFor, getPlatformSettings } from "./platformSettings";
 
 /**
@@ -46,6 +47,7 @@ export const LIMITS = {
   prompts: { perVisitor: envInt("RATE_LIMIT_PROMPTS", 20), global: 300, windowSec: 3600 },
   promptAgent: { perVisitor: envInt("RATE_LIMIT_PROMPT_AGENT", 60), global: 900, windowSec: 3600 },
   promptTest: { perVisitor: envInt("RATE_LIMIT_PROMPT_TEST", 6), global: 60, windowSec: 3600 },
+  support: { perVisitor: envInt("RATE_LIMIT_SUPPORT", 5), global: 100, windowSec: 3600 },
 } satisfies Record<string, LimitRule>;
 
 export type LimitScope = keyof typeof LIMITS;
@@ -139,13 +141,29 @@ export async function checkLimit(
     rateLimitFor(scope, !!userId),
     rule.windowSec
   );
-  return {
-    allowed: ok,
-    message: ok
-      ? ""
-      : "تجاوزت الحد المسموح من الطلبات مؤقتاً — حاول بعد قليل" +
+  if (!ok) {
+    return {
+      allowed: false,
+      message:
+        "تجاوزت الحد المسموح من الطلبات مؤقتاً — حاول بعد قليل" +
         (userId ? "" : "، أو سجّل الدخول لحدود أعلى"),
-  };
+    };
+  }
+
+  // نظام الرصيد: المسجل يخصم من باقته الشهرية حسب كلفة المسار
+  if (userId) {
+    const credit = await consumeCredits(userId, scope);
+    if (!credit.allowed) {
+      return {
+        allowed: false,
+        message:
+          "انتهى رصيدك الشهري من النقاط — يتجدد تلقائياً مطلع كل شهر، أو راسل الدعم لرفع باقتك",
+        status: 402,
+      };
+    }
+  }
+
+  return { allowed: true, message: "" };
 }
 
 /** استجابة الرفض الموحّدة — 429 لتجاوز الحد و503 لإيقاف من المالك */

@@ -12,6 +12,7 @@ import JobsTab from "@/components/admin/JobsTab";
 import LimitsTab from "@/components/admin/LimitsTab";
 import VoicesTab from "@/components/admin/VoicesTab";
 import ControlTab from "@/components/admin/ControlTab";
+import SupportTab from "@/components/admin/SupportTab";
 
 /**
  * لوحة مالك النظام — كل خصائص المنصة وتفاصيلها في مكان واحد:
@@ -29,6 +30,7 @@ const TABS = [
   { id: "jobs", label: "المهام", icon: "⚙️" },
   { id: "limits", label: "الحدود", icon: "🛡️" },
   { id: "voices", label: "الأصوات", icon: "🎙️" },
+  { id: "support", label: "الدعم", icon: "💌" },
   { id: "control", label: "التحكم", icon: "🎛️" },
 ] as const;
 
@@ -163,6 +165,7 @@ export default function AdminDashboard() {
         {tab === "jobs" && <JobsTab />}
         {tab === "limits" && <LimitsTab />}
         {tab === "voices" && <VoicesTab />}
+        {tab === "support" && <SupportTab />}
         {tab === "control" && (
           <ControlTab settings={data.settings} limits={data.limits} onSaved={onSettingsSaved} />
         )}
