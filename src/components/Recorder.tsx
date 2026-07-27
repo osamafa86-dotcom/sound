@@ -73,7 +73,7 @@ export default function Recorder({ onAudio }: { onAudio: (blob: Blob) => void })
         {recording ? (
           <button
             onClick={stop}
-            className="flex items-center gap-2 rounded-xl bg-red-500 px-5 py-2.5 font-semibold text-white transition-opacity hover:opacity-90"
+            className="flex items-center gap-2 rounded-xl bg-primary-strong px-5 py-2.5 font-semibold text-white transition-opacity hover:opacity-90"
           >
             <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-white" />
             إيقاف التسجيل ({mm}:{ss})
