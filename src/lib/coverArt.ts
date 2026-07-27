@@ -30,9 +30,10 @@ function buildPrompt(req: CoverRequest): string {
 
 type Part = { inlineData?: { mimeType?: string; data?: string } };
 
-export async function generateCover(
+/** توليد صورة خام من برومبت كما هو — يخدم الأغلفة وتجربة وكيل البرومبتات */
+export async function generateImageRaw(
   apiKey: string,
-  req: CoverRequest
+  prompt: string
 ): Promise<{ image: Buffer; mimeType: string }> {
   let lastError = "";
   for (const model of MODELS) {
@@ -42,7 +43,7 @@ export async function generateCover(
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: buildPrompt(req) }] }],
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
           generationConfig: { responseModalities: ["IMAGE"] },
         }),
       }
@@ -65,5 +66,12 @@ export async function generateCover(
     }
     lastError = "استجابة بلا صورة";
   }
-  throw new Error(lastError || "تعذّر توليد الغلاف");
+  throw new Error(lastError || "تعذّر توليد الصورة");
+}
+
+export async function generateCover(
+  apiKey: string,
+  req: CoverRequest
+): Promise<{ image: Buffer; mimeType: string }> {
+  return generateImageRaw(apiKey, buildPrompt(req));
 }

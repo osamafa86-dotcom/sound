@@ -43,6 +43,8 @@ export const LIMITS = {
   cover: { perVisitor: envInt("RATE_LIMIT_COVER", 8), global: 80, windowSec: 3600 },
   signals: { perVisitor: envInt("RATE_LIMIT_SIGNALS", 120), global: 3000, windowSec: 3600 },
   prompts: { perVisitor: envInt("RATE_LIMIT_PROMPTS", 20), global: 300, windowSec: 3600 },
+  promptAgent: { perVisitor: envInt("RATE_LIMIT_PROMPT_AGENT", 60), global: 900, windowSec: 3600 },
+  promptTest: { perVisitor: envInt("RATE_LIMIT_PROMPT_TEST", 6), global: 60, windowSec: 3600 },
 } satisfies Record<string, LimitRule>;
 
 export type LimitScope = keyof typeof LIMITS;

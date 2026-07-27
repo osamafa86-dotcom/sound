@@ -341,6 +341,33 @@ create index if not exists prompt_variants_maqam_idx on public.prompt_variants (
 
 alter table public.prompt_variants enable row level security;
 
+-- ============================================================
+-- 11) ذاكرة البرومبتات — صياغات وكيل البرومبتات بتقييم أصحابها
+-- ============================================================
+
+create table if not exists public.prompt_crafts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users (id) on delete cascade,
+  type_id text not null,
+  platform text,
+  brief text not null,
+  result jsonb not null,
+  score int,
+  -- 1 = اشتغل ممتاز (يصبح مثالاً للصياغات القادمة) / -1 = لم ينفع
+  feedback smallint,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists prompt_crafts_user_idx on public.prompt_crafts (user_id, created_at desc);
+create index if not exists prompt_crafts_type_feedback_idx on public.prompt_crafts (type_id, feedback);
+
+alter table public.prompt_crafts enable row level security;
+
+drop policy if exists "برومبتاتي: قراءة" on public.prompt_crafts;
+create policy "برومبتاتي: قراءة" on public.prompt_crafts
+  for select using (auth.uid() = user_id);
+-- الكتابة عبر مفتاح الخدمة من الخادم حصراً
+
 -- تنظيف دوري اختياري للمهام القديمة (Dashboard → Database → Extensions → pg_cron):
 -- select cron.schedule('cleanup-song-jobs', '0 * * * *',
 --   $$delete from public.song_jobs where created_at < now() - interval '1 day'$$);

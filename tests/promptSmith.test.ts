@@ -2,10 +2,16 @@ import { describe, expect, it } from "vitest";
 import { PROMPT_TYPES } from "@/lib/promptSmith";
 
 describe("مهندس البرومبتات", () => {
-  it("ثمانية اختصاصات بمعرّفات فريدة", () => {
-    expect(PROMPT_TYPES).toHaveLength(8);
+  it("تسعة اختصاصات بمعرّفات فريدة", () => {
+    expect(PROMPT_TYPES).toHaveLength(9);
     const ids = PROMPT_TYPES.map((t) => t.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("المشروع المتكامل: سلسلة متسقة بمكونات معنونة", () => {
+    const project = PROMPT_TYPES.find((t) => t.id === "project")!;
+    expect(project.expertise).toContain("الرؤية الموحدة");
+    expect(project.expertise).toContain("الاتساق");
   });
 
   it("كل اختصاص كامل العدّة: منصات وعدّة خبير غنية ولغة رئيسة", () => {
