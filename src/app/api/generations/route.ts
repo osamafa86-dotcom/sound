@@ -51,14 +51,13 @@ export async function GET() {
 
 /** حفظ عمل جديد في المكتبة (الملف الصوتي + بياناته) */
 export async function POST(req: NextRequest) {
+  const limit = await checkLimit(req, "tts");
+  if (!limit.allowed) return limitResponse(limit);
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  // نطاق «حفظ» مستقل بلا كلفة نقاط — الحفظ تخزين لا توليد
-  const limit = await checkLimit(req, "save", user?.id ?? null);
-  if (!limit.allowed) return limitResponse(limit);
   if (!user) {
     return NextResponse.json({ error: "سجّل الدخول لحفظ أعمالك" }, { status: 401 });
   }

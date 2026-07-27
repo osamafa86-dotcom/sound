@@ -4,10 +4,18 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import VoiceAvatar from "@/components/VoiceAvatar";
 import { VOICES, type Voice } from "@/lib/voices";
+import { authHeaders } from "@/lib/supabase";
 import WaveLine from "@/components/WaveLine";
 
 /** صوت الكتالوج مُثرى بتقييمات المستخدمين من عقل المنصة */
 type CatalogVoice = Voice & { rating?: { avg: number; count: number } };
+
+/**
+ * جملة العينة — مشكّلة تشكيلاً كاملاً (التشكيل يصنع فرقاً هائلاً في سلامة النطق)
+ * وتُؤدَّى بالمحرك التعبيري v3 ليظهر الصوت بأفضل حالاته من أول استماع.
+ */
+const SAMPLE_TEXT =
+  "أَهْلًا بِكُمْ فِي مَقَام! اِسْتَمِعُوا إِلَى صَوْتِي، وَأَنَا أُحَوِّلُ كَلِمَاتِكُمْ إِلَى أَدَاءٍ حَيٍّ نَابِضٍ بِالْمَشَاعِرِ.";
 
 export default function VoicesGallery() {
   const [voices, setVoices] = useState<CatalogVoice[]>(VOICES);
@@ -42,10 +50,7 @@ export default function VoicesGallery() {
     [voices, dialect, gender]
   );
 
-  /**
-   * العينات مخزنة لدى الخادم (تُولَّد مرة لكل صوت على مستوى المنصة كلها) —
-   * الاستماع مجاني تماماً: لا خصم نقاط ولا استهلاك من حصة التوليد.
-   */
+  /** عينة حية: تُولَّد مرة واحدة لكل صوت وتُعاد من الذاكرة بعدها */
   async function playSample(v: CatalogVoice) {
     if (playing === v.id) {
       audioRef.current?.pause();
@@ -59,10 +64,15 @@ export default function VoicesGallery() {
     if (!url) {
       setLoadingId(v.id);
       try {
-        const res = await fetch(`/api/voices/sample?voice=${encodeURIComponent(v.id)}`);
+        const res = await fetch("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+          // المحرك التعبيري بلا أسلوب مسبق — طابع الصوت الطبيعي في أبهى صوره
+          body: JSON.stringify({ text: SAMPLE_TEXT, voiceId: v.id, expressive: true, styleId: "" }),
+        });
         if (!res.ok) {
           const data = await res.json().catch(() => null);
-          throw new Error(data?.error ?? "تعذّر جلب العينة");
+          throw new Error(data?.error ?? "تعذّر توليد العينة");
         }
         url = URL.createObjectURL(await res.blob());
         cacheRef.current.set(v.id, url);

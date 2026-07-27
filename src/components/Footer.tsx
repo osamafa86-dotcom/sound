@@ -38,12 +38,6 @@ export default function Footer() {
           <p className="text-sm leading-loose text-cream/75">
             بياتي · حجاز · راست · صبا · كرد · نهاوند · عجم · سيكاه
           </p>
-          <p className="mb-3 mt-6 text-sm font-bold text-gold">قانوني</p>
-          <nav className="flex flex-col gap-2 text-sm">
-            <Link href="/terms" className="text-cream/75 transition-colors hover:text-cream">شروط الاستخدام</Link>
-            <Link href="/privacy" className="text-cream/75 transition-colors hover:text-cream">سياسة الخصوصية</Link>
-            <Link href="/refund" className="text-cream/75 transition-colors hover:text-cream">سياسة الاسترجاع</Link>
-          </nav>
         </div>
       </div>
       <div className="border-t border-cream/20 py-5 text-center text-xs text-cream/60">

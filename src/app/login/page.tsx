@@ -10,8 +10,6 @@ function LoginForm() {
   const params = useSearchParams();
   const mode = params.get("mode") === "signup" ? "signup" : "login";
   const confirmed = params.get("confirmed") === "1";
-  // وصل من رابط استعادة كلمة السر في بريده — جلسة مؤقتة تسمح بتعيين كلمة جديدة
-  const recovery = params.get("recovery") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -19,7 +17,6 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
-  const [sendingReset, setSendingReset] = useState(false);
 
   // أخطاء روابط البريد تصل في جزء الهاش (#error_code=otp_expired...) — نعرضها بلغة مفهومة
   const [linkError, setLinkError] = useState("");
@@ -65,56 +62,6 @@ function LoginForm() {
       setError(e instanceof Error ? e.message : "تعذّر إرسال الرابط");
     } finally {
       setResending(false);
-    }
-  }
-
-  /** إرسال رابط استعادة كلمة السر إلى البريد */
-  async function forgotPassword() {
-    if (!email) {
-      setError("اكتب بريدك الإلكتروني في الخانة أولاً ثم اضغط «نسيت كلمة السر»");
-      return;
-    }
-    setSendingReset(true);
-    setError("");
-    setInfo("");
-    try {
-      const supabase = createClient();
-      if (!supabase) throw new Error("نظام الحسابات غير مفعّل بعد على هذا الموقع");
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${location.origin}/login?recovery=1`,
-      });
-      if (error) throw error;
-      setInfo("أرسلنا رابط استعادة كلمة السر إلى بريدك — افتحه من نفس هذا الجهاز واتبع الخطوات.");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "تعذّر إرسال رابط الاستعادة");
-    } finally {
-      setSendingReset(false);
-    }
-  }
-
-  /** تعيين كلمة السر الجديدة — بعد الوصول من رابط الاستعادة بجلسته المؤقتة */
-  async function updatePassword(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      const supabase = createClient();
-      if (!supabase) throw new Error("نظام الحسابات غير مفعّل بعد على هذا الموقع");
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
-      router.push("/library");
-      router.refresh();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "حدث خطأ";
-      setError(
-        /session|auth/i.test(msg)
-          ? "انتهت صلاحية رابط الاستعادة — اطلب رابطاً جديداً من «نسيت كلمة السر»"
-          : /different from the old/i.test(msg)
-            ? "كلمة السر الجديدة مطابقة للقديمة — اختر كلمة مختلفة"
-            : msg
-      );
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -178,14 +125,12 @@ function LoginForm() {
           </span>
         </div>
         <h1 className="text-center text-2xl font-bold">
-          {recovery ? "تعيين كلمة سر جديدة" : mode === "signup" ? "إنشاء حساب جديد" : "تسجيل الدخول"}
+          {mode === "signup" ? "إنشاء حساب جديد" : "تسجيل الدخول"}
         </h1>
         <p className="mt-2 text-center text-sm text-muted">
-          {recovery
-            ? "وصلت من رابط الاستعادة — اختر كلمة سر جديدة وستدخل مباشرة."
-            : mode === "signup"
-              ? "احفظ أعمالك في مكتبتك الخاصة واحصل على رصيد مجاني للبدء."
-              : "أهلاً بعودتك — ادخل لتصل إلى مكتبتك."}
+          {mode === "signup"
+            ? "احفظ أعمالك في مكتبتك الخاصة واحصل على رصيد مجاني للبدء."
+            : "أهلاً بعودتك — ادخل لتصل إلى مكتبتك."}
         </p>
 
         {confirmed && !info && !error && (
@@ -207,35 +152,6 @@ function LoginForm() {
           </div>
         )}
 
-        {recovery && (
-          <form onSubmit={updatePassword} className="mt-6 flex flex-col gap-4">
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="كلمة السر الجديدة (6 أحرف فأكثر)"
-              dir="ltr"
-              autoFocus
-              className="rounded-xl border border-border-soft bg-surface px-4 py-3 text-start outline-none transition-colors focus:border-primary"
-            />
-            {error && (
-              <p className="rounded-xl border border-primary/40 bg-rose px-4 py-3 text-sm text-primary-strong">
-                {error}
-              </p>
-            )}
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-xl bg-primary px-6 py-3 font-semibold text-white transition-colors hover:bg-primary-strong disabled:opacity-50"
-            >
-              {loading ? "جارٍ..." : "🔑 عيّن كلمة السر وادخل"}
-            </button>
-          </form>
-        )}
-
-        {!recovery && (
         <form onSubmit={submit} className="mt-6 flex flex-col gap-4">
           {mode === "signup" && (
             <input
@@ -266,17 +182,6 @@ function LoginForm() {
             className="rounded-xl border border-border-soft bg-surface px-4 py-3 text-start outline-none transition-colors focus:border-primary"
           />
 
-          {mode === "login" && (
-            <button
-              type="button"
-              onClick={forgotPassword}
-              disabled={sendingReset}
-              className="self-start text-xs text-muted underline-offset-2 transition-colors hover:text-primary hover:underline disabled:opacity-50"
-            >
-              {sendingReset ? "جارٍ إرسال الرابط..." : "نسيت كلمة السر؟"}
-            </button>
-          )}
-
           {error && (
             <p className="rounded-xl border border-primary/40 bg-rose px-4 py-3 text-sm text-primary-strong">
               {error}
@@ -296,9 +201,7 @@ function LoginForm() {
             {loading ? "جارٍ..." : mode === "signup" ? "أنشئ الحساب" : "دخول"}
           </button>
         </form>
-        )}
 
-        {!recovery && (
         <p className="mt-6 text-center text-sm text-muted">
           {mode === "signup" ? (
             <>
@@ -316,7 +219,6 @@ function LoginForm() {
             </>
           )}
         </p>
-        )}
       </div>
     </div>
   );

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -12,10 +11,6 @@ export async function POST(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "سجّل الدخول للتقييم" }, { status: 401 });
-
-  // حد استهلاك يحمي طبقة التعلم من الحشو — التقييمات تغذي عقل المنصة
-  const limit = await checkLimit(req, "signals", user.id);
-  if (!limit.allowed) return limitResponse(limit);
 
   const body = await req.json().catch(() => null);
   const generationId: string = body?.generationId ?? "";
