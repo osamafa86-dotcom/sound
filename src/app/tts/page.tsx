@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
 import SaveToLibrary from "@/components/SaveToLibrary";
+import WaveLine from "@/components/WaveLine";
 import { VOICES, type Voice } from "@/lib/voices";
 import { authHeaders } from "@/lib/supabase";
 
@@ -397,10 +398,11 @@ export default function TTSStudio() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
-      <h1 className="text-3xl font-bold">
+      <h1 className="text-3xl font-extrabold md:text-4xl">
         استوديو <span className="text-gradient">النص إلى صوت</span>
       </h1>
-      <p className="mt-2 text-muted">
+      <WaveLine className="mt-3" />
+      <p className="mt-3 text-muted">
         اكتب نصك، اختر الصوت واللهجة، واضبط الأداء — ثم استمع وحمّل الناتج.
       </p>
 
@@ -444,7 +446,7 @@ export default function TTSStudio() {
             </div>
 
             {adviceError && (
-              <p className="mt-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+              <p className="mt-3 rounded-lg border border-primary/40 bg-rose px-3 py-2 text-xs text-primary-strong">
                 {adviceError}
               </p>
             )}
@@ -482,7 +484,7 @@ export default function TTSStudio() {
           </div>
 
           {error && (
-            <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            <p className="rounded-xl border border-primary/40 bg-rose px-4 py-3 text-sm text-primary-strong">
               {error}
             </p>
           )}
@@ -564,7 +566,7 @@ export default function TTSStudio() {
                     onClick={recording ? stopRecording : startRecording}
                     className={`flex-1 rounded-lg border px-3 py-2 text-xs transition-colors ${
                       recording
-                        ? "animate-pulse border-red-500 bg-red-500/10 text-red-300"
+                        ? "animate-pulse border-primary bg-rose text-primary-strong"
                         : "border-border-soft text-muted hover:border-accent hover:text-body"
                     }`}
                   >
@@ -589,7 +591,7 @@ export default function TTSStudio() {
                 </label>
 
                 {cloneError && (
-                  <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                  <p className="rounded-lg border border-primary/40 bg-rose px-3 py-2 text-xs text-primary-strong">
                     {cloneError}
                   </p>
                 )}
@@ -660,7 +662,7 @@ export default function TTSStudio() {
                     disabled={pronAnalyzing}
                     className={`w-full rounded-lg border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 ${
                       pronRecording
-                        ? "animate-pulse border-red-500 bg-red-500/10 text-red-300"
+                        ? "animate-pulse border-primary bg-rose text-primary-strong"
                         : "border-accent text-accent hover:bg-accent/10"
                     }`}
                   >
@@ -716,7 +718,7 @@ export default function TTSStudio() {
                         </span>
                         <button
                           onClick={() => forgetPronunciation(r.word)}
-                          className="text-muted transition-colors hover:text-red-400"
+                          className="text-muted transition-colors hover:text-primary-strong"
                           title="حذف"
                         >
                           ✕
@@ -758,13 +760,13 @@ export default function TTSStudio() {
                 <button
                   onClick={designVoice}
                   disabled={designing || designDesc.trim().length < 20}
-                  className="rounded-lg bg-gold px-3 py-2 text-sm font-semibold text-surface transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-lg bg-gold px-3 py-2 text-sm font-bold text-wine transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {designing ? "جارٍ التصميم..." : "🎨 صمّم 3 معاينات"}
                 </button>
 
                 {designError && (
-                  <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                  <p className="rounded-lg border border-primary/40 bg-rose px-3 py-2 text-xs text-primary-strong">
                     {designError}
                   </p>
                 )}
@@ -786,7 +788,7 @@ export default function TTSStudio() {
                         <button
                           onClick={() => saveDesign(p.generatedVoiceId)}
                           disabled={!!savingDesign}
-                          className="mt-2 w-full rounded-lg border border-gold px-3 py-1.5 text-xs font-semibold text-gold transition-colors hover:bg-gold/10 disabled:opacity-40"
+                          className="mt-2 w-full rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-rose disabled:opacity-40"
                         >
                           {savingDesign === p.generatedVoiceId ? "جارٍ الحفظ..." : "✓ احفظ هذا الصوت"}
                         </button>
