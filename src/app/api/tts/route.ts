@@ -4,7 +4,7 @@ import { getVoiceTuning } from "@/lib/brain";
 import { TTS_SAMPLE_ONE_IN, autoEvalTTS, sampleOneIn } from "@/lib/autoEval";
 import { getCustomVoice } from "@/lib/customVoices";
 import { applyPronunciationRules, listRules } from "@/lib/pronunciation";
-import { classifyStyle, getStyle, styleTagPrefix } from "@/lib/performance/styles";
+import { classifyStyle, getStyle, layerTagPrefix, styleTagPrefix } from "@/lib/performance/styles";
 import { hasAudioTags } from "@/lib/performance/tags";
 import { elevenLabsTranscribe } from "@/lib/providers/elevenlabs";
 import { pronunciationAccuracy } from "@/lib/textCompare";
@@ -52,9 +52,25 @@ export async function POST(req: NextRequest) {
   }
   const style = getStyle(styleId);
 
-  // المحرك التعبيري يُفعَّل بأسلوب أداء أو وسوم داخل النص أو طلب صريح
+  // قاعدة الطبقات: حالة جسدية وبيئة صوتية تتراكب فوق الأسلوب الأساسي
+  const layerIds: string[] = Array.isArray(body?.layerIds)
+    ? body.layerIds.filter((l: unknown) => typeof l === "string").slice(0, 4)
+    : [];
+  const layersPrefix = layerTagPrefix(layerIds);
+
+  // موجه المخرج الحر — توجيه إضافي يُحقن كوسم (بلا أقواس متداخلة أو أسطر)
+  const directorNote =
+    typeof body?.directorNote === "string"
+      ? body.directorNote.replace(/[[\]\n\r]/g, " ").trim().slice(0, 200)
+      : "";
+
+  // المحرك التعبيري يُفعَّل بأسلوب أو طبقات أو موجه أو وسوم داخل النص أو طلب صريح
   const expressive =
-    body?.expressive === true || !!style || (body?.expressive !== false && hasAudioTags(text));
+    body?.expressive === true ||
+    !!style ||
+    !!layersPrefix ||
+    !!directorNote ||
+    (body?.expressive !== false && hasAudioTags(text));
 
   // الجيل الثالث لا يدعم قواميس النطق — ذاكرة النطق تُطبَّق نصياً قبل التوليد
   const elevenKey = process.env.ELEVENLABS_API_KEY;
@@ -72,7 +88,11 @@ export async function POST(req: NextRequest) {
     speed: body?.speed,
     format: body?.format,
     expressive,
-    stylePrefix: style ? styleTagPrefix(style) : undefined,
+    // بادئة مركّبة: أسلوب + طبقات + موجه المخرج — بترتيب العموم فالخصوص
+    stylePrefix:
+      [style ? styleTagPrefix(style) : "", layersPrefix, directorNote ? `[${directorNote}]` : ""]
+        .filter(Boolean)
+        .join(" ") || undefined,
     liveliness: Number.isFinite(body?.liveliness) ? Number(body.liveliness) : undefined,
     speakerBoost: body?.speakerBoost !== false,
   };

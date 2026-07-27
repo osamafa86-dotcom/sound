@@ -61,3 +61,48 @@ export function insertTagAt(text: string, cursor: number, tag: string): { text: 
 export function hasAudioTags(text: string): boolean {
   return /\[[a-zA-Z][^\]؀-ۿ]{1,40}\]/.test(text);
 }
+
+/**
+ * دلالات منطوقة — نص عربي يُدرج كما هو فيؤديه المحرك صوتاً:
+ * ضحك وتنهد وتردد تُكتب في النص نفسه لا كوسوم إنجليزية.
+ */
+export const SPOKEN_CUES: { id: string; name: string; cue: string }[] = [
+  { id: "haha", name: "هاهاها", cue: "هاهاها" },
+  { id: "aah", name: "آآه", cue: "آآه..." },
+  { id: "ooff", name: "أوووف", cue: "أوووف..." },
+  { id: "hmm", name: "همم", cue: "هممم..." },
+  { id: "dramatic-dots", name: "وقفة درامية ...", cue: "..." },
+];
+
+/**
+ * التلعثم المتعمد — حيلة الخوف والارتباك:
+ * يحوّل الكلمة المحددة (أو التي عند المؤشر) إلى «أـ أـ أنا».
+ * نقية وقابلة للاختبار؛ تعيد النص كما هو إن لم توجد كلمة.
+ */
+export function stutterize(
+  text: string,
+  start: number,
+  end: number
+): { text: string; cursor: number } {
+  let from = Math.min(Math.max(0, start), text.length);
+  let to = Math.min(Math.max(from, end), text.length);
+
+  // بلا تحديد: نتوسع لحدود الكلمة المحيطة بالمؤشر
+  if (from === to) {
+    while (from > 0 && !/\s/.test(text[from - 1])) from--;
+    while (to < text.length && !/\s/.test(text[to])) to++;
+  }
+
+  const selected = text.slice(from, to);
+  const wordMatch = selected.match(/[؀-ۿ]+/);
+  if (!wordMatch || wordMatch.index === undefined) return { text, cursor: end };
+
+  const word = wordMatch[0];
+  const wordStart = from + wordMatch.index;
+  // الحرف الأول مع همزته/مدّته إن وجدت — «أنا» تتلعثم بـ«أـ» لا بجزء مبتور
+  const first = word[0];
+  const stuttered = `${first}ـ ${first}ـ ${word}`;
+
+  const nextText = text.slice(0, wordStart) + stuttered + text.slice(wordStart + word.length);
+  return { text: nextText, cursor: wordStart + stuttered.length };
+}
