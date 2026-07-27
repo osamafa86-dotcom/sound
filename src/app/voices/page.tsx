@@ -9,8 +9,12 @@ import { authHeaders } from "@/lib/supabase";
 /** صوت الكتالوج مُثرى بتقييمات المستخدمين من عقل المنصة */
 type CatalogVoice = Voice & { rating?: { avg: number; count: number } };
 
-/** جملة العينة — قصيرة لتكلفة أقل ومعبّرة ليظهر طابع الصوت */
-const SAMPLE_TEXT = "أهلاً بك في مقام! أنا صوتك الجديد — جرّبني في أي نص تريده.";
+/**
+ * جملة العينة — مشكّلة تشكيلاً كاملاً (التشكيل يصنع فرقاً هائلاً في سلامة النطق)
+ * وتُؤدَّى بالمحرك التعبيري v3 ليظهر الصوت بأفضل حالاته من أول استماع.
+ */
+const SAMPLE_TEXT =
+  "أَهْلًا بِكُمْ فِي مَقَام! اِسْتَمِعُوا إِلَى صَوْتِي، وَأَنَا أُحَوِّلُ كَلِمَاتِكُمْ إِلَى أَدَاءٍ حَيٍّ نَابِضٍ بِالْمَشَاعِرِ.";
 
 export default function VoicesGallery() {
   const [voices, setVoices] = useState<CatalogVoice[]>(VOICES);
@@ -62,7 +66,8 @@ export default function VoicesGallery() {
         const res = await fetch("/api/tts", {
           method: "POST",
           headers: { "Content-Type": "application/json", ...(await authHeaders()) },
-          body: JSON.stringify({ text: SAMPLE_TEXT, voiceId: v.id, expressive: false }),
+          // المحرك التعبيري بلا أسلوب مسبق — طابع الصوت الطبيعي في أبهى صوره
+          body: JSON.stringify({ text: SAMPLE_TEXT, voiceId: v.id, expressive: true, styleId: "" }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => null);
