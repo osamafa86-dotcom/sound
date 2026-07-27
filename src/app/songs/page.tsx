@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
 import Karaoke from "@/components/Karaoke";
 import SaveToLibrary from "@/components/SaveToLibrary";
+import SingAlongPanel from "@/components/SingAlongPanel";
+import StemsPanel from "@/components/StemsPanel";
 import { findActiveWord, type KaraokeWord } from "@/lib/karaoke";
 import { HERITAGE_STYLE_IDS, LYRIC_FORMS, heritageStyle } from "@/lib/heritage/palestinian";
 import { emitSignal } from "@/lib/signalClient";
@@ -1501,6 +1503,23 @@ export default function SongsStudio() {
                     </div>
                     {fixMsg && <p className="mt-2 text-xs text-accent">{fixMsg}</p>}
                   </div>
+                )}
+
+                {/* المرحلة 8: فصل المسارات (للأغاني المغناة) وغناء المستخدم على اللحن */}
+                {!result.mock && !instrumental && (
+                  <StemsPanel
+                    key={`stems-${result.url}`}
+                    song={{ blob: result.blob, title: result.title }}
+                  />
+                )}
+                {!result.mock && (
+                  <SingAlongPanel
+                    key={`sing-${result.url}`}
+                    song={{ blob: result.blob, title: result.title }}
+                    isInstrumental={instrumental}
+                    maqamId={maqamId}
+                    styleId={styleId}
+                  />
                 )}
 
                 {result.prompt && (
