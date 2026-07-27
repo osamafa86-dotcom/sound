@@ -20,5 +20,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ jobId: str
     ...(job.mock !== undefined && { mock: job.mock }),
     ...(job.fellBack && { fellBack: job.fellBack }),
     ...(job.error && { error: job.error }),
+    // يفتح زر «أعد توليد هذا المقطع فقط» في الواجهة
+    ...(job.request.elevenSongId && { elevenSongId: job.request.elevenSongId }),
   });
 }

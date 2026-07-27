@@ -8,12 +8,13 @@ import SaveToLibrary from "@/components/SaveToLibrary";
 import { VOICES, type Voice } from "@/lib/voices";
 import { authHeaders } from "@/lib/supabase";
 
-type Tab = "stt" | "sts" | "clone";
+type Tab = "stt" | "sts" | "clone" | "isolate";
 
 const TABS: { id: Tab; label: string; desc: string }[] = [
   { id: "stt", label: "📝 تفريغ نصي", desc: "حوّل تسجيلك إلى نص عربي مكتوب" },
   { id: "sts", label: "🎭 تحويل الصوت", desc: "أداؤك ونبرتك وتوقيتك — بصوت آخر" },
   { id: "clone", label: "🧬 استنساخ صوتي", desc: "نسختك الرقمية تقرأ أي نص بصوتك" },
+  { id: "isolate", label: "🧹 عازل الضجيج", desc: "يفصل صوتك عن الضجيج والموسيقى ويعيده نقياً كأنه من استوديو" },
 ];
 
 export default function VoiceLab() {
@@ -33,6 +34,8 @@ export default function VoiceLab() {
   const [cloneName, setCloneName] = useState("");
   const [consent, setConsent] = useState(false);
   const [cloneDone, setCloneDone] = useState("");
+
+  const [isolated, setIsolated] = useState<{ url: string; blob: Blob } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,6 +114,28 @@ export default function VoiceLab() {
         blob,
         mock: res.headers.get("X-Mock") === "1",
       });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function isolate() {
+    if (!audio) return;
+    setBusy(true);
+    setError("");
+    setIsolated(null);
+    try {
+      const form = new FormData();
+      form.append("audio", audio, "recording.webm");
+      const res = await fetch("/api/isolate", { method: "POST", headers: await authHeaders(), body: form });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? "تعذّر العزل");
+      }
+      const blob = await res.blob();
+      setIsolated({ url: URL.createObjectURL(blob), blob });
     } catch (e) {
       setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
     } finally {
@@ -266,6 +291,38 @@ export default function VoiceLab() {
                     title={`تحويل صوت — ${voices.find((v) => v.id === targetVoiceId)?.name ?? ""}`}
                     voiceId={targetVoiceId}
                     provider={converted.mock ? "mock" : "elevenlabs-sts"}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === "isolate" && (
+            <div className="flex flex-col gap-4">
+              <p className="text-sm leading-relaxed text-muted">
+                سجّلت في مكان صاخب؟ ارفع التسجيل وسيفصل الذكاء الاصطناعي كلامك عن ضجيج الشارع
+                والمكيّف والموسيقى الخلفية — النتيجة صوت نقي جاهز للنشر أو للاستنساخ.
+              </p>
+              <button
+                onClick={isolate}
+                disabled={!audio || busy}
+                className="self-start rounded-xl bg-primary px-6 py-3 font-semibold text-white transition-colors hover:bg-primary-strong disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {busy ? "جارٍ العزل..." : "🧹 اعزل الصوت من الضجيج"}
+              </button>
+              {isolated && (
+                <div className="flex flex-col gap-3">
+                  <AudioPlayer
+                    src={isolated.url}
+                    title="التسجيل النقي — بعد عزل الضجيج"
+                    filename="maqam-clean-audio.mp3"
+                    note="قارنه بالتسجيل الأصلي أعلاه — يمكنك الآن استخدامه للاستنساخ أو النشر."
+                  />
+                  <SaveToLibrary
+                    url={isolated.url}
+                    kind="recording"
+                    title="تسجيل نقي — بعد عزل الضجيج"
+                    provider="elevenlabs-isolation"
                   />
                 </div>
               )}

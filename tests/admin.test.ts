@@ -27,6 +27,17 @@ describe("صلاحية المالك", () => {
     expect(isOwnerEmail("intruder@example.com")).toBe(false);
   });
 
+  it("تتسامح مع فواصل الإدخال الشائعة في لوحات الاستضافة", () => {
+    process.env.OWNER_EMAILS = "a@x.com، b@x.com; c@x.com\nd@x.com  e@x.com";
+    expect(ownerEmails()).toEqual(["a@x.com", "b@x.com", "c@x.com", "d@x.com", "e@x.com"]);
+    expect(isOwnerEmail("c@x.com")).toBe(true);
+  });
+
+  it("تتجاهل علامات التنصيص الملتصقة بالقيمة", () => {
+    process.env.OWNER_EMAILS = '"owner@example.com"';
+    expect(isOwnerEmail("owner@example.com")).toBe(true);
+  });
+
   it("ترفض القيم الفارغة", () => {
     process.env.OWNER_EMAILS = "owner@example.com";
     expect(isOwnerEmail(null)).toBe(false);

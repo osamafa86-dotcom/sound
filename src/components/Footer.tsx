@@ -21,12 +21,12 @@ export default function Footer() {
         <div>
           <p className="mb-3 text-sm font-bold text-gold">المنصة</p>
           <nav className="flex flex-col gap-2 text-sm">
-            <Link href="/tts" className="text-cream/75 transition-colors hover:text-cream">استوديو النص إلى صوت</Link>
-            <Link href="/songs" className="text-cream/75 transition-colors hover:text-cream">استوديو الأغاني والمقامات</Link>
-            <Link href="/drama" className="text-cream/75 transition-colors hover:text-cream">الاستوديو الدرامي</Link>
-            <Link href="/podcast" className="text-cream/75 transition-colors hover:text-cream">البودكاست الذكي</Link>
-            <Link href="/library" className="text-cream/75 transition-colors hover:text-cream">مكتبتي</Link>
-            <Link href="/pricing" className="text-cream/75 transition-colors hover:text-cream">الأسعار</Link>
+            <Link href="/tts" className="text-muted hover:text-body">استوديو النص إلى صوت</Link>
+            <Link href="/songs" className="text-muted hover:text-body">استوديو الأغاني والمقامات</Link>
+            <Link href="/gallery" className="text-muted hover:text-body">معرض الإبداعات</Link>
+            <Link href="/library" className="text-muted hover:text-body">مكتبتي</Link>
+            <Link href="/pricing" className="text-muted hover:text-body">الأسعار</Link>
+            <Link href="/support" className="text-muted hover:text-body">الدعم والتواصل</Link>
           </nav>
         </div>
         <div>

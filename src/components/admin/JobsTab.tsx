@@ -75,7 +75,7 @@ export default function JobsTab() {
           </button>
           <button
             onClick={purge}
-            className="rounded-xl border border-primary/40 px-4 py-2 text-sm text-primary-strong transition-colors hover:bg-rose"
+            className="rounded-xl border border-red-500/40 px-4 py-2 text-sm text-red-300 transition-colors hover:bg-red-500/10"
           >
             تنظيف الأقدم من يوم
           </button>
@@ -98,8 +98,8 @@ export default function JobsTab() {
                   ) : (
                     <span className="ms-2 text-[11px] text-muted">زائر</span>
                   )}
-                  {j.error && <p className="mt-1 max-w-md text-xs text-primary-strong">{j.error}</p>}
-                  {j.fellBack && <p className="mt-1 text-[11px] text-amber-700">رجوع تلقائي: {j.fellBack}</p>}
+                  {j.error && <p className="mt-1 max-w-md text-xs text-red-300">{j.error}</p>}
+                  {j.fellBack && <p className="mt-1 text-[11px] text-amber-300">رجوع تلقائي: {j.fellBack}</p>}
                 </td>
                 <td className="px-3 py-2">
                   <Badge tone={STATUS[j.status]?.tone ?? "neutral"}>{STATUS[j.status]?.label ?? j.status}</Badge>

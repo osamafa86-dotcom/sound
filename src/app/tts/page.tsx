@@ -5,6 +5,8 @@ import AudioPlayer from "@/components/AudioPlayer";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import WaveLine from "@/components/WaveLine";
 import { VOICES, type Voice } from "@/lib/voices";
+import { PERFORMANCE_STYLES, STYLE_CATEGORIES } from "@/lib/performance/styles";
+import { TAG_GROUPS, insertTagAt } from "@/lib/performance/tags";
 import { authHeaders } from "@/lib/supabase";
 
 type CustomVoice = { id: string; name: string };
@@ -15,11 +17,41 @@ type CatalogVoice = Voice & {
   learned?: { stability: number; speed: number };
 };
 
+function b64ToBlob(b64: string, mime: string): Blob {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
 export default function TTSStudio() {
   const [voices, setVoices] = useState<CatalogVoice[]>(VOICES);
   const [text, setText] = useState("");
   const [dialect, setDialect] = useState<string>("الكل");
   const [voiceId, setVoiceId] = useState(VOICES[0].id);
+
+  // المخرج الصوتي: المحرك التعبيري + أسلوب الأداء + وسوم داخل النص
+  const textRef = useRef<HTMLTextAreaElement>(null);
+  const [expressive, setExpressive] = useState(true);
+  const [perfStyle, setPerfStyle] = useState("auto");
+  const [liveliness, setLiveliness] = useState(0.35);
+  const [takes, setTakes] = useState(1);
+  const [takesResults, setTakesResults] = useState<
+    { url: string; blob: Blob; score: number | null; ext: string }[] | null
+  >(null);
+  const [takesMock, setTakesMock] = useState(false);
+
+  /** إدراج وسم أداء عند موضع المؤشر في النص */
+  function insertTag(tag: string) {
+    const el = textRef.current;
+    const cursor = el ? el.selectionStart : text.length;
+    const next = insertTagAt(text, cursor, tag);
+    setText(next.text);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(next.cursor, next.cursor);
+    });
+  }
 
   // الأصوات المستنسخة + نموذج الاستنساخ
   const [customVoices, setCustomVoices] = useState<CustomVoice[]>([]);
@@ -285,20 +317,48 @@ export default function TTSStudio() {
   const [result, setResult] = useState<{ url: string; blob: Blob; mock: boolean; ext: string; fellBack: boolean } | null>(null);
   const [error, setError] = useState("");
 
+  // الشخصنة: الافتراضات من ذوق المستخدم المتعلم لا من ترتيب القائمة
+  const [personalized, setPersonalized] = useState("");
+
   // كتالوج المنصة الفعلي من الخادم — الأصوات المتاحة حسب المفاتيح المضبوطة (ElevenLabs / Azure)
   useEffect(() => {
     let cancelled = false;
+    // قادم من معرض الأصوات برابط ?voice= — اختياره الصريح يتقدم على الشخصنة
+    const urlVoice = new URLSearchParams(window.location.search).get("voice");
     async function loadVoices() {
       try {
         const res = await fetch("/api/voices/catalog");
         const data = await res.json().catch(() => null);
-        if (cancelled || !res.ok || !data) return;
+        if (cancelled) return;
+        if (!res.ok || !data) {
+          if (urlVoice && VOICES.some((v) => v.id === urlVoice)) setVoiceId(urlVoice);
+          return;
+        }
         const all: CatalogVoice[] = data.voices ?? [];
         if (all.length) {
           setVoices(all);
           setVoiceId((prev) =>
             prev.startsWith("custom:") || all.some((v) => v.id === prev) ? prev : all[0].id
           );
+        }
+        if (urlVoice && all.some((v) => v.id === urlVoice)) {
+          setVoiceId(urlVoice);
+          return;
+        }
+
+        // ملف الذوق: صوت المستخدم المفضل يتقدم افتراضياً مع إعداداته المريحة
+        const pres = await fetch("/api/me/profile");
+        const pdata = await pres.json().catch(() => null);
+        const profile = pdata?.profile;
+        if (cancelled || !profile) return;
+        const favorite = (profile.topVoices ?? [])
+          .map((t: { voiceId: string }) => all.find((v) => v.id === t.voiceId))
+          .find(Boolean) as CatalogVoice | undefined;
+        if (favorite) {
+          setVoiceId(favorite.id);
+          if (Number.isFinite(profile.avgStability)) setStability(profile.avgStability);
+          if (Number.isFinite(profile.avgSpeed)) setSpeed(Math.min(1.5, Math.max(0.5, profile.avgSpeed)));
+          setPersonalized(favorite.name);
         }
       } catch {
         /* الكتالوج الثابت يبقى بديلاً */
@@ -374,16 +434,49 @@ export default function TTSStudio() {
     setError("");
     setLoading(true);
     setResult(null);
+    setTakesResults(null);
     try {
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
-        body: JSON.stringify({ text, voiceId, speed, stability, format }),
+        body: JSON.stringify({
+          text,
+          voiceId,
+          speed,
+          stability,
+          format,
+          expressive,
+          // إيقاف المحرك التعبيري يعطّل الأسلوب أيضاً — كي لا يعيد تفعيله في الخادم
+          styleId: expressive ? perfStyle : "",
+          liveliness,
+          takes,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error ?? "تعذّر التوليد، حاول مجدداً");
       }
+
+      // التوليد المتعدد يعود JSON بكل النسخ ودرجاتها؛ النسخة الواحدة تعود صوتاً مباشراً
+      const contentType = res.headers.get("Content-Type") ?? "";
+      if (contentType.includes("application/json")) {
+        const data = await res.json();
+        const items = (data.takes ?? []).map(
+          (t: { audio: string; mimeType: string; score: number | null }) => {
+            const blob = b64ToBlob(t.audio, t.mimeType);
+            return {
+              url: URL.createObjectURL(blob),
+              blob,
+              score: t.score,
+              ext: t.mimeType === "audio/mpeg" ? "mp3" : "wav",
+            };
+          }
+        );
+        setTakesMock(!!data.mock);
+        setTakesResults(items);
+        return;
+      }
+
       const mock = res.headers.get("X-Mock") === "1";
       const fellBack = res.headers.has("X-Fallback");
       const blob = await res.blob();
@@ -410,12 +503,151 @@ export default function TTSStudio() {
         {/* النص */}
         <div className="flex flex-col gap-4">
           <textarea
+            ref={textRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
             maxLength={20000}
             placeholder={"اكتب النص هنا...\nمثال: أهلاً بكم في منصة مقام، حيث تتحول الكلمات إلى صوتٍ نابضٍ بالحياة."}
             className="min-h-72 w-full resize-y rounded-2xl border border-border-soft bg-surface-card p-5 leading-relaxed outline-none transition-colors focus:border-primary"
           />
+          {/* المخرج الصوتي — المحرك التعبيري (الجيل الثالث) */}
+          <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-bold">
+                  🎬 المخرج الصوتي
+                  <span className="mx-2 rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                    المحرك التعبيري v3
+                  </span>
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-muted">
+                  أداء بشري بمشاعر حقيقية: اختر أسلوب أداء جاهزاً، أو ضع المؤشر داخل النص
+                  وأدرج وسوم مشاعر وتوقفات تتحكم باللحظة نفسها.
+                </p>
+              </div>
+              <button
+                onClick={() => setExpressive(!expressive)}
+                className={`shrink-0 rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors ${
+                  expressive
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border-soft text-muted hover:text-body"
+                }`}
+              >
+                {expressive ? "● مفعّل" : "○ متوقف"}
+              </button>
+            </div>
+
+            {expressive && (
+              <>
+                {/* مكتبة أساليب الأداء */}
+                <div className="mt-4">
+                  <p className="mb-2 text-xs font-semibold">أسلوب الأداء</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      onClick={() => setPerfStyle("auto")}
+                      className={`rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+                        perfStyle === "auto"
+                          ? "border-primary bg-primary/15 font-semibold text-primary"
+                          : "border-border-soft text-muted hover:border-primary/50 hover:text-body"
+                      }`}
+                      title="يحلل الذكاء الاصطناعي نصك ويختار الأسلوب الأنسب بنفسه"
+                    >
+                      ✨ تلقائي — يقرأ النص ويختار
+                    </button>
+                    <button
+                      onClick={() => setPerfStyle("")}
+                      className={`rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+                        perfStyle === ""
+                          ? "border-primary bg-primary/15 font-semibold text-primary"
+                          : "border-border-soft text-muted hover:border-primary/50 hover:text-body"
+                      }`}
+                      title="بلا أسلوب مسبق — الوسوم داخل النص وحدها تتحكم"
+                    >
+                      بدون أسلوب
+                    </button>
+                  </div>
+                  {STYLE_CATEGORIES.map((cat) => (
+                    <div key={cat} className="mt-2.5">
+                      <p className="text-[10px] font-semibold text-muted">{cat}</p>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {PERFORMANCE_STYLES.filter((s) => s.category === cat).map((s) => (
+                          <button
+                            key={s.id}
+                            onClick={() => setPerfStyle(s.id)}
+                            title={s.desc}
+                            className={`rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+                              perfStyle === s.id
+                                ? "border-primary bg-primary/15 font-semibold text-primary"
+                                : "border-border-soft text-muted hover:border-primary/50 hover:text-body"
+                            }`}
+                          >
+                            {s.icon} {s.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* وسوم داخل النص */}
+                <div className="mt-4 border-t border-border-soft pt-3">
+                  <p className="mb-1 text-xs font-semibold">
+                    وسوم داخل النص{" "}
+                    <span className="font-normal text-muted">
+                      — ضع المؤشر في الموضع المطلوب ثم اضغط الوسم
+                    </span>
+                  </p>
+                  {TAG_GROUPS.map((g) => (
+                    <div key={g.id} className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] text-muted">
+                        {g.icon} {g.name}:
+                      </span>
+                      {g.tags.map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => insertTag(t.tag)}
+                          className="rounded-lg border border-border-soft px-2 py-1 text-xs text-muted transition-colors hover:border-primary/50 hover:text-body"
+                        >
+                          {t.name}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* التوليد المتعدد */}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border-soft pt-3">
+              <p className="text-xs font-semibold">
+                التوليد المتعدد{" "}
+                <span className="font-normal text-muted">
+                  — نسخ بأداءات مختلفة تُرتَّب آلياً حسب دقة النطق
+                </span>
+              </p>
+              <div className="flex gap-1.5">
+                {[1, 2, 3].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setTakes(n)}
+                    className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+                      takes === n
+                        ? "border-primary bg-primary/15 font-semibold text-primary"
+                        : "border-border-soft text-muted hover:border-primary/50 hover:text-body"
+                    }`}
+                  >
+                    {n === 1 ? "نسخة واحدة" : `${n} نسخ`}
+                  </button>
+                ))}
+              </div>
+              {takes > 1 && (
+                <p className="w-full text-[10px] text-muted">
+                  كل نسخة إضافية تُحتسب توليداً من حصتك اليومية.
+                </p>
+              )}
+            </div>
+          </div>
+
           {/* المستشار الصوتي */}
           <div className="rounded-2xl border border-accent/30 bg-accent/5 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -502,6 +734,7 @@ export default function TTSStudio() {
               src={result.url}
               title="الناتج الصوتي"
               mock={result.mock}
+              signal={result.mock ? undefined : { voiceId, settings: { stability, speed } }}
               filename={`maqam-tts.${result.ext}`}
               note={
                 result.fellBack
@@ -519,6 +752,36 @@ export default function TTSStudio() {
                 settings={{ speed, stability, format }}
               />
             </AudioPlayer>
+          )}
+
+          {takesResults && takesResults.length > 0 && (
+            <div className="flex flex-col gap-3">
+              <p className="text-sm font-semibold">
+                🎛️ النسخ المولّدة — مرتبة آلياً حسب دقة النطق، استمع واختر الأفضل لأذنك
+              </p>
+              {takesResults.map((t, i) => (
+                <AudioPlayer
+                  key={t.url}
+                  src={t.url}
+                  title={`النسخة ${i + 1}${
+                    t.score !== null ? ` — دقة النطق ${Math.round(t.score * 100)}%` : ""
+                  }${i === 0 && t.score !== null ? " ⭐" : ""}`}
+                  mock={takesMock}
+                  signal={takesMock ? undefined : { voiceId, settings: { stability, speed } }}
+                  filename={`maqam-tts-take${i + 1}.${t.ext}`}
+                >
+                  <SaveToLibrary
+                    url={t.url}
+                    kind="tts"
+                    title={`تعليق صوتي — ${voices.find((v) => v.id === voiceId)?.name ?? ""} (نسخة ${i + 1})`}
+                    content={text}
+                    voiceId={voiceId}
+                    provider={takesMock ? "mock" : "elevenlabs"}
+                    settings={{ speed, stability, format, style: perfStyle }}
+                  />
+                </AudioPlayer>
+              ))}
+            </div>
           )}
         </div>
 
@@ -843,6 +1106,11 @@ export default function TTSStudio() {
 
           <div>
             <label className="mb-2 block text-sm font-semibold">الصوت</label>
+            {personalized && (
+              <p className="mb-2 rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary">
+                ✨ اخترنا لك «{personalized}» وإعداداتك المريحة — من ذوقك المتعلم
+              </p>
+            )}
             <div className="flex flex-col gap-2">
               {shownVoices.map((v) => (
                 <button
@@ -878,7 +1146,7 @@ export default function TTSStudio() {
             </div>
           </div>
 
-          <div>
+          <div className={expressive ? "opacity-50" : ""}>
             <label className="mb-2 flex justify-between text-sm font-semibold">
               <span>السرعة</span>
               <span className="text-muted">{speed.toFixed(2)}×</span>
@@ -890,14 +1158,28 @@ export default function TTSStudio() {
               step={0.05}
               value={speed}
               onChange={(e) => setSpeed(Number(e.target.value))}
+              disabled={expressive}
               className="w-full"
             />
+            {expressive && (
+              <p className="mt-1 text-xs text-muted">
+                المحرك التعبيري يضبط الإيقاع بنفسه — تحكّم به عبر وسوم التوقفات وأسلوب الأداء
+              </p>
+            )}
           </div>
 
           <div>
             <label className="mb-2 flex justify-between text-sm font-semibold">
               <span>الثبات ↔ التعبير</span>
-              <span className="text-muted">{Math.round(stability * 100)}%</span>
+              <span className="text-muted">
+                {expressive
+                  ? stability < 0.25
+                    ? "مبدع"
+                    : stability < 0.75
+                      ? "طبيعي"
+                      : "رصين"
+                  : `${Math.round(stability * 100)}%`}
+              </span>
             </label>
             <input
               type="range"
@@ -909,9 +1191,32 @@ export default function TTSStudio() {
               className="w-full"
             />
             <p className="mt-1 text-xs text-muted">
-              ثبات أعلى = أداء متزن؛ ثبات أقل = تعبير عاطفي أقوى
+              {expressive
+                ? "المحرك التعبيري يعمل بثلاث درجات: مبدع (تعبير أقصى) · طبيعي (متوازن) · رصين (متزن)"
+                : "ثبات أعلى = أداء متزن؛ ثبات أقل = تعبير عاطفي أقوى"}
             </p>
           </div>
+
+          {!expressive && (
+            <div>
+              <label className="mb-2 flex justify-between text-sm font-semibold">
+                <span>قوة التعبير</span>
+                <span className="text-muted">{Math.round(liveliness * 100)}%</span>
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={liveliness}
+                onChange={(e) => setLiveliness(Number(e.target.value))}
+                className="w-full"
+              />
+              <p className="mt-1 text-xs text-muted">
+                يضخّم حيوية الأداء في المحرك الكلاسيكي — قيم عالية قد تقلل الثبات
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="mb-2 block text-sm font-semibold">صيغة الملف</label>

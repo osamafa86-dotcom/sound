@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const mode = params.get("mode") === "signup" ? "signup" : "login";
+  const confirmed = params.get("confirmed") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,6 +17,53 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+
+  // أخطاء روابط البريد تصل في جزء الهاش (#error_code=otp_expired...) — نعرضها بلغة مفهومة
+  const [linkError, setLinkError] = useState("");
+  const [resending, setResending] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const code = hash.get("error_code");
+      if (cancelled || !code) return;
+      setLinkError(
+        code === "otp_expired"
+          ? "رابط التأكيد انتهت صلاحيته أو استُخدم من قبل. اكتب بريدك في الخانة ثم اضغط «أعد إرسال رابط التأكيد»."
+          : hash.get("error_description") ?? "تعذّر تأكيد البريد — حاول مجدداً"
+      );
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function resendConfirmation() {
+    if (!email) {
+      setError("اكتب بريدك الإلكتروني في الخانة أولاً ثم اضغط إعادة الإرسال");
+      return;
+    }
+    setResending(true);
+    setError("");
+    setInfo("");
+    try {
+      const supabase = createClient();
+      if (!supabase) throw new Error("نظام الحسابات غير مفعّل بعد على هذا الموقع");
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email,
+        options: { emailRedirectTo: `${location.origin}/login?confirmed=1` },
+      });
+      if (error) throw error;
+      setLinkError("");
+      setInfo("أرسلنا رابط تأكيد جديداً إلى بريدك — افتحه من نفس هذا الجهاز.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "تعذّر إرسال الرابط");
+    } finally {
+      setResending(false);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,7 +78,11 @@ function LoginForm() {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { display_name: name || email.split("@")[0] } },
+          options: {
+            data: { display_name: name || email.split("@")[0] },
+            // رابط العودة بعد تأكيد البريد — لموقعنا الفعلي لا لإعدادات المشروع الافتراضية
+            emailRedirectTo: `${location.origin}/login?confirmed=1`,
+          },
         });
         if (error) throw error;
 
@@ -80,6 +132,25 @@ function LoginForm() {
             ? "احفظ أعمالك في مكتبتك الخاصة واحصل على رصيد مجاني للبدء."
             : "أهلاً بعودتك — ادخل لتصل إلى مكتبتك."}
         </p>
+
+        {confirmed && !info && !error && (
+          <p className="mt-4 rounded-xl border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-accent">
+            ✓ تم تأكيد بريدك بنجاح — سجّل الدخول الآن.
+          </p>
+        )}
+        {linkError && (
+          <div className="mt-4 rounded-xl border border-gold/40 bg-gold/10 px-4 py-3 text-sm">
+            <p>{linkError}</p>
+            <button
+              type="button"
+              onClick={resendConfirmation}
+              disabled={resending}
+              className="mt-2 rounded-lg border border-gold px-3 py-1.5 text-xs font-semibold text-gold transition-colors hover:bg-gold/10 disabled:opacity-50"
+            >
+              {resending ? "جارٍ الإرسال..." : "📧 أعد إرسال رابط التأكيد"}
+            </button>
+          </div>
+        )}
 
         <form onSubmit={submit} className="mt-6 flex flex-col gap-4">
           {mode === "signup" && (
