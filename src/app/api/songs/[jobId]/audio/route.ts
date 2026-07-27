@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJobsStore } from "@/lib/jobs";
-import { rangeResponse } from "@/lib/httpRange";
 
-/** جلب الملف الصوتي لمهمة مكتملة — بدعم طلبات المدى (يشترطه سفاري للتشغيل) */
-export async function GET(req: NextRequest, ctx: { params: Promise<{ jobId: string }> }) {
+/** جلب الملف الصوتي لمهمة مكتملة */
+export async function GET(_req: NextRequest, ctx: { params: Promise<{ jobId: string }> }) {
   const { jobId } = await ctx.params;
   const store = getJobsStore();
   const job = await store.get(jobId);
@@ -19,7 +18,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ jobId: stri
     return NextResponse.json({ error: "تعذّر جلب الملف الصوتي" }, { status: 404 });
   }
 
-  return rangeResponse(req, audio.audio, audio.mimeType, {
-    "Cache-Control": "private, max-age=1800",
+  return new NextResponse(new Uint8Array(audio.audio), {
+    headers: {
+      "Content-Type": audio.mimeType,
+      "Cache-Control": "private, max-age=1800",
+    },
   });
 }

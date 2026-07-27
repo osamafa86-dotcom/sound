@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DIALECTS, SONG_STYLES } from "@/lib/maqamat";
-import { LYRIC_FORMS } from "@/lib/heritage/palestinian";
 import { getLyricsAssistant, mockAssistant } from "@/lib/assistant";
 import { getPromptExemplars } from "@/lib/brain";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
@@ -37,7 +36,6 @@ export async function POST(req: NextRequest) {
     lyrics,
     dialectId: DIALECTS.some((d) => d.id === body.dialectId) ? body.dialectId : DIALECTS[0].id,
     styleId: SONG_STYLES.some((s) => s.id === body.styleId) ? body.styleId : SONG_STYLES[0].id,
-    formId: LYRIC_FORMS.some((f) => f.id === body.formId) ? body.formId : undefined,
     // عقل المنصة: أمثلة برومبتات نالت أعلى تقييم تُحقن في سياق المساعد
     exemplars: await getPromptExemplars().catch(() => []),
   };

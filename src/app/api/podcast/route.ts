@@ -29,31 +29,21 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null);
   const topic: string = typeof body?.topic === "string" ? body.topic.trim() : "";
-  const sourceText: string = typeof body?.sourceText === "string" ? body.sourceText.trim() : "";
   const length: PodcastLength = LENGTHS.includes(body?.length) ? body.length : "medium";
   const tone: PodcastTone = TONES.includes(body?.tone) ? body.tone : "informative";
   const dialect: string =
     typeof body?.dialect === "string" && DIALECT_OPTIONS.includes(body.dialect) ? body.dialect : ANY_DIALECT;
 
-  // مساران: موضوع تؤلَّف منه الحلقة، أو مادة مصدرية يرفعها المستخدم فتُحوَّل حواراً
-  if (!topic && !sourceText) {
-    return NextResponse.json({ error: "اكتب موضوع الحلقة أو أرفق نصاً مصدرياً" }, { status: 400 });
-  }
+  if (!topic) return NextResponse.json({ error: "موضوع الحلقة مطلوب" }, { status: 400 });
   if (topic.length > PODCAST_LIMITS.maxTopicChars) {
     return NextResponse.json(
       { error: `الحد الأقصى لوصف الموضوع ${PODCAST_LIMITS.maxTopicChars} حرف` },
       { status: 400 }
     );
   }
-  if (sourceText.length > PODCAST_LIMITS.maxSourceChars) {
-    return NextResponse.json(
-      { error: `الحد الأقصى للنص المصدري ${PODCAST_LIMITS.maxSourceChars} حرف — قصّه أو قسّمه لحلقتين` },
-      { status: 400 }
-    );
-  }
 
   try {
-    const script = await generatePodcast(key, topic, length, tone, dialect, sourceText || undefined);
+    const script = await generatePodcast(key, topic, length, tone, dialect);
     await logUsage("podcast", user?.id ?? null).catch(() => {});
     return NextResponse.json(script);
   } catch (e) {

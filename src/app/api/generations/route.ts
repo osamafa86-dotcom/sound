@@ -10,28 +10,11 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ generations: [] });
 
-  const FIELDS = "id, kind, title, content, voice_id, maqam_id, style_id, provider, audio_path, created_at";
-  type Row = { audio_path: string | null; is_public?: boolean } & Record<string, unknown>;
-
-  const first = await supabase
+  const { data, error } = await supabase
     .from("generations")
-    .select(`${FIELDS}, is_public`)
+    .select("id, kind, title, content, voice_id, maqam_id, style_id, provider, audio_path, created_at")
     .order("created_at", { ascending: false })
     .limit(100);
-
-  let data = first.data as Row[] | null;
-  let error = first.error;
-
-  // قاعدة لم تُحدَّث بعد بعمود المعرض العام — نعمل بدونه بدل كسر المكتبة
-  if (error && /is_public/.test(error.message)) {
-    const fallback = await supabase
-      .from("generations")
-      .select(FIELDS)
-      .order("created_at", { ascending: false })
-      .limit(100);
-    data = fallback.data as Row[] | null;
-    error = fallback.error;
-  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -112,37 +95,6 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ id: data.id });
-}
-
-/** نشر عمل في المعرض العام أو سحبه منه — قرار صاحبه وحده */
-export async function PATCH(req: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "غير مصرّح" }, { status: 401 });
-
-  const body = await req.json().catch(() => null);
-  const id = typeof body?.id === "string" ? body.id : "";
-  if (!id) return NextResponse.json({ error: "المعرّف مطلوب" }, { status: 400 });
-
-  const { error } = await supabase
-    .from("generations")
-    .update({ is_public: body?.isPublic === true })
-    .eq("id", id);
-
-  if (error) {
-    const needsMigration = /is_public|policy/.test(error.message);
-    return NextResponse.json(
-      {
-        error: needsMigration
-          ? "المعرض العام يحتاج تحديث قاعدة البيانات — شغّل schema.sql في Supabase أولاً"
-          : error.message,
-      },
-      { status: needsMigration ? 503 : 500 }
-    );
-  }
-  return NextResponse.json({ ok: true });
 }
 
 /** حذف عمل من المكتبة */

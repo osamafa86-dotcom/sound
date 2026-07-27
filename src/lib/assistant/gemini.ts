@@ -1,6 +1,4 @@
 import { DIALECTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
-import { heritageAssistBlock } from "@/lib/heritage/palestinian";
-import { parseSections, sanitizeSections } from "@/lib/songSections";
 import type { AssistRequest, AssistResult, LyricsAssistant } from "./types";
 
 /** النموذج الافتراضي — سريع وممتاز مع العربية؛ قابل للتبديل عبر متغير البيئة */
@@ -22,24 +20,10 @@ const RESULT_SCHEMA = {
       description:
         "Professional English music-generation prompt: maqam name, quarter tones if applicable, instruments, rhythm, tempo, mood, structure. One dense paragraph under 400 characters.",
     },
-    sections: {
-      type: "array",
-      description: "الكلمات نفسها مقسّمة مقاطع مُهيكلة بالترتيب الزمني للأغنية",
-      items: {
-        type: "object",
-        properties: {
-          kind: { type: "string", enum: ["intro", "verse", "chorus", "bridge", "outro"] },
-          lyrics: { type: "string", description: "أسطر هذا المقطع فقط — فارغة للمقدمة/الخاتمة الآلية" },
-          durationSec: { type: "number", description: "مدة واقعية بالثواني (سطر مغنّى ≈ 7 ثوانٍ)" },
-        },
-        required: ["kind", "lyrics", "durationSec"],
-        propertyOrdering: ["kind", "lyrics", "durationSec"],
-      },
-    },
   },
-  required: ["title", "lyrics", "maqamId", "maqamReason", "stylePromptEn", "sections"],
+  required: ["title", "lyrics", "maqamId", "maqamReason", "stylePromptEn"],
   // ترتيب الحقول في الإخراج (خاص بـ Gemini)
-  propertyOrdering: ["title", "lyrics", "maqamId", "maqamReason", "stylePromptEn", "sections"],
+  propertyOrdering: ["title", "lyrics", "maqamId", "maqamReason", "stylePromptEn"],
 };
 
 /** حقن أمثلة عقل المنصة: برومبتات سبق أن أنتجت أغاني نالت أعلى رضا المستخدمين */
@@ -67,7 +51,6 @@ function buildSystemPrompt(exemplars?: AssistRequest["exemplars"]): string {
 2. اختيار المقام الأنسب لمعنى الكلمات ومزاجها من القائمة التالية حصراً (استخدم قيمة id كما هي):
 ${maqamList}
 3. صياغة برومبت موسيقي احترافي بالإنجليزية لمحرك توليد الموسيقى، يصف المقام وأرباع النغمات إن وُجدت والآلات الشرقية المناسبة والإيقاع والسرعة والمزاج وبنية الأغنية.
-4. تقسيم الكلمات نفسها إلى مقاطع مُهيكلة (sections) بالترتيب: مقدمة آلية قصيرة (intro بلا كلمات)، ثم مقاطع (verse) ولازمة (chorus) تتكرر بعد كل مقطع، وجسر (bridge) عند الحاجة، وخاتمة (outro). قدّر مدة كل مقطع بواقعية: السطر المغنّى ≈ 7 ثوانٍ، والمقدمة والخاتمة 8–15 ثانية.
 
 قواعد الكتابة: التزم باللهجة المطلوبة بدقة، وراعِ الوزن والقافية وقابلية الغناء، وتجنّب الحشو والتكرار غير المقصود.${exemplarsBlock(exemplars)}`;
 }
@@ -82,8 +65,7 @@ function buildUserPrompt(req: AssistRequest): string {
   } else {
     base.push(`حسّن كلمات الأغنية التالية مع الحفاظ على معناها وشخصيتها، واقترح المقام الأنسب لها:\n${req.lyrics}`);
   }
-  // ذاكرة التراث: قالب الكتابة الصريح أو بنية الأسلوب + المعجم الفلسطيني
-  return base.join("\n\n") + heritageAssistBlock(req.dialectId, req.styleId, req.formId);
+  return base.join("\n\n");
 }
 
 export function geminiAssistant(apiKey: string): LyricsAssistant {
@@ -132,8 +114,6 @@ export function geminiAssistant(apiKey: string): LyricsAssistant {
         maqamId,
         maqamReason: data.maqamReason,
         stylePromptEn: data.stylePromptEn,
-        // مقاطع النموذج بعد التحقيق، أو تقسيم استدلالي من النص عند غيابها
-        sections: sanitizeSections(data.sections) ?? parseSections(data.lyrics),
         provider: "gemini",
       };
     },

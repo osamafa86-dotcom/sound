@@ -1,5 +1,4 @@
 import { getSupabaseAdmin } from "./supabaseAdmin";
-import { consumeCredits } from "./credits";
 import { gateFor, getPlatformSettings } from "./platformSettings";
 
 /**
@@ -35,20 +34,12 @@ export const LIMITS = {
   lyrics: { perVisitor: envInt("RATE_LIMIT_LYRICS", 30), global: 400, windowSec: 3600 },
   stt: { perVisitor: envInt("RATE_LIMIT_STT", 8), global: 120, windowSec: 3600 },
   sts: { perVisitor: envInt("RATE_LIMIT_STS", 6), global: 80, windowSec: 3600 },
-  isolate: { perVisitor: envInt("RATE_LIMIT_ISOLATE", 6), global: 80, windowSec: 3600 },
   voiceClone: { perVisitor: envInt("RATE_LIMIT_CLONE", 3), global: 20, windowSec: 24 * 3600 },
   voiceDesign: { perVisitor: envInt("RATE_LIMIT_DESIGN", 5), global: 40, windowSec: 3600 },
   pronunciation: { perVisitor: envInt("RATE_LIMIT_PRONUNCIATION", 30), global: 200, windowSec: 3600 },
   enhance: { perVisitor: envInt("RATE_LIMIT_ENHANCE", 30), global: 400, windowSec: 3600 },
   imageBrief: { perVisitor: envInt("RATE_LIMIT_IMAGE_BRIEF", 10), global: 120, windowSec: 3600 },
   drama: { perVisitor: envInt("RATE_LIMIT_DRAMA", 5), global: 50, windowSec: 3600 },
-  cover: { perVisitor: envInt("RATE_LIMIT_COVER", 8), global: 80, windowSec: 3600 },
-  signals: { perVisitor: envInt("RATE_LIMIT_SIGNALS", 120), global: 3000, windowSec: 3600 },
-  prompts: { perVisitor: envInt("RATE_LIMIT_PROMPTS", 20), global: 300, windowSec: 3600 },
-  promptAgent: { perVisitor: envInt("RATE_LIMIT_PROMPT_AGENT", 60), global: 900, windowSec: 3600 },
-  promptTest: { perVisitor: envInt("RATE_LIMIT_PROMPT_TEST", 6), global: 60, windowSec: 3600 },
-  support: { perVisitor: envInt("RATE_LIMIT_SUPPORT", 5), global: 100, windowSec: 3600 },
-  pay: { perVisitor: envInt("RATE_LIMIT_PAY", 10), global: 200, windowSec: 3600 },
 } satisfies Record<string, LimitRule>;
 
 export type LimitScope = keyof typeof LIMITS;
@@ -142,29 +133,13 @@ export async function checkLimit(
     rateLimitFor(scope, !!userId),
     rule.windowSec
   );
-  if (!ok) {
-    return {
-      allowed: false,
-      message:
-        "تجاوزت الحد المسموح من الطلبات مؤقتاً — حاول بعد قليل" +
+  return {
+    allowed: ok,
+    message: ok
+      ? ""
+      : "تجاوزت الحد المسموح من الطلبات مؤقتاً — حاول بعد قليل" +
         (userId ? "" : "، أو سجّل الدخول لحدود أعلى"),
-    };
-  }
-
-  // نظام الرصيد: المسجل يخصم من باقته الشهرية حسب كلفة المسار
-  if (userId) {
-    const credit = await consumeCredits(userId, scope);
-    if (!credit.allowed) {
-      return {
-        allowed: false,
-        message:
-          "انتهى رصيدك الشهري من النقاط — يتجدد تلقائياً مطلع كل شهر، أو راسل الدعم لرفع باقتك",
-        status: 402,
-      };
-    }
-  }
-
-  return { allowed: true, message: "" };
+  };
 }
 
 /** استجابة الرفض الموحّدة — 429 لتجاوز الحد و503 لإيقاف من المالك */

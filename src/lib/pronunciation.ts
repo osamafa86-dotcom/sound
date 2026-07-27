@@ -112,56 +112,6 @@ export async function addRules(
   return { id: existing.id, versionId: data?.version_id ?? existing.versionId };
 }
 
-/** قراءة كل قواعد الذاكرة (الكلمة ← النطق) من ملف PLS — بكاش قصير للتوليدات المتتابعة */
-let rulesCache: { at: number; rules: PronunciationRule[] } | null = null;
-const RULES_TTL_MS = 60_000;
-
-export async function listRules(apiKey: string): Promise<PronunciationRule[]> {
-  if (rulesCache && Date.now() - rulesCache.at < RULES_TTL_MS) return rulesCache.rules;
-
-  const dict = await findDictionary(apiKey).catch(() => null);
-  if (!dict) return [];
-
-  const res = await fetch(
-    `${API_BASE}/pronunciation-dictionaries/${dict.id}/${dict.versionId}/download`,
-    { headers: { "xi-api-key": apiKey }, cache: "no-store" }
-  );
-  if (!res.ok) return [];
-
-  const xml = await res.text();
-  const rules: PronunciationRule[] = [];
-  const lexemeRe = /<lexeme>([\s\S]*?)<\/lexeme>/g;
-  let m: RegExpExecArray | null;
-  while ((m = lexemeRe.exec(xml))) {
-    const word = m[1].match(/<grapheme>([\s\S]*?)<\/grapheme>/)?.[1]?.trim();
-    const alias = m[1].match(/<alias>([\s\S]*?)<\/alias>/)?.[1]?.trim();
-    if (word && alias) rules.push({ word, alias });
-  }
-  rulesCache = { at: Date.now(), rules };
-  return rules;
-}
-
-/** إبطال كاش القواعد بعد إضافة/حذف — ليصل التعليم الجديد فوراً */
-export function invalidateRulesCache(): void {
-  rulesCache = null;
-}
-
-/**
- * تطبيق قواعد النطق نصياً — لمحركات لا تدعم القواميس (توليد الموسيقى):
- * استبدال الكلمة كاملةً (لا داخل كلمة أخرى) بصيغتها المنطوقة الصحيحة.
- */
-export function applyPronunciationRules(text: string, rules: PronunciationRule[]): string {
-  let out = text;
-  for (const rule of rules) {
-    if (!rule.word || rule.word === rule.alias) continue;
-    const escaped = rule.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    // حدود الكلمة العربية: ما قبلها وما بعدها ليس حرفاً عربياً أو لاتينياً
-    const re = new RegExp(`(?<![\\u0600-\\u06FFa-zA-Z])${escaped}(?![\\u0600-\\u06FFa-zA-Z])`, "g");
-    out = out.replace(re, rule.alias);
-  }
-  return out;
-}
-
 /** حذف قاعدة (عند التراجع عن تصحيح) */
 export async function removeRules(apiKey: string, words: string[]): Promise<void> {
   const existing = await findDictionary(apiKey);

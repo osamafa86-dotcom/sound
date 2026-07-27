@@ -11,17 +11,11 @@ import { createClient } from "./supabase/server";
  * اللوحة لأحد بالخطأ عند نسيان الإعداد.
  */
 
-/**
- * قائمة بُرُد المالكين كما ضُبطت في البيئة (بحروف صغيرة وبلا فراغات).
- *
- * الفصل متسامح عمداً: فاصلة لاتينية أو عربية (،) أو فاصلة منقوطة أو مسافة
- * أو سطر جديد — لأن خطأ فاصل واحد في لوحة الاستضافة يقفل اللوحة على
- * صاحبها بلا سبب ظاهر. وتُزال علامات التنصيص التي تلتصق بالقيمة أحياناً.
- */
+/** قائمة بُرُد المالكين كما ضُبطت في البيئة (بحروف صغيرة وبلا فراغات) */
 export function ownerEmails(): string[] {
   return (process.env.OWNER_EMAILS ?? "")
-    .split(/[,;،\s]+/)
-    .map((e) => e.trim().toLowerCase().replace(/^["']|["']$/g, ""))
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
 }
 
@@ -85,14 +79,7 @@ export async function requireOwner(req: NextRequest): Promise<OwnerGuard> {
   if (!isOwnerEmail(user.email)) {
     return {
       ok: false,
-      response: NextResponse.json(
-        {
-          error: "هذه الصفحة لمالك النظام فقط",
-          // بريد صاحب الجلسة نفسه — يوضّح له فوراً أنه داخل بحساب غير المالك
-          signedInAs: user.email,
-        },
-        { status: 403 }
-      ),
+      response: NextResponse.json({ error: "هذه الصفحة لمالك النظام فقط" }, { status: 403 }),
     };
   }
   return { ok: true, user };

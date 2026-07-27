@@ -1,14 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { emitSignal } from "@/lib/signalClient";
-
-/** سياق الإشارة الضمنية: من يُنسب له الاستماع الكامل/الإعادة/التنزيل */
-export type SignalContext = {
-  voiceId?: string;
-  maqamId?: string;
-  settings?: Record<string, unknown>;
-};
 
 /** عدد أعمدة شكل الموجة المرسومة */
 const BARS = 160;
@@ -54,8 +46,6 @@ export default function AudioPlayer({
   mock,
   filename = "maqam-audio.wav",
   note,
-  onTime,
-  signal,
   children,
 }: {
   src: string;
@@ -63,21 +53,12 @@ export default function AudioPlayer({
   mock?: boolean;
   filename?: string;
   note?: string;
-  /** يُستدعى بموضع التشغيل الحالي بالثواني — للكاريوكي والمزامنات */
-  onTime?: (sec: number) => void;
-  /** سياق إشارات التعلم الضمنية — يفعّل إشارات الاستماع الكامل والإعادة والتنزيل */
-  signal?: SignalContext;
   /** إجراءات إضافية أسفل المشغّل — مثل زر الحفظ في المكتبة */
   children?: React.ReactNode;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef(0);
-  // مرجع حي للمستمع كي لا تعلق حلقة rAF على نسخة قديمة منه
-  const onTimeRef = useRef(onTime);
-  useEffect(() => {
-    onTimeRef.current = onTime;
-  });
   const [peaks, setPeaks] = useState<number[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -97,13 +78,7 @@ export default function AudioPlayer({
     setDuration(0);
   }
 
-  // إشارة واحدة لكل ملف: استماع كامل، ثم إعادة واحدة كحد أقصى
-  const endedOnceRef = useRef(false);
-  const replayedRef = useRef(false);
-
   useEffect(() => {
-    endedOnceRef.current = false;
-    replayedRef.current = false;
     let cancelled = false;
     extractPeaks(src)
       .then((p) => {
@@ -132,8 +107,8 @@ export default function AudioPlayer({
     ctx.scale(dpr, dpr);
 
     const css = getComputedStyle(document.documentElement);
-    const played = css.getPropertyValue("--gold").trim() || "#e0b354";
-    const rest = css.getPropertyValue("--primary").trim() || "#8b5cf6";
+    const played = css.getPropertyValue("--primary").trim() || "#c0453e";
+    const rest = "#ead9d2";
 
     const w = rect.width;
     const h = rect.height;
@@ -147,7 +122,7 @@ export default function AudioPlayer({
       const x = i * slot + (slot - barW) / 2;
       const y = (h - barH) / 2;
       const isPlayed = i < playedBars;
-      ctx.globalAlpha = isPlayed ? 1 : 0.35;
+      ctx.globalAlpha = 1;
       ctx.fillStyle = isPlayed ? played : rest;
       ctx.beginPath();
       ctx.roundRect(x, y, barW, barH, barW / 2);
@@ -164,7 +139,6 @@ export default function AudioPlayer({
       if (a && a.duration) {
         setCurrent(a.currentTime);
         setProgress(a.currentTime / a.duration);
-        onTimeRef.current?.(a.currentTime);
       }
       rafRef.current = requestAnimationFrame(tick);
     };
@@ -191,11 +165,11 @@ export default function AudioPlayer({
   }
 
   return (
-    <div className="rounded-2xl border border-border-soft bg-surface-raised p-4">
+    <div className="card-lift rounded-2xl border border-border-soft bg-surface-card p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold">{title}</p>
+        <p className="text-sm font-bold">{title}</p>
         {mock && (
-          <span className="rounded-full bg-gold/15 px-3 py-1 text-xs font-semibold text-gold">
+          <span className="rounded-full bg-rose px-3 py-1 text-xs font-semibold text-primary">
             وضع تجريبي — بانتظار ربط مفاتيح الـ API
           </span>
         )}
@@ -207,21 +181,11 @@ export default function AudioPlayer({
         controls={failed}
         className={failed ? "w-full" : "hidden"}
         preload="auto"
-        onPlay={() => {
-          setPlaying(true);
-          if (signal && endedOnceRef.current && !replayedRef.current) {
-            replayedRef.current = true;
-            emitSignal({ kind: "replayed", ...signal });
-          }
-        }}
+        onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onEnded={() => {
           setPlaying(false);
           setProgress(1);
-          if (signal && !endedOnceRef.current) {
-            endedOnceRef.current = true;
-            emitSignal({ kind: "played_to_end", ...signal });
-          }
         }}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
         onTimeUpdate={(e) => {
@@ -229,7 +193,6 @@ export default function AudioPlayer({
           if (a.duration) {
             setCurrent(a.currentTime);
             setProgress(a.currentTime / a.duration);
-            onTimeRef.current?.(a.currentTime);
           }
         }}
       />
@@ -249,7 +212,7 @@ export default function AudioPlayer({
           <canvas
             ref={canvasRef}
             onClick={seek}
-            className={`h-14 min-w-0 flex-1 cursor-pointer ${peaks ? "" : "animate-pulse rounded-lg bg-surface"}`}
+            className={`h-14 min-w-0 flex-1 cursor-pointer ${peaks ? "" : "animate-pulse rounded-lg bg-surface-raised"}`}
           />
           <span className="w-10 shrink-0 text-center text-xs tabular-nums text-muted">
             {formatTime(duration)}
@@ -261,7 +224,6 @@ export default function AudioPlayer({
       <a
         href={src}
         download={filename}
-        onClick={() => signal && emitSignal({ kind: "downloaded", ...signal })}
         className="mt-3 inline-block rounded-lg border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:text-body"
       >
         ⬇ تنزيل الملف

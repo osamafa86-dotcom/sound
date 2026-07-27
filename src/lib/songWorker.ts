@@ -1,6 +1,5 @@
 import { getJobsStore } from "./jobs";
 import { getMusicProvider, mockMusic } from "./providers";
-import { SONG_SAMPLE_ONE_IN, autoEvalSong, sampleOneIn } from "./autoEval";
 import { logUsage } from "./usage";
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -28,20 +27,7 @@ export async function runSongJob(jobId: string): Promise<void> {
   try {
     const result = await provider.generate(job.request);
     await store.complete(jobId, result);
-    if (result.provider !== "mock") {
-      await logUsage("songs", job.userId);
-      // النقد الذاتي بالعينات: حكم Gemini الصوتي على الالتزام المقامي
-      const geminiKey = process.env.GEMINI_API_KEY;
-      if (geminiKey && sampleOneIn(SONG_SAMPLE_ONE_IN)) {
-        await autoEvalSong({
-          geminiKey,
-          audio: result.audio,
-          mimeType: result.mimeType,
-          maqamId: job.request.maqamId,
-          variantId: job.request.variantId,
-        });
-      }
-    }
+    if (result.provider !== "mock") await logUsage("songs", job.userId);
   } catch (e) {
     const reason = e instanceof Error ? e.message : "unknown";
     if (provider.id === "mock") {

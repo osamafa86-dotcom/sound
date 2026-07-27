@@ -3,33 +3,20 @@ import { getSupabaseAdmin } from "./supabaseAdmin";
 /**
  * عقل المنصة — طبقة التعلّم الذاتي فوق المحركات.
  *
- * يتغذى من ثلاثة مصادر تُدمج في إشارات موحدة:
- * 1. نجوم التقييم اليدوية (ratings)
- * 2. الإشارات الضمنية (signals): استماع كامل، حفظ، تنزيل، مشاركة، إعادة توليد...
- * 3. النقد الذاتي (auto_evals): دقة النطق المقيسة آلياً والتزام المقام
+ * تقرأ تقييمات المستخدمين (نجوم المكتبة) وتحوّلها إلى ثلاث إشارات:
+ * 1. درجات الأصوات       → ترتيب الكتالوج بالأعلى رضاً
+ * 2. الإعدادات المتعلمة   → أفضل ثبات/سرعة لكل صوت من التوليدات عالية التقييم
+ * 3. البرومبتات الناجحة   → أمثلة تُحقن في مساعد الكلمات ليحتذي بها
  *
- * ويحوّلها إلى ثلاث قدرات:
- * - درجات الأصوات       → ترتيب الكتالوج بالأعلى رضاً
- * - الإعدادات المتعلمة   → أفضل ثبات/سرعة لكل صوت
- * - البرومبتات الناجحة   → أمثلة تُحقن في مساعد الكلمات
- *
- * كل الدوال آمنة التدهور: بلا Supabase أو بلا بيانات تعيد نتائج فارغة،
- * وBRAIN_DISABLED=1 يطفئ كل حلقات التعلم فوراً.
+ * كل الدوال آمنة التدهور: بلا Supabase أو بلا بيانات تعيد نتائج فارغة.
  */
 
 export type VoiceScore = { voiceId: string; count: number; avg: number };
 export type VoiceTuning = { stability: number; speed: number; samples: number };
 export type PromptExemplar = { maqamId: string | null; stylePrompt: string };
 
-/** الحد الأدنى من التقييمات اليدوية قبل اعتماد الإشارة وحدها */
+/** الحد الأدنى من التقييمات قبل اعتماد الإشارة (يمنع تحيّز التقييم الواحد) */
 const MIN_RATINGS = 2;
-/** الحد الأدنى من الأدلة المدمجة (نجوم + إشارات + نقد ذاتي) */
-const MIN_EVIDENCE = 3;
-
-/** مفتاح الإطفاء الشامل لكل حلقات التعلم */
-function brainDisabled(): boolean {
-  return process.env.BRAIN_DISABLED === "1";
-}
 
 /** كاش قصير العمر — يوفّر قراءات القاعدة على النسخ الدافئة في Serverless */
 const TTL_MS = 60_000;
@@ -42,9 +29,8 @@ async function memo<T>(key: string, load: () => Promise<T>): Promise<T> {
   return value;
 }
 
-/** درجات الأصوات المدموجة من المصادر الثلاثة (بمقياس نجوم 1..5) */
+/** درجات الأصوات من واجهة voice_scores (متوسط نجوم كل صوت) */
 export function getVoiceScores(): Promise<Map<string, VoiceScore>> {
-  if (brainDisabled()) return Promise.resolve(new Map());
   return memo("voice-scores", loadVoiceScores);
 }
 
@@ -53,43 +39,17 @@ async function loadVoiceScores(): Promise<Map<string, VoiceScore>> {
   const scores = new Map<string, VoiceScore>();
   if (!admin) return scores;
 
-  // فشل أي واجهة (مخطط لم يُحدَّث بعد) لا يعطل بقية المصادر
-  const [ratings, signals, autos] = await Promise.all([
-    admin.from("voice_scores").select("voice_id, ratings_count, avg_score"),
-    admin.from("voice_signal_scores").select("voice_id, signals_count, avg_weight"),
-    admin.from("voice_auto_scores").select("voice_id, evals_count, avg_auto"),
-  ]);
+  const { data, error } = await admin
+    .from("voice_scores")
+    .select("voice_id, ratings_count, avg_score");
+  if (error || !data) return scores;
 
-  type Blend = { starSum: number; evidence: number; ratings: number };
-  const acc = new Map<string, Blend>();
-  const add = (voiceId: unknown, stars: number, count: number, isRating: boolean) => {
-    if (typeof voiceId !== "string" || !voiceId || !Number.isFinite(stars) || count <= 0) return;
-    const b = acc.get(voiceId) ?? { starSum: 0, evidence: 0, ratings: 0 };
-    b.starSum += stars * count;
-    b.evidence += count;
-    if (isRating) b.ratings += count;
-    acc.set(voiceId, b);
-  };
-
-  for (const row of ratings.data ?? []) {
-    add(row.voice_id, Number(row.avg_score), Number(row.ratings_count), true);
-  }
-  for (const row of signals.data ?? []) {
-    // متوسط وزن الإشارات يتحول نجوماً حول الوسط 3 (مقصوصاً بين 1 و5)
-    const stars = Math.min(5, Math.max(1, 3 + Number(row.avg_weight)));
-    add(row.voice_id, stars, Math.min(Number(row.signals_count), 30), false);
-  }
-  for (const row of autos.data ?? []) {
-    // دقة النطق الآلية 0..1 → نجوم 1..5
-    add(row.voice_id, 1 + Number(row.avg_auto) * 4, Math.min(Number(row.evals_count), 20), false);
-  }
-
-  for (const [voiceId, b] of acc) {
-    if (b.ratings >= MIN_RATINGS || b.evidence >= MIN_EVIDENCE) {
-      scores.set(voiceId, {
-        voiceId,
-        count: Math.round(b.evidence),
-        avg: Math.round((b.starSum / b.evidence) * 10) / 10,
+  for (const row of data) {
+    if (row.voice_id && row.ratings_count >= MIN_RATINGS) {
+      scores.set(row.voice_id as string, {
+        voiceId: row.voice_id as string,
+        count: row.ratings_count as number,
+        avg: Number(row.avg_score),
       });
     }
   }
@@ -122,55 +82,26 @@ async function highRatedGenerations(kind: "tts" | "song", limit: number): Promis
   return data as unknown as RatedGeneration[];
 }
 
-type StrongSignalRow = {
-  voice_id: string | null;
-  maqam_id: string | null;
-  settings: Record<string, unknown> | null;
-  weight: number;
-};
-
-/** إشارات الرضا القوية (حفظ/تنزيل/مشاركة/اختيار نسخة) مع إعداداتها */
-async function strongSignals(withVoice: boolean, limit: number): Promise<StrongSignalRow[]> {
-  const admin = getSupabaseAdmin();
-  if (!admin) return [];
-  const { data, error } = await admin
-    .from("signals")
-    .select("voice_id, maqam_id, settings, weight")
-    .gte("weight", 2)
-    .not(withVoice ? "voice_id" : "maqam_id", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  return error || !data ? [] : (data as StrongSignalRow[]);
-}
-
-/** الإعدادات المتعلمة لكل صوت: من التوليدات المُرضية نجوماً وإشاراتٍ معاً */
+/** الإعدادات المتعلمة لكل صوت: متوسط ثبات/سرعة التوليدات التي أرضت المستخدمين */
 export function getVoiceTuning(): Promise<Map<string, VoiceTuning>> {
-  if (brainDisabled()) return Promise.resolve(new Map());
   return memo("voice-tuning", loadVoiceTuning);
 }
 
 async function loadVoiceTuning(): Promise<Map<string, VoiceTuning>> {
   const tuning = new Map<string, VoiceTuning>();
-  const [rated, signaled] = await Promise.all([
-    highRatedGenerations("tts", 500),
-    strongSignals(true, 400),
-  ]);
+  const rows = await highRatedGenerations("tts", 500);
 
   const acc = new Map<string, { stability: number[]; speed: number[] }>();
-  const feed = (voiceId: string | null, settings: Record<string, unknown> | null) => {
-    if (!voiceId || !settings) return;
-    const stability = Number(settings.stability);
-    const speed = Number(settings.speed);
-    if (!Number.isFinite(stability) && !Number.isFinite(speed)) return;
-    const entry = acc.get(voiceId) ?? { stability: [], speed: [] };
+  for (const row of rows) {
+    const g = row.generations;
+    if (!g?.voice_id || !g.settings) continue;
+    const stability = Number(g.settings.stability);
+    const speed = Number(g.settings.speed);
+    if (!Number.isFinite(stability) && !Number.isFinite(speed)) continue;
+    const entry = acc.get(g.voice_id) ?? { stability: [], speed: [] };
     if (Number.isFinite(stability)) entry.stability.push(stability);
     if (Number.isFinite(speed)) entry.speed.push(speed);
-    acc.set(voiceId, entry);
-  };
-
-  for (const row of rated) feed(row.generations?.voice_id ?? null, row.generations?.settings ?? null);
-  for (const row of signaled) {
-    feed(row.voice_id as string | null, row.settings as Record<string, unknown> | null);
+    acc.set(g.voice_id, entry);
   }
 
   for (const [voiceId, { stability, speed }] of acc) {
@@ -187,36 +118,23 @@ async function loadVoiceTuning(): Promise<Map<string, VoiceTuning>> {
   return tuning;
 }
 
-/** البرومبتات الموسيقية الناجحة — من أعلى التقييمات وأقوى الإشارات */
+/** البرومبتات الموسيقية التي أنتجت أغاني عالية التقييم — أمثلة لمساعد الكلمات */
 export function getPromptExemplars(max = 3): Promise<PromptExemplar[]> {
-  if (brainDisabled()) return Promise.resolve([]);
   return memo(`exemplars-${max}`, () => loadPromptExemplars(max));
 }
 
 async function loadPromptExemplars(max: number): Promise<PromptExemplar[]> {
-  const [rated, signaled] = await Promise.all([
-    highRatedGenerations("song", 40),
-    strongSignals(false, 60),
-  ]);
+  const rows = await highRatedGenerations("song", 40);
 
   const seen = new Set<string>();
   const exemplars: PromptExemplar[] = [];
-  const push = (maqamId: string | null, raw: unknown) => {
-    const stylePrompt = typeof raw === "string" ? raw : "";
-    if (!stylePrompt || seen.has(stylePrompt) || exemplars.length >= max) return;
+  for (const row of rows) {
+    const g = row.generations;
+    const stylePrompt = typeof g?.settings?.stylePrompt === "string" ? g.settings.stylePrompt : "";
+    if (!stylePrompt || seen.has(stylePrompt)) continue;
     seen.add(stylePrompt);
-    exemplars.push({ maqamId, stylePrompt: stylePrompt.slice(0, 400) });
-  };
-
-  // النجوم اليدوية أقوى دليلاً فتتقدم، والإشارات الضمنية تكمل النقص
-  for (const row of rated) {
-    push(row.generations?.maqam_id ?? null, row.generations?.settings?.stylePrompt);
-  }
-  for (const row of signaled) {
-    push(
-      (row.maqam_id as string | null) ?? null,
-      (row.settings as Record<string, unknown> | null)?.stylePrompt
-    );
+    exemplars.push({ maqamId: g?.maqam_id ?? null, stylePrompt: stylePrompt.slice(0, 400) });
+    if (exemplars.length >= max) break;
   }
   return exemplars;
 }

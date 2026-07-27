@@ -16,9 +16,9 @@ export default function OverviewTab({ data }: { data: Overview }) {
     <div className="space-y-6">
       {/* تنبيهات تحتاج قراراً من المالك */}
       {(data.settings.maintenance || data.settings.forceMock || data.settings.disabledRoutes.length > 0) && (
-        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
+        <div className="rounded-2xl border border-gold/50 bg-gold/10 p-4 text-sm text-amber-900">
           <p className="font-bold">⚠️ المنصة تعمل بوضع مقيّد الآن</p>
-          <ul className="mt-2 space-y-1 text-amber-200/90">
+          <ul className="mt-2 space-y-1 text-amber-900/85">
             {data.settings.maintenance && <li>• وضع الصيانة مفعّل — كل التوليد متوقف للزوار.</li>}
             {data.settings.forceMock && <li>• الوضع التجريبي القسري مفعّل — لا كلفة على المزوّدين ولا مخرجات حقيقية.</li>}
             {data.settings.disabledRoutes.length > 0 && (
@@ -29,7 +29,7 @@ export default function OverviewTab({ data }: { data: Overview }) {
       )}
 
       {missingCritical.length > 0 && (
-        <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
+        <div className="rounded-2xl border border-primary/40 bg-rose p-4 text-sm text-primary-strong">
           <p className="font-bold">🔑 مفاتيح أساسية ناقصة</p>
           <p className="mt-1">
             {missingCritical.map((i) => `${i.name} (${i.envVars.join("، ")})`).join(" — ")} — الميزات المرتبطة بها تعمل

@@ -24,10 +24,6 @@ export const ROUTE_LABELS: Record<string, string> = {
   imageBrief: "الموسيقى من صورة",
   drama: "الاستوديو الدرامي",
   podcast: "البودكاست",
-  cover: "أغلفة الألبومات",
-  karaoke: "الكاريوكي (توقيت الكلمات)",
-  proofread: "تدقيق التشكيل",
-  signals: "إشارات عقل المنصة",
 };
 
 /**
@@ -48,11 +44,6 @@ export const DEFAULT_ROUTE_COST_USD: Record<string, number> = {
   imageBrief: 0.004,
   drama: 0.02,
   podcast: 0.02,
-  cover: 0.03,
-  karaoke: 0.01,
-  proofread: 0.004,
-  // إشارات التعلم تُكتب في قاعدتنا فقط — بلا كلفة على أي مزوّد
-  signals: 0,
 };
 
 /** كلفة المسار مع احترام تجاوز البيئة (COST_TTS=0.03 مثلاً) */

@@ -1,5 +1,4 @@
 import { DIALECTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
-import { parseSections } from "@/lib/songSections";
 import type { AssistRequest, AssistResult, LyricsAssistant } from "./types";
 
 /**
@@ -43,13 +42,10 @@ export const mockAssistant: LyricsAssistant = {
     const style = SONG_STYLES.find((s) => s.id === req.styleId) ?? SONG_STYLES[0];
     const dialect = DIALECTS.find((d) => d.id === req.dialectId) ?? DIALECTS[0];
 
-    // في وضع التحسين لا يستطيع البديل التجريبي تحسين الصياغة فعلياً، فيعيد الكلمات كما هي
-    const lyrics = req.mode === "improve" ? (req.lyrics ?? "").trim() : mockLyrics((req.idea ?? "").trim());
-
     return {
       title: "مسودة تجريبية",
-      lyrics,
-      sections: parseSections(lyrics),
+      // في وضع التحسين لا يستطيع البديل التجريبي تحسين الصياغة فعلياً، فيعيد الكلمات كما هي
+      lyrics: req.mode === "improve" ? (req.lyrics ?? "").trim() : mockLyrics((req.idea ?? "").trim()),
       maqamId: maqam.id,
       maqamReason: `اقتراح تجريبي مبني على كلمات مفتاحية في النص: مقام ${maqam.name} يناسب أجواء «${maqam.mood}». التحليل الدقيق للمعنى يُفعَّل مع ربط مفتاح الذكاء الاصطناعي.`,
       stylePromptEn: [
