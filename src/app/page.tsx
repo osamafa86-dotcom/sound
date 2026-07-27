@@ -283,6 +283,54 @@ export default function Home() {
         </section>
       </div>
 
+      {/* عقل المنصة */}
+      <div className="mx-auto max-w-6xl px-4">
+        <section className="pb-16">
+          <div className="glow-card card-lift relative overflow-hidden rounded-3xl border border-primary/25 p-8 md:p-10">
+            <div className="grid items-center gap-8 md:grid-cols-2">
+              <div className="rounded-2xl border border-border-soft bg-surface p-6 text-center">
+                <p className="text-5xl">🧠</p>
+                <p className="mt-3 font-heading text-lg font-bold">كل هذا التعلم مكشوف بشفافية</p>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  صفحة «العقل» تريك الإشارات المجمعة ودرجات النقد الذاتي وترتيب الأصوات
+                  بأدلته وسلالات كل مقام — لا صندوق أسود.
+                </p>
+                <Link
+                  href="/brain"
+                  className="mt-4 inline-block rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-primary/25 transition-colors hover:bg-primary-strong"
+                >
+                  افتح لوحة العقل ←
+                </Link>
+              </div>
+              <div>
+                <p className="flex items-center gap-2.5 text-sm font-bold text-primary">
+                  <span className="h-1 w-5 rounded-full bg-primary" />
+                  عقل المنصة
+                </p>
+                <h2 className="mt-3 text-2xl font-extrabold md:text-3xl">
+                  منصة تصير <span className="text-gradient">أذكى</span> مع كل استخدام
+                </h2>
+                <ul className="mt-5 flex flex-col gap-3.5 text-sm leading-relaxed text-muted">
+                  {[
+                    ["تتعلم من أفعالك:", "كل استماع كامل وحفظ ومشاركة وتقييم يصقل ترتيب الأصوات والإعدادات المقترحة."],
+                    ["تنقد نفسها:", "تفرّغ عينات من الأصوات وتقيس دقة نطقها، وتستمع لعينات الأغاني وتحكم على التزامها المقامي."],
+                    ["تتطور وحدها:", "وصفات المقامات سلالات تتنافس، وجلسة تأمل أسبوعية تولّد سلالات محسّنة وتُبقي الرابح."],
+                    ["تعرفك شخصياً:", "صوتك المفضل ومقامك الأقرب وإعداداتك المريحة تصبح افتراضاتك في كل استوديو."],
+                  ].map(([b, t]) => (
+                    <li key={b} className="flex gap-2.5">
+                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                      <span>
+                        <span className="font-bold text-body">{b}</span> {t}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
       {/* لماذا مقام — حزام رملي بعرض كامل */}
       <section className="bg-surface-raised py-16">
         <div className="mx-auto max-w-6xl px-4">
@@ -350,6 +398,12 @@ export default function Home() {
                 className="rounded-xl bg-cream px-8 py-3.5 font-bold text-wine transition-opacity hover:opacity-90"
               >
                 ابدأ مجاناً
+              </Link>
+              <Link
+                href="/brain"
+                className="rounded-xl border border-cream/40 px-8 py-3.5 font-bold text-cream transition-colors hover:border-cream hover:bg-cream/10"
+              >
+                🧠 شاهد ماذا تعلمت المنصة
               </Link>
             </div>
             <WaveBars bars={24} tone="cream" className="relative mt-10 h-10 opacity-70" />
