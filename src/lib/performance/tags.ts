@@ -6,6 +6,10 @@
 
 export type AudioTag = { id: string; name: string; tag: string };
 
+/**
+ * الوسوم مطابقة لقائمة الجيل الثالث الموثقة لدى ElevenLabs —
+ * الوقفات عبر [pause]/[breathes] والنقاط (...)، لا وسوم مخترعة يتجاهلها المحرك.
+ */
 export const TAG_GROUPS: { id: string; name: string; icon: string; tags: AudioTag[] }[] = [
   {
     id: "pauses",
@@ -13,8 +17,8 @@ export const TAG_GROUPS: { id: string; name: string; icon: string; tags: AudioTa
     icon: "⏱",
     tags: [
       { id: "pause", name: "وقفة", tag: "[pause]" },
-      { id: "long-pause", name: "وقفة طويلة", tag: "[long pause]" },
-      { id: "beat", name: "لحظة صمت درامي", tag: "[dramatic pause]" },
+      { id: "breath-pause", name: "وقفة بنفَس", tag: "[breathes]" },
+      { id: "beat", name: "يكمل بعد برهة", tag: "[continues after a beat]" },
     ],
   },
   {
@@ -24,12 +28,12 @@ export const TAG_GROUPS: { id: string; name: string; icon: string; tags: AudioTa
     tags: [
       { id: "sad", name: "حزين", tag: "[sad]" },
       { id: "excited", name: "متحمس", tag: "[excited]" },
-      { id: "whisper", name: "همس", tag: "[whispering]" },
+      { id: "whisper", name: "همس", tag: "[whispers]" },
       { id: "angry", name: "غاضب", tag: "[angry]" },
       { id: "happy", name: "مبتهج", tag: "[happily]" },
       { id: "curious", name: "فضولي", tag: "[curious]" },
       { id: "sarcastic", name: "ساخر", tag: "[sarcastic]" },
-      { id: "calm", name: "هادئ", tag: "[calmly]" },
+      { id: "crying", name: "باكٍ", tag: "[crying]" },
     ],
   },
   {
@@ -39,7 +43,7 @@ export const TAG_GROUPS: { id: string; name: string; icon: string; tags: AudioTa
     tags: [
       { id: "laughs", name: "ضحكة", tag: "[laughs]" },
       { id: "sighs", name: "تنهيدة", tag: "[sighs]" },
-      { id: "breath", name: "نفَس عميق", tag: "[exhales deeply]" },
+      { id: "breath", name: "زفير", tag: "[exhales]" },
       { id: "gasp", name: "شهقة", tag: "[gasps]" },
       { id: "clears", name: "تنحنح", tag: "[clears throat]" },
     ],
@@ -60,6 +64,26 @@ export function insertTagAt(text: string, cursor: number, tag: string): { text: 
 /** هل يحتوي النص وسوم أداء؟ — لتفعيل المحرك التعبيري تلقائياً */
 export function hasAudioTags(text: string): boolean {
   return /\[[a-zA-Z][^\]؀-ۿ]{1,40}\]/.test(text);
+}
+
+/**
+ * إزالة وسوم الأداء من النص — للمحرك الكلاسيكي (v2) الذي لولاها
+ * لقرأ «sad» بصوت عالٍ ككلمة، ومعها علامات الاتجاه غير المرئية.
+ */
+export function stripAudioTags(text: string): string {
+  return stripBidiMarks(text)
+    .replace(/\[[a-zA-Z][^\]؀-ۿ]{1,40}\]/g, " ")
+    .replace(/ {2,}/g, " ")
+    .trim();
+}
+
+/** عازلا اتجاه للعرض السليم: الوسم الإنجليزي داخل نص عربي يُعزل اتجاهياً */
+export const LRI = "⁦";
+export const PDI = "⁩";
+
+/** إزالة علامات الاتجاه وحدها — قبل الإرسال للمحرك كي لا تربك النطق */
+export function stripBidiMarks(text: string): string {
+  return text.replace(/[‎‏⁦-⁩]/g, "");
 }
 
 /**

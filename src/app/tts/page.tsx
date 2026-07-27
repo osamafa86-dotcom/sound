@@ -11,7 +11,7 @@ import {
   STYLE_CATEGORIES,
   STYLE_LAYERS,
 } from "@/lib/performance/styles";
-import { SPOKEN_CUES, TAG_GROUPS, insertTagAt, stutterize } from "@/lib/performance/tags";
+import { LRI, PDI, SPOKEN_CUES, TAG_GROUPS, insertTagAt, stutterize } from "@/lib/performance/tags";
 import { authHeaders } from "@/lib/supabase";
 
 type CustomVoice = { id: string; name: string };
@@ -109,12 +109,18 @@ export default function TTSStudio() {
   >(null);
   const [takesMock, setTakesMock] = useState(false);
 
-  /** إدراج وسم أداء عند موضع المؤشر في النص */
+  /**
+   * إدراج وسم أداء عند موضع المؤشر — الوسم الإنجليزي يُعزل اتجاهياً
+   * كي يظهر في موضعه الصحيح داخل النص العربي، والثبات «الرصين» يتجاهل
+   * الوسوم رسمياً فنخفضه لـ«طبيعي» عند أول إدراج.
+   */
   function insertTag(tag: string) {
     const el = textRef.current;
     const cursor = el ? el.selectionStart : text.length;
-    const next = insertTagAt(text, cursor, tag);
+    const wrapped = tag.startsWith("[") ? `${LRI}${tag}${PDI}` : tag;
+    const next = insertTagAt(text, cursor, wrapped);
     setText(next.text);
+    if (tag.startsWith("[") && stability >= 0.75) setStability(0.5);
     requestAnimationFrame(() => {
       el?.focus();
       el?.setSelectionRange(next.cursor, next.cursor);
@@ -384,6 +390,8 @@ export default function TTSStudio() {
 
   const [speed, setSpeed] = useState(1);
   const [stability, setStability] = useState(0.5);
+  // مع «تلقائي» غير الملموس: يُترك الثبات للخادم ليطبق ثبات الأسلوب المصنف
+  const [stabilityTouched, setStabilityTouched] = useState(false);
   const [format, setFormat] = useState<"mp3" | "wav">("mp3");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ url: string; blob: Blob; mock: boolean; ext: string; fellBack: boolean } | null>(null);
@@ -515,7 +523,9 @@ export default function TTSStudio() {
           text,
           voiceId,
           speed,
-          stability,
+          // مع «تلقائي» بلا لمس للمنزلق: الخادم يطبق ثبات الأسلوب المصنف
+          stability:
+            expressive && perfStyle === "auto" && !stabilityTouched ? undefined : stability,
           format,
           expressive,
           // إيقاف المحرك التعبيري يعطّل الأسلوب والطبقات والموجه أيضاً
@@ -647,7 +657,11 @@ export default function TTSStudio() {
                         {PERFORMANCE_STYLES.filter((s) => s.category === cat).map((s) => (
                           <button
                             key={s.id}
-                            onClick={() => setPerfStyle(s.id)}
+                            onClick={() => {
+                              setPerfStyle(s.id);
+                              // ثبات الأسلوب المضبوط مخبرياً ينعكس على المنزلق فوراً
+                              setStability(s.stability);
+                            }}
                             title={s.desc}
                             className={`rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
                               perfStyle === s.id
@@ -710,6 +724,7 @@ export default function TTSStudio() {
                   <p className="mt-2 text-[10px] leading-relaxed text-muted">
                     💡 الترقيم نوتتك الموسيقية: الفاصلة (،) وقفة قصيرة · النقاط (...) تردد ووقفة
                     درامية · التعجب المتكرر (!!!) صراخ · والتشكيل يحسم النطق (عَلَم / عِلْم).
+                    وتذكّر: الوسوم تستجيب بقوة مع ثبات «مبدع» أو «طبيعي» — و«الرصين» يتجاهلها.
                   </p>
                 </div>
 
@@ -1371,7 +1386,10 @@ export default function TTSStudio() {
               max={1}
               step={0.05}
               value={stability}
-              onChange={(e) => setStability(Number(e.target.value))}
+              onChange={(e) => {
+                setStability(Number(e.target.value));
+                setStabilityTouched(true);
+              }}
               className="w-full"
             />
             <p className="mt-1 text-xs text-muted">
