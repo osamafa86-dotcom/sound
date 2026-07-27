@@ -1,16 +1,23 @@
 @import "tailwindcss";
 
+/* هوية «ورق وقرمزي» — أبيض دافئ مع أحمر هادئ */
 :root {
-  --surface: #0a0e1a;
-  --surface-raised: #111827;
-  --surface-card: #141c2e;
-  --border-soft: #23304a;
-  --body: #dbe2ef;
-  --muted: #8b96ad;
-  --primary: #8b5cf6;
-  --primary-strong: #7c3aed;
-  --accent: #22d3ee;
-  --gold: #e0b354;
+  --surface: #fbf8f4;
+  --surface-raised: #f4efe7;
+  --surface-card: #ffffff;
+  --border-soft: #ede4dd;
+  --border-strong: #dccec5;
+  --body: #262019;
+  --muted: #8a7d74;
+  --faint: #bcafa5;
+  --primary: #c0453e;
+  --primary-strong: #a5352e;
+  --accent: #c0453e;
+  --gold: #d9a441;
+  --wine: #6e2620;
+  --rose: #f8ece8;
+  --cream: #f9efe7;
+  --success: #4e9b7d;
 }
 
 @theme inline {
@@ -18,34 +25,52 @@
   --color-surface-raised: var(--surface-raised);
   --color-surface-card: var(--surface-card);
   --color-border-soft: var(--border-soft);
+  --color-border-strong: var(--border-strong);
   --color-body: var(--body);
   --color-muted: var(--muted);
+  --color-faint: var(--faint);
   --color-primary: var(--primary);
   --color-primary-strong: var(--primary-strong);
   --color-accent: var(--accent);
   --color-gold: var(--gold);
-  --font-sans: var(--font-plex-arabic), "Segoe UI", "Noto Naskh Arabic", Tahoma, sans-serif;
+  --color-wine: var(--wine);
+  --color-rose: var(--rose);
+  --color-cream: var(--cream);
+  --color-success: var(--success);
+  --font-sans: var(--font-tajawal), "Segoe UI", "Noto Naskh Arabic", Tahoma, sans-serif;
+  --font-heading: var(--font-alexandria), var(--font-tajawal), sans-serif;
 }
 
 body {
   font-family: var(--font-sans);
 }
 
+h1,
+h2,
+h3,
+.font-heading {
+  font-family: var(--font-heading);
+}
+
 ::selection {
-  background: color-mix(in srgb, var(--primary) 45%, transparent);
+  background: color-mix(in srgb, var(--primary) 25%, transparent);
 }
 
+/* الكلمة المميزة في العناوين — قرمزي صريح بدل التدرج القديم */
 .text-gradient {
-  background: linear-gradient(120deg, var(--accent), var(--primary) 55%, var(--gold));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--primary);
 }
 
+/* بطاقة بتوهج وردي ناعم */
 .glow-card {
   background:
-    radial-gradient(60% 80% at 80% 0%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 70%),
+    radial-gradient(60% 80% at 80% 0%, color-mix(in srgb, var(--rose) 80%, transparent), transparent 70%),
     var(--surface-card);
+}
+
+/* ظل ورقي ناعم للبطاقات المرفوعة */
+.card-lift {
+  box-shadow: 0 14px 40px -10px rgb(138 106 92 / 0.12);
 }
 
 input[type="range"] {
@@ -54,23 +79,46 @@ input[type="range"] {
 
 /* الموجة الصوتية المتحركة */
 @keyframes wave-pulse {
-  0%, 100% { transform: scaleY(0.25); }
-  50% { transform: scaleY(1); }
+  0%,
+  100% {
+    transform: scaleY(0.25);
+  }
+  50% {
+    transform: scaleY(1);
+  }
 }
 
 .wave-bar {
   transform-origin: center;
   animation: wave-pulse 1.4s ease-in-out infinite;
-  background: linear-gradient(180deg, var(--accent), var(--primary));
+  background: linear-gradient(180deg, var(--primary), var(--primary-strong));
   border-radius: 999px;
 }
 
-/* توهج خلفي ناعم للواجهة */
+.wave-bar-cream {
+  background: linear-gradient(180deg, var(--cream), color-mix(in srgb, var(--cream) 55%, transparent));
+}
+
+/* توهج خلفي وردي ناعم للواجهة */
 .hero-glow {
   background:
-    radial-gradient(50% 45% at 50% 0%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 75%),
-    radial-gradient(35% 30% at 15% 25%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 70%),
-    radial-gradient(35% 30% at 85% 20%, color-mix(in srgb, var(--gold) 7%, transparent), transparent 70%);
+    radial-gradient(50% 45% at 50% 0%, color-mix(in srgb, var(--rose) 65%, transparent), transparent 75%),
+    radial-gradient(35% 30% at 15% 25%, color-mix(in srgb, var(--rose) 45%, transparent), transparent 70%),
+    radial-gradient(35% 30% at 85% 20%, color-mix(in srgb, var(--gold) 10%, transparent), transparent 70%);
+}
+
+/* شريط المقامات المتحرك */
+@keyframes ticker-rtl {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(50%);
+  }
+}
+
+.ticker-track {
+  animation: ticker-rtl 36s linear infinite;
 }
 
 details.faq summary {
@@ -82,4 +130,13 @@ details.faq summary::-webkit-details-marker {
 }
 details.faq[open] .faq-chevron {
   transform: rotate(180deg);
+}
+details.faq .faq-minus {
+  display: none;
+}
+details.faq[open] .faq-minus {
+  display: grid;
+}
+details.faq[open] .faq-plus {
+  display: none;
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
 import SaveToLibrary from "@/components/SaveToLibrary";
+import WaveLine from "@/components/WaveLine";
 import { MAQAMAT } from "@/lib/maqamat";
 import { VOICES } from "@/lib/voices";
 import { authHeaders } from "@/lib/supabase";
@@ -89,9 +90,10 @@ export default function DramaStudio() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
-      <h1 className="text-3xl font-bold">
+      <h1 className="text-3xl font-extrabold md:text-4xl">
         🎭 الاستوديو <span className="text-gradient">الدرامي</span>
       </h1>
+      <WaveLine className="mt-3" />
       <p className="mt-2 max-w-2xl leading-relaxed text-muted">
         الصق قصة أو حواراً، فيوزّع الذكاء الاصطناعي الأدوار على أصوات مختلفة، ويشكّل كل سطر،
         ويضبط انفعاله وإيقاعه — ثم ينتج عملاً مسموعاً واحداً متكامل الأصوات.
@@ -104,7 +106,7 @@ export default function DramaStudio() {
           onChange={(e) => setText(e.target.value)}
           maxLength={DRAMA_LIMITS.maxInputChars}
           placeholder="الصق قصتك أو حوارك هنا..."
-          className="min-h-56 w-full resize-y rounded-2xl border border-border-soft bg-surface-card p-5 leading-loose outline-none transition-colors focus:border-gold"
+          className="min-h-56 w-full resize-y rounded-2xl border border-border-soft bg-surface-card p-5 leading-loose outline-none transition-colors focus:border-primary"
         />
         {/* لهجة الكتابة والإلقاء */}
         <div className="rounded-2xl border border-border-soft bg-surface-card p-4">
@@ -120,7 +122,7 @@ export default function DramaStudio() {
                 onClick={() => setDialect(d)}
                 className={`rounded-full border px-4 py-1.5 text-sm transition-colors ${
                   dialect === d
-                    ? "border-gold bg-gold/10 font-semibold text-gold"
+                    ? "border-primary bg-rose font-semibold text-primary"
                     : "border-border-soft text-muted hover:text-body"
                 }`}
               >
@@ -140,7 +142,7 @@ export default function DramaStudio() {
         </div>
 
         {error && (
-          <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <p className="rounded-xl border border-primary/40 bg-rose px-4 py-3 text-sm text-primary-strong">
             {error}
           </p>
         )}
@@ -148,7 +150,7 @@ export default function DramaStudio() {
         <button
           onClick={analyze}
           disabled={analyzing || !text.trim()}
-          className="self-start rounded-xl bg-gold px-6 py-3 font-semibold text-surface transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="self-start rounded-xl bg-primary px-6 py-3 font-semibold text-white shadow-lg shadow-primary/25 transition-colors hover:bg-primary-strong disabled:cursor-not-allowed disabled:opacity-40"
         >
           {analyzing ? "جارٍ توزيع الأدوار..." : "🎬 حلّل النص ووزّع الأدوار"}
         </button>
@@ -157,7 +159,7 @@ export default function DramaStudio() {
       {/* الخطوة 2: السيناريو */}
       {script && (
         <div className="mt-10 flex flex-col gap-6">
-          <div className="rounded-2xl border border-gold/40 bg-gold/5 p-5">
+          <div className="rounded-2xl border border-primary/30 bg-rose p-5">
             <h2 className="text-xl font-bold">{script.title}</h2>
             <p className="mt-1 text-sm leading-relaxed text-muted">{script.summary}</p>
             <p className="mt-2 text-xs text-muted">
@@ -178,7 +180,7 @@ export default function DramaStudio() {
                   <select
                     value={c.voiceId}
                     onChange={(e) => setCharacterVoice(c.id, e.target.value)}
-                    className="mt-3 w-full rounded-lg border border-border-soft bg-surface px-3 py-2 text-sm outline-none focus:border-gold"
+                    className="mt-3 w-full rounded-lg border border-border-soft bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
                   >
                     {VOICES.map((v) => (
                       <option key={v.id} value={v.id}>
@@ -199,7 +201,7 @@ export default function DramaStudio() {
               <div className="flex flex-col gap-2.5">
                 {script.lines.map((l, i) => (
                   <div key={i} className="flex gap-3 text-sm">
-                    <span className="w-24 shrink-0 truncate font-semibold text-gold" title={charName(l.characterId)}>
+                    <span className="w-24 shrink-0 truncate font-semibold text-primary" title={charName(l.characterId)}>
                       {charName(l.characterId)}
                     </span>
                     <span className="flex-1 leading-relaxed">{l.text}</span>

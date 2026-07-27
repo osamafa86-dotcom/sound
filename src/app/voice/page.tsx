@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
 import Recorder from "@/components/Recorder";
+import WaveLine from "@/components/WaveLine";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import { VOICES, type Voice } from "@/lib/voices";
 import { authHeaders } from "@/lib/supabase";
@@ -143,9 +144,10 @@ export default function VoiceLab() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-12">
-      <h1 className="text-3xl font-bold">
+      <h1 className="text-3xl font-extrabold md:text-4xl">
         معمل <span className="text-gradient">الصوت</span>
       </h1>
+      <WaveLine className="mt-3" />
       <p className="mt-2 text-muted">
         سجّل صوتك أو ارفع تسجيلاً — ثم فرّغه نصياً، أو حوّله لصوت آخر، أو استنسخ نسختك الرقمية.
       </p>
@@ -191,7 +193,7 @@ export default function VoiceLab() {
 
         <div className="mt-4 rounded-2xl border border-border-soft bg-surface-card p-6">
           {error && (
-            <p className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            <p className="mb-4 rounded-xl border border-primary/40 bg-rose px-4 py-3 text-sm text-primary-strong">
               {error}
             </p>
           )}
@@ -273,8 +275,8 @@ export default function VoiceLab() {
           {tab === "clone" && (
             <div className="flex flex-col gap-4">
               {cloneDone ? (
-                <div className="rounded-xl border border-gold/40 bg-gold/5 p-4 text-sm">
-                  <p className="font-semibold text-gold">✓ اكتمل الاستنساخ: «{cloneDone}»</p>
+                <div className="rounded-xl border border-success/40 bg-success/10 p-4 text-sm">
+                  <p className="font-semibold text-success">✓ اكتمل الاستنساخ: «{cloneDone}»</p>
                   <p className="mt-1 text-muted">
                     صوتك الجديد ظهر الآن في قائمة الأصوات — جرّبه في استوديو النص إلى صوت أو في تحويل الصوت.
                   </p>
@@ -307,7 +309,7 @@ export default function VoiceLab() {
                   <button
                     onClick={clone}
                     disabled={!audio || !consent || !cloneName.trim() || busy}
-                    className="self-start rounded-xl bg-gold px-6 py-3 font-semibold text-surface transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="self-start rounded-xl bg-primary px-6 py-3 font-semibold text-white shadow-lg shadow-primary/25 transition-colors hover:bg-primary-strong disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {busy ? "جارٍ الاستنساخ..." : "🧬 استنسخ صوتي"}
                   </button>

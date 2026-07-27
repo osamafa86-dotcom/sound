@@ -1,5 +1,14 @@
 /** موجة صوتية زخرفية متحركة — CSS فقط بلا JavaScript */
-export default function WaveBars({ bars = 32, className = "" }: { bars?: number; className?: string }) {
+export default function WaveBars({
+  bars = 32,
+  className = "",
+  tone = "red",
+}: {
+  bars?: number;
+  className?: string;
+  /** «red» على الخلفيات الفاتحة، «cream» على الخلفيات النبيذية الداكنة */
+  tone?: "red" | "cream";
+}) {
   return (
     <div aria-hidden className={`flex items-center justify-center gap-1 ${className}`}>
       {Array.from({ length: bars }, (_, i) => {
@@ -10,7 +19,7 @@ export default function WaveBars({ bars = 32, className = "" }: { bars?: number;
         return (
           <span
             key={i}
-            className="wave-bar w-1 md:w-1.5"
+            className={`wave-bar w-1 md:w-1.5 ${tone === "cream" ? "wave-bar-cream" : ""}`}
             style={{
               height: `${h}px`,
               animationDelay: `${delay}s`,

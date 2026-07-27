@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
+import WaveLine from "@/components/WaveLine";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import { VOICES } from "@/lib/voices";
 import { authHeaders } from "@/lib/supabase";
@@ -91,9 +92,10 @@ export default function PodcastStudio() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
-      <h1 className="text-3xl font-bold">
+      <h1 className="text-3xl font-extrabold md:text-4xl">
         🎙️ البودكاست <span className="text-gradient">الذكي</span>
       </h1>
+      <WaveLine className="mt-3" />
       <p className="mt-2 max-w-2xl leading-relaxed text-muted">
         اكتب موضوعاً واحداً، فيؤلّف الذكاء الاصطناعي حلقة حوارية كاملة بين مقدّمَين
         بأصوات مختلفة — بمحتوى حقيقي وحوار طبيعي، جاهزة للنشر.
@@ -164,7 +166,7 @@ export default function PodcastStudio() {
         </div>
 
         {error && (
-          <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <p className="rounded-xl border border-primary/40 bg-rose px-4 py-3 text-sm text-primary-strong">
             {error}
           </p>
         )}
@@ -172,7 +174,7 @@ export default function PodcastStudio() {
         <button
           onClick={writeEpisode}
           disabled={writing || !topic.trim()}
-          className="self-start rounded-xl bg-accent px-6 py-3 font-semibold text-surface transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="self-start rounded-xl bg-primary px-6 py-3 font-semibold text-white shadow-lg shadow-primary/25 transition-colors hover:bg-primary-strong disabled:cursor-not-allowed disabled:opacity-40"
         >
           {writing ? "جارٍ إعداد الحلقة..." : "✍️ اكتب الحلقة"}
         </button>

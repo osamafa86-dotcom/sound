@@ -1,14 +1,19 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Sans_Arabic } from "next/font/google";
+import { Alexandria, Tajawal } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SiteBanner from "@/components/SiteBanner";
 
-const plexArabic = IBM_Plex_Sans_Arabic({
-  variable: "--font-plex-arabic",
+const alexandria = Alexandria({
+  variable: "--font-alexandria",
   subsets: ["arabic", "latin"],
-  weight: ["300", "400", "500", "600", "700"],
+});
+
+const tajawal = Tajawal({
+  variable: "--font-tajawal",
+  subsets: ["arabic", "latin"],
+  weight: ["400", "500", "700"],
 });
 
 export const metadata: Metadata = {
@@ -28,7 +33,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport = {
-  themeColor: "#0a0e1a",
+  themeColor: "#fbf8f4",
 };
 
 export default function RootLayout({
@@ -37,7 +42,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ar" dir="rtl" className={`${plexArabic.variable} h-full antialiased`}>
+    <html lang="ar" dir="rtl" className={`${alexandria.variable} ${tajawal.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-surface text-body">
         <SiteBanner />
         <Navbar />
