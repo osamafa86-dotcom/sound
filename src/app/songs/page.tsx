@@ -3,6 +3,7 @@
 import { useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
 import SaveToLibrary from "@/components/SaveToLibrary";
+import WaveLine from "@/components/WaveLine";
 import { DIALECTS, INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
 import { authHeaders } from "@/lib/supabase";
 import type { AssistMode, AssistResult } from "@/lib/assistant/types";
@@ -230,10 +231,11 @@ export default function SongsStudio() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
-      <h1 className="text-3xl font-bold">
+      <h1 className="text-3xl font-extrabold md:text-4xl">
         استوديو <span className="text-gradient">الأغاني والمقامات</span>
       </h1>
-      <p className="mt-2 text-muted">
+      <WaveLine className="mt-3" />
+      <p className="mt-3 text-muted">
         ثلاث خطوات: اكتب الكلمات، اختر المقام والأسلوب، ثم ولّد أغنيتك.
       </p>
 
@@ -245,7 +247,7 @@ export default function SongsStudio() {
               onClick={() => setStep(i)}
               className={`w-full rounded-xl border px-3 py-2.5 text-sm font-semibold transition-colors ${
                 i === step
-                  ? "border-gold bg-gold/10 text-gold"
+                  ? "border-primary bg-rose text-primary"
                   : i < step
                     ? "border-border-soft text-body"
                     : "border-border-soft text-muted"
@@ -275,12 +277,12 @@ export default function SongsStudio() {
                   onChange={(e) => setIdea(e.target.value)}
                   maxLength={500}
                   placeholder="فكرة الأغنية... مثال: شوق للوطن بعد سنين غربة"
-                  className="flex-1 rounded-xl border border-border-soft bg-surface p-3 text-sm outline-none transition-colors focus:border-gold"
+                  className="flex-1 rounded-xl border border-border-soft bg-surface p-3 text-sm outline-none transition-colors focus:border-primary"
                 />
                 <select
                   value={dialectId}
                   onChange={(e) => setDialectId(e.target.value)}
-                  className="rounded-xl border border-border-soft bg-surface p-3 text-sm outline-none transition-colors focus:border-gold"
+                  className="rounded-xl border border-border-soft bg-surface p-3 text-sm outline-none transition-colors focus:border-primary"
                 >
                   {DIALECTS.map((d) => (
                     <option key={d.id} value={d.id}>
@@ -300,19 +302,19 @@ export default function SongsStudio() {
                 <button
                   onClick={() => runAssist("improve")}
                   disabled={!!assistLoading || !lyrics.trim()}
-                  className="rounded-xl border border-gold px-4 py-2 text-sm font-semibold text-gold transition-colors hover:bg-gold/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-rose disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {assistLoading === "improve" ? "جارٍ التحسين..." : "✨ حسّن كلماتي واقترح المقام"}
                 </button>
               </div>
               {assistError && (
-                <p className="mt-3 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                <p className="mt-3 rounded-xl border border-primary/40 bg-rose px-4 py-3 text-sm text-primary-strong">
                   {assistError}
                 </p>
               )}
               {assist && (
-                <div className="mt-4 rounded-xl border border-gold/40 bg-gold/5 p-4 text-sm">
-                  <p className="font-semibold text-gold">
+                <div className="mt-4 rounded-xl border border-primary/30 bg-rose p-4 text-sm">
+                  <p className="font-semibold text-primary">
                     {assist.title && assist.title !== "مسودة تجريبية" && `«${assist.title}» — `}
                     المقام المقترح: {MAQAMAT.find((m) => m.id === assist.maqamId)?.name}
                   </p>
@@ -364,7 +366,7 @@ export default function SongsStudio() {
                 )}
               </div>
               {imageError && (
-                <p className="mt-3 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                <p className="mt-3 rounded-xl border border-primary/40 bg-rose px-4 py-3 text-sm text-primary-strong">
                   {imageError}
                 </p>
               )}
@@ -377,7 +379,7 @@ export default function SongsStudio() {
                   <p className="mt-1 text-xs text-muted">{imageBrief.maqamReason}</p>
                   <button
                     onClick={() => setStep(2)}
-                    className="mt-3 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-surface transition-opacity hover:opacity-90"
+                    className="mt-3 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-strong"
                   >
                     🎼 اعتمد وانتقل للتوليد ←
                   </button>
@@ -390,7 +392,7 @@ export default function SongsStudio() {
               onChange={(e) => setLyrics(e.target.value)}
               maxLength={3000}
               placeholder={"اكتب كلمات أغنيتك هنا (فصحى أو لهجة)...\nأو استخدم المساعد بالأعلى ليكتبها لك من فكرة."}
-              className="min-h-72 w-full resize-y rounded-2xl border border-border-soft bg-surface-card p-5 leading-loose outline-none transition-colors focus:border-gold"
+              className="min-h-72 w-full resize-y rounded-2xl border border-border-soft bg-surface-card p-5 leading-loose outline-none transition-colors focus:border-primary"
             />
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted">{lyrics.length} / 3000 حرف</span>
@@ -416,13 +418,13 @@ export default function SongsStudio() {
                     onClick={() => setMaqamId(m.id)}
                     className={`rounded-2xl border p-4 text-start transition-colors ${
                       maqamId === m.id
-                        ? "border-gold bg-gold/10"
-                        : "border-border-soft bg-surface-card hover:border-gold/50"
+                        ? "border-primary bg-rose"
+                        : "border-border-soft bg-surface-card hover:border-primary/50"
                     }`}
                   >
                     <span className="flex items-center justify-between">
                       <span className="text-lg font-bold">{m.name}</span>
-                      {maqamId === m.id && <span className="text-gold">✓</span>}
+                      {maqamId === m.id && <span className="text-primary">✓</span>}
                     </span>
                     <span className="mt-1 block text-xs font-semibold text-accent">{m.mood}</span>
                     <span className="mt-2 block text-xs leading-relaxed text-muted">{m.description}</span>
@@ -488,13 +490,13 @@ export default function SongsStudio() {
                   onClick={() => setTier("preview")}
                   className={`rounded-2xl border p-4 text-start transition-colors ${
                     tier === "preview"
-                      ? "border-gold bg-gold/10"
-                      : "border-border-soft bg-surface-card hover:border-gold/50"
+                      ? "border-primary bg-rose"
+                      : "border-border-soft bg-surface-card hover:border-primary/50"
                   }`}
                 >
                   <span className="flex items-center justify-between">
                     <span className="text-lg font-bold">🎧 معاينة سريعة</span>
-                    {tier === "preview" && <span className="text-gold">✓</span>}
+                    {tier === "preview" && <span className="text-primary">✓</span>}
                   </span>
                   <span className="mt-2 block text-xs leading-relaxed text-muted">
                     مسودة آلية ~30 ثانية لتجربة المقام والأسلوب بأقل تكلفة (Lyria 3)، قبل توليد النسخة النهائية.
@@ -504,13 +506,13 @@ export default function SongsStudio() {
                   onClick={() => setTier("full")}
                   className={`rounded-2xl border p-4 text-start transition-colors ${
                     tier === "full"
-                      ? "border-gold bg-gold/10"
-                      : "border-border-soft bg-surface-card hover:border-gold/50"
+                      ? "border-primary bg-rose"
+                      : "border-border-soft bg-surface-card hover:border-primary/50"
                   }`}
                 >
                   <span className="flex items-center justify-between">
                     <span className="text-lg font-bold">🎼 النسخة الكاملة</span>
-                    {tier === "full" && <span className="text-gold">✓</span>}
+                    {tier === "full" && <span className="text-primary">✓</span>}
                   </span>
                   <span className="mt-2 block text-xs leading-relaxed text-muted">
                     {instrumental
@@ -568,7 +570,7 @@ export default function SongsStudio() {
             </div>
 
             {error && (
-              <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              <p className="rounded-xl border border-primary/40 bg-rose px-4 py-3 text-sm text-primary-strong">
                 {error}
               </p>
             )}
@@ -576,7 +578,7 @@ export default function SongsStudio() {
             <button
               onClick={generate}
               disabled={loading}
-              className="rounded-xl bg-gold px-6 py-3.5 font-semibold text-surface transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="rounded-xl bg-primary px-6 py-3.5 font-semibold text-white shadow-lg shadow-primary/25 transition-colors hover:bg-primary-strong disabled:opacity-50"
             >
               {loading
                 ? stage || "جارٍ التلحين والتوليد..."
@@ -619,7 +621,7 @@ export default function SongsStudio() {
                 <button
                   onClick={generate}
                   disabled={loading}
-                  className="self-start rounded-xl border border-gold px-5 py-2.5 text-sm font-semibold text-gold transition-colors hover:bg-gold/10 disabled:opacity-50"
+                  className="self-start rounded-xl border border-primary px-5 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-rose disabled:opacity-50"
                 >
                   🔁 ولّد نسخة أخرى بنفس الإعدادات
                 </button>
