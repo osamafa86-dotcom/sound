@@ -24,6 +24,7 @@ export const ROUTE_LABELS: Record<string, string> = {
   imageBrief: "الموسيقى من صورة",
   drama: "الاستوديو الدرامي",
   podcast: "البودكاست",
+  audiobook: "الكتب الصوتية",
 };
 
 /**
@@ -44,6 +45,7 @@ export const DEFAULT_ROUTE_COST_USD: Record<string, number> = {
   imageBrief: 0.004,
   drama: 0.02,
   podcast: 0.02,
+  audiobook: 0.02,
 };
 
 /** كلفة المسار مع احترام تجاوز البيئة (COST_TTS=0.03 مثلاً) */

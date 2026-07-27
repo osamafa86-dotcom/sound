@@ -11,6 +11,7 @@ const links = [
   { href: "/songs", label: "استوديو الأغاني" },
   { href: "/drama", label: "الاستوديو الدرامي" },
   { href: "/podcast", label: "البودكاست" },
+  { href: "/audiobook", label: "الكتب الصوتية" },
   { href: "/library", label: "مكتبتي" },
   { href: "/pricing", label: "الأسعار" },
 ];

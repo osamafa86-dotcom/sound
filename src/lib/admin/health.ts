@@ -33,7 +33,7 @@ export function integrations(): IntegrationStatus[] {
     {
       id: "elevenlabs",
       name: "ElevenLabs",
-      powers: ["النص إلى صوت", "التفريغ النصي", "تحويل صوت إلى صوت", "استنساخ وتصميم الأصوات", "ذاكرة النطق", "الاستوديو الدرامي", "Eleven Music"],
+      powers: ["النص إلى صوت", "التفريغ النصي", "تحويل صوت إلى صوت", "استنساخ وتصميم الأصوات", "ذاكرة النطق", "الاستوديو الدرامي", "الكتب الصوتية", "Eleven Music"],
       configured: has("ELEVENLABS_API_KEY"),
       envVars: ["ELEVENLABS_API_KEY"],
       model: process.env.ELEVENLABS_MODEL_ID ?? "eleven_multilingual_v2",
@@ -111,6 +111,7 @@ export function features(forceMock = false): FeatureStatus[] {
     { id: "voice", name: "معمل الصوت (تفريغ/تحويل/استنساخ)", path: "/voice", state: state(eleven, false), note: eleven ? "Scribe + Speech-to-Speech" : "معطّل بلا ELEVENLABS_API_KEY" },
     { id: "drama", name: "الاستوديو الدرامي", path: "/drama", state: state(gemini && eleven, false), note: gemini && eleven ? "تحليل بـ Gemini وإلقاء بـ ElevenLabs" : "يحتاج مفتاحي Gemini وElevenLabs" },
     { id: "podcast", name: "البودكاست الذكي", path: "/podcast", state: state(gemini && eleven, false), note: gemini && eleven ? "سيناريو وإلقاء متعدد الأصوات" : "يحتاج مفتاحي Gemini وElevenLabs" },
+    { id: "audiobook", name: "استوديو الكتب الصوتية", path: "/audiobook", state: state(eleven), note: eleven ? "فهرسة محلية وإلقاء بـ ElevenLabs" : "الفهرسة تعمل، والإلقاء بوضع تجريبي" },
     { id: "library", name: "المكتبة السحابية والحسابات", path: "/library", state: supabase ? "live" : "off", note: supabase ? "Supabase Auth + Storage" : "مكتبة محلية في المتصفح فقط" },
     { id: "jobs", name: "المهام الطويلة الدائمة", path: "/songs", state: service ? "live" : "mock", note: service ? "جدول song_jobs في Supabase" : "ذاكرة الخادم (تُفقد بين النسخ)" },
     { id: "limits", name: "حدود الاستهلاك الذرّية", path: "-", state: service ? "live" : "mock", note: service ? "دالة consume_rate_limit" : "عدّاد في ذاكرة النسخة" },
