@@ -7,7 +7,7 @@ const stats = [
   { n: "٥٦", label: "صوتاً عربياً أصيلاً" },
   { n: "٢٠", label: "لهجة عربية" },
   { n: "٨", label: "مقامات بأرباع النغمات" },
-  { n: "٦", label: "استوديوهات متكاملة" },
+  { n: "٧", label: "استوديوهات متكاملة" },
 ];
 
 const studios = [
@@ -54,6 +54,15 @@ const studios = [
     text: "سجّل بصوتك وحوّل الأداء لأي صوت من الكتالوج مع الحفاظ على النبرة والتوقيت، وفرّغ التسجيلات نصاً عربياً دقيقاً.",
     cta: "جرّب المعمل",
     color: "hover:border-primary",
+    ctaColor: "text-accent",
+  },
+  {
+    href: "/prompts",
+    icon: "⚡",
+    title: "مهندس البرومبتات",
+    text: "اختصاصي صياغة لكل نوع مادة: خبر، سرد، صورة، فيديو، أغنية، بودكاست، إعلان — صف فكرتك بلغتك العادية واحصل على برومبت احترافي جاهز للصق في أي منصة.",
+    cta: "اهندس برومبتك",
+    color: "hover:border-accent",
     ctaColor: "text-accent",
   },
   {
@@ -227,7 +236,7 @@ export default function Home() {
       <div className="mx-auto max-w-6xl px-4">
         {/* الاستوديوهات الستة */}
         <section className="py-16">
-          <h2 className="mb-2 text-center text-3xl font-bold">ستة استوديوهات في منصة واحدة</h2>
+          <h2 className="mb-2 text-center text-3xl font-bold">سبعة استوديوهات في منصة واحدة</h2>
           <p className="mb-10 text-center text-muted">كل ما يحتاجه صانع المحتوى العربي — من التعليق الصوتي إلى الأغنية الكاملة</p>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {studios.map((s) => (

@@ -11,6 +11,7 @@ const links = [
   { href: "/songs", label: "استوديو الأغاني" },
   { href: "/drama", label: "الاستوديو الدرامي" },
   { href: "/podcast", label: "البودكاست" },
+  { href: "/prompts", label: "البرومبتات" },
   { href: "/library", label: "مكتبتي" },
   { href: "/brain", label: "🧠 العقل" },
   { href: "/pricing", label: "الأسعار" },
