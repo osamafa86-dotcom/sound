@@ -322,17 +322,27 @@ export default function TTSStudio() {
   // كتالوج المنصة الفعلي من الخادم — الأصوات المتاحة حسب المفاتيح المضبوطة (ElevenLabs / Azure)
   useEffect(() => {
     let cancelled = false;
+    // قادم من معرض الأصوات برابط ?voice= — اختياره الصريح يتقدم على الشخصنة
+    const urlVoice = new URLSearchParams(window.location.search).get("voice");
     async function loadVoices() {
       try {
         const res = await fetch("/api/voices/catalog");
         const data = await res.json().catch(() => null);
-        if (cancelled || !res.ok || !data) return;
+        if (cancelled) return;
+        if (!res.ok || !data) {
+          if (urlVoice && VOICES.some((v) => v.id === urlVoice)) setVoiceId(urlVoice);
+          return;
+        }
         const all: CatalogVoice[] = data.voices ?? [];
         if (all.length) {
           setVoices(all);
           setVoiceId((prev) =>
             prev.startsWith("custom:") || all.some((v) => v.id === prev) ? prev : all[0].id
           );
+        }
+        if (urlVoice && all.some((v) => v.id === urlVoice)) {
+          setVoiceId(urlVoice);
+          return;
         }
 
         // ملف الذوق: صوت المستخدم المفضل يتقدم افتراضياً مع إعداداته المريحة

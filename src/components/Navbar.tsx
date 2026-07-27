@@ -8,10 +8,12 @@ import { createClient } from "@/lib/supabase/client";
 const links = [
   { href: "/", label: "الرئيسية" },
   { href: "/tts", label: "النص إلى صوت" },
+  { href: "/voices", label: "الأصوات" },
   { href: "/songs", label: "استوديو الأغاني" },
   { href: "/drama", label: "الاستوديو الدرامي" },
   { href: "/podcast", label: "البودكاست" },
   { href: "/prompts", label: "البرومبتات" },
+  { href: "/gallery", label: "المعرض" },
   { href: "/library", label: "مكتبتي" },
   { href: "/brain", label: "🧠 العقل" },
   { href: "/pricing", label: "الأسعار" },

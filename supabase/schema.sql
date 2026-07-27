@@ -412,3 +412,25 @@ create index if not exists usage_time_idx on public.usage_events (created_at des
 
 -- ملاحظة: صلاحية المالك لا تُخزَّن في القاعدة بل في متغير البيئة OWNER_EMAILS،
 -- فلا يمكن منح أحدٍ نفسه صلاحية المالك بتعديل صف في الجدول.
+
+-- ------------------------------------------------------------
+-- 12) المعرض العام — أعمال ينشرها أصحابها باختيارهم ليراها الجميع
+-- ------------------------------------------------------------
+alter table public.generations
+  add column if not exists is_public boolean not null default false;
+
+-- فهرس جزئي: المعرض يقرأ المنشور فقط، فلا يدفع ثمن الأرشيف الخاص كله
+create index if not exists generations_public_idx
+  on public.generations (created_at desc)
+  where is_public;
+
+-- النشر وإلغاؤه تعديل يخص صاحب العمل وحده
+drop policy if exists "أعمالي فقط: تعديل" on public.generations;
+create policy "أعمالي فقط: تعديل" on public.generations
+  for update using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- المنشور للمعرض يقرؤه أي زائر — الخاص يبقى خاصاً بسياساته أعلاه
+drop policy if exists "المعرض العام: قراءة" on public.generations;
+create policy "المعرض العام: قراءة" on public.generations
+  for select using (is_public);
