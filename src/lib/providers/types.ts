@@ -15,6 +15,14 @@ export type TTSRequest = {
   /** سرعة النطق (1 = طبيعي) */
   speed?: number;
   format?: "mp3" | "wav";
+  /** المحرك التعبيري (الجيل الثالث): وسوم مشاعر وأفعال داخل النص */
+  expressive?: boolean;
+  /** بادئة وسوم أسلوب الأداء — تُحقن قبل النص */
+  stylePrefix?: string;
+  /** قوة التعبير لمحرك الجيل الثاني (style exaggeration 0..1) */
+  liveliness?: number;
+  /** تعزيز حضور الصوت وقربه */
+  speakerBoost?: boolean;
 };
 
 export type MusicRequest = {

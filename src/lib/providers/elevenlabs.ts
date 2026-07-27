@@ -7,8 +7,17 @@ import type { AudioResult, MusicProvider, MusicRequest, TTSProvider, TTSRequest 
 
 const API_BASE = "https://api.elevenlabs.io/v1";
 
-/** نموذج التوليد — multilingual_v2 مستقر وممتاز مع العربية؛ قابل للترقية لـ v3 عبر متغير البيئة */
+/** نموذج التوليد المتوازن — multilingual_v2 مستقر وممتاز مع العربية */
 const MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? "eleven_multilingual_v2";
+/** المحرك التعبيري — الجيل الثالث بوسوم المشاعر والأفعال داخل النص */
+const V3_MODEL_ID = process.env.ELEVENLABS_V3_MODEL ?? "eleven_v3";
+
+/** الجيل الثالث يقبل ثلاث درجات ثبات فقط: 0 مبدع | 0.5 طبيعي | 1 رصين */
+export function snapStabilityV3(value: number): 0 | 0.5 | 1 {
+  if (value < 0.25) return 0;
+  if (value < 0.75) return 0.5;
+  return 1;
+}
 
 class ElevenLabsError extends Error {
   constructor(message: string, readonly status: number) {
@@ -66,11 +75,33 @@ export function elevenLabsTTS(apiKey: string): TTSProvider {
       // باقة Creator تتيح جودة 192kbps — قابلة للتخفيض عبر متغير البيئة عند تغيير الباقة
       const mp3Quality = process.env.ELEVENLABS_MP3_QUALITY ?? "mp3_44100_192";
       const outputFormat = wantWav ? "pcm_44100" : mp3Quality;
+      const expressive = !!req.expressive;
 
-      // ذاكرة النطق المتراكمة للمنصة — تُطبَّق تلقائياً على كل توليد
-      const dict = await findDictionary(apiKey).catch(() => null);
+      // ذاكرة النطق: قاموس المحرك للجيل الثاني — والجيل الثالث لا يدعمه
+      // (تتكفل به قواعد الاستبدال النصية المطبقة في المسار قبل الوصول هنا)
+      const dict = expressive ? null : await findDictionary(apiKey).catch(() => null);
+
+      // إعدادات الصوت حسب الجيل: الثالث يقبل ثلاث درجات ثبات بلا سرعة/حيوية،
+      // والثاني يدعم السرعة وقوة التعبير (style) وتعزيز الحضور
+      const voiceSettings = expressive
+        ? {
+            stability: snapStabilityV3(req.stability ?? 0.5),
+            similarity_boost: 0.75,
+            use_speaker_boost: true,
+          }
+        : {
+            stability: req.stability ?? 0.5,
+            similarity_boost: 0.75,
+            // النطاق المدعوم للسرعة في ElevenLabs هو 0.7–1.2
+            speed: Math.min(1.2, Math.max(0.7, req.speed ?? 1)),
+            ...(req.liveliness !== undefined && {
+              style: Math.min(1, Math.max(0, req.liveliness)),
+            }),
+            use_speaker_boost: req.speakerBoost ?? true,
+          };
 
       // النصوص الطويلة تُقسَّم عند حدود الجمل وتُدمج مخرجاتها (mp3 مباشرة، وwav عبر PCM خام)
+      // بادئة الأسلوب تُحقن في كل جزء كي يبقى الأداء موحداً عبر الأجزاء
       const chunks = splitTextForTTS(req.text);
       const buffers: Buffer[] = [];
       for (const chunk of chunks) {
@@ -79,14 +110,9 @@ export function elevenLabsTTS(apiKey: string): TTSProvider {
             `/text-to-speech/${elevenVoiceId}`,
             apiKey,
             {
-              text: chunk,
-              model_id: MODEL_ID,
-              voice_settings: {
-                stability: req.stability ?? 0.5,
-                similarity_boost: 0.75,
-                // النطاق المدعوم للسرعة في ElevenLabs هو 0.7–1.2
-                speed: Math.min(1.2, Math.max(0.7, req.speed ?? 1)),
-              },
+              text: req.stylePrefix ? `${req.stylePrefix} ${chunk}` : chunk,
+              model_id: expressive ? V3_MODEL_ID : MODEL_ID,
+              voice_settings: voiceSettings,
               ...(dict?.id && {
                 pronunciation_dictionary_locators: [
                   { pronunciation_dictionary_id: dict.id, ...(dict.versionId && { version_id: dict.versionId }) },
