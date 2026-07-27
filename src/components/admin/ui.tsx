@@ -49,9 +49,9 @@ export type Tone = "neutral" | "good" | "warn" | "critical" | "info";
 
 const TONE_CLASS: Record<Tone, string> = {
   neutral: "border-border-soft text-muted",
-  good: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
-  warn: "border-amber-500/40 bg-amber-500/10 text-amber-300",
-  critical: "border-red-500/40 bg-red-500/10 text-red-300",
+  good: "border-success/40 bg-success/10 text-emerald-800",
+  warn: "border-gold/50 bg-gold/10 text-amber-800",
+  critical: "border-primary/40 bg-rose text-primary-strong",
   info: "border-primary/40 bg-primary/10 text-primary",
 };
 
@@ -77,7 +77,7 @@ export function StatTile({
   tone?: Tone;
 }) {
   const accent =
-    tone === "good" ? "text-emerald-300" : tone === "warn" ? "text-amber-300" : tone === "critical" ? "text-red-300" : "text-body";
+    tone === "good" ? "text-success" : tone === "warn" ? "text-amber-700" : tone === "critical" ? "text-primary-strong" : "text-body";
   return (
     <div className="rounded-2xl border border-border-soft bg-surface-card p-4">
       <p className="text-xs text-muted">{label}</p>
@@ -215,7 +215,7 @@ export function Toggle({
         className="mt-1 h-4 w-4 accent-current"
       />
       <span>
-        <span className={`font-semibold ${danger && checked ? "text-amber-300" : ""}`}>{label}</span>
+        <span className={`font-semibold ${danger && checked ? "text-amber-700" : ""}`}>{label}</span>
         {note && <span className="mt-1 block text-xs leading-relaxed text-muted">{note}</span>}
       </span>
     </label>

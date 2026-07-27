@@ -133,7 +133,7 @@ export default function Library() {
           <Link href="/tts" className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-strong">
             🎙️ صوت جديد
           </Link>
-          <Link href="/songs" className="rounded-xl border border-border-soft px-4 py-2 text-sm font-semibold hover:border-gold">
+          <Link href="/songs" className="rounded-xl border border-border-soft px-4 py-2 text-sm font-semibold hover:border-primary">
             🎼 أغنية جديدة
           </Link>
         </div>
@@ -192,7 +192,7 @@ export default function Library() {
                 </div>
                 <button
                   onClick={() => remove(g.id)}
-                  className="shrink-0 rounded-lg border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:border-red-500/50 hover:text-red-400"
+                  className="shrink-0 rounded-lg border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:border-primary/60 hover:text-primary-strong"
                 >
                   حذف
                 </button>

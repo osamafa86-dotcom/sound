@@ -64,11 +64,18 @@ function LoginForm() {
 
   return (
     <div className="mx-auto max-w-md px-4 py-16">
-      <div className="rounded-3xl border border-border-soft bg-surface-card p-8">
-        <h1 className="text-2xl font-bold">
+      <div className="card-lift rounded-3xl border border-border-soft bg-surface-card p-8">
+        <div className="mb-5 flex justify-center">
+          <span aria-hidden className="flex h-13 w-13 items-center justify-center gap-[3.5px] rounded-2xl bg-primary p-3.5 shadow-lg shadow-primary/25">
+            {[13, 24, 16, 26].map((h, i) => (
+              <span key={i} className="w-[3.5px] rounded-full bg-white" style={{ height: h }} />
+            ))}
+          </span>
+        </div>
+        <h1 className="text-center text-2xl font-bold">
           {mode === "signup" ? "إنشاء حساب جديد" : "تسجيل الدخول"}
         </h1>
-        <p className="mt-2 text-sm text-muted">
+        <p className="mt-2 text-center text-sm text-muted">
           {mode === "signup"
             ? "احفظ أعمالك في مكتبتك الخاصة واحصل على رصيد مجاني للبدء."
             : "أهلاً بعودتك — ادخل لتصل إلى مكتبتك."}
@@ -105,7 +112,7 @@ function LoginForm() {
           />
 
           {error && (
-            <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            <p className="rounded-xl border border-primary/40 bg-rose px-4 py-3 text-sm text-primary-strong">
               {error}
             </p>
           )}
