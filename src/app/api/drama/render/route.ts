@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { renderDrama } from "@/lib/drama/render";
 import { DRAMA_LIMITS, type DramaScript } from "@/lib/drama/types";
+import { elevenLabsMusic } from "@/lib/providers/elevenlabs";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
 import { logUsage } from "@/lib/usage";
@@ -19,7 +20,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "الإنتاج يتطلب مفتاح ElevenLabs" }, { status: 503 });
   }
 
-  const script = (await req.json().catch(() => null)) as DramaScript | null;
+  const script = (await req.json().catch(() => null)) as
+    | (DramaScript & { introMusic?: boolean })
+    | null;
   if (!script?.lines?.length || !script?.characters?.length) {
     return NextResponse.json({ error: "السيناريو غير صالح" }, { status: 400 });
   }
@@ -31,14 +34,42 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { audio, durationSec } = await renderDrama(key, script);
+    // ثيم الافتتاح يُولَّد بالتوازي مع الحوار — لا يضيف زمن انتظار يُذكر
+    const themePromise: Promise<Buffer | null> =
+      script.introMusic && script.musicPromptEn
+        ? elevenLabsMusic(key)
+            .generate({
+              maqamId: script.maqamId,
+              styleId: "instrumental",
+              instrumentIds: [],
+              stylePrompt: script.musicPromptEn,
+              durationSec: 15,
+            })
+            .then((r) => r.audio)
+            .catch((e) => {
+              // فشل الموسيقى لا يُسقط الحلقة — تصدر بلا ثيم
+              console.error("Podcast theme failed:", e instanceof Error ? e.message : e);
+              return null;
+            })
+        : Promise.resolve(null);
+
+    const [{ audio: speech, durationSec }, theme] = await Promise.all([
+      renderDrama(key, script),
+      themePromise,
+    ]);
     await logUsage("drama", user?.id ?? null, script.lines.length);
+
+    // الثيم نفسه افتتاحاً وختاماً — هوية صوتية موحدة للحلقة بلا توليد إضافي
+    const audio = theme ? Buffer.concat([theme, speech, theme]) : speech;
+    const totalSec = durationSec + (theme ? 30 : 0);
+
     return new NextResponse(new Uint8Array(audio), {
       headers: {
         "Content-Type": "audio/mpeg",
-        "X-Duration": durationSec.toFixed(1),
+        "X-Duration": totalSec.toFixed(1),
         "X-Lines": String(script.lines.length),
         "X-Voices": String(new Set(script.characters.map((c) => c.voiceId)).size),
+        ...(theme && { "X-Theme": "1" }),
       },
     });
   } catch (e) {

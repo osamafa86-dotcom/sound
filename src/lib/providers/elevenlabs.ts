@@ -170,6 +170,18 @@ export async function elevenLabsTranscribeWords(
   return { text: data.text, words };
 }
 
+/** عازل الصوت — يفصل الكلام عن الضجيج والموسيقى الخلفية ويعيد تسجيلاً نقياً */
+export async function elevenLabsIsolateAudio(apiKey: string, audio: Blob): Promise<AudioResult> {
+  const form = new FormData();
+  form.append("audio", audio, "noisy.webm");
+  const res = await apiCallMultipart("/audio-isolation", apiKey, form);
+  return {
+    audio: Buffer.from(await res.arrayBuffer()),
+    mimeType: res.headers.get("Content-Type")?.split(";")[0] || "audio/mpeg",
+    provider: "elevenlabs-isolation",
+  };
+}
+
 /** تحويل صوت إلى صوت (Speech-to-Speech) — يحافظ على الأداء والتوقيت بصوت آخر */
 export async function elevenLabsSpeechToSpeech(
   apiKey: string,

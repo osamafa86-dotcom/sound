@@ -6,7 +6,7 @@
  * و«التلقائي» يحلل النص عبر Gemini ويختار الأسلوب بنفسه.
  */
 
-export type StyleCategory = "مشاعر" | "مهني" | "سرد" | "إعلان";
+export type StyleCategory = "مشاعر" | "مهني" | "سرد" | "إعلان" | "فلسطيني";
 
 export type PerformanceStyle = {
   id: string;
@@ -178,9 +178,58 @@ export const PERFORMANCE_STYLES: PerformanceStyle[] = [
     tags: ["inspiring hopeful tone", "rising optimistic energy"],
     stability: 0.5,
   },
+  // فلسطيني — لهجات فرعية أصيلة، امتداد ذاكرة التراث الفلسطيني في المنصة
+  {
+    id: "ps-fallahi",
+    name: "فلاحية ريفية",
+    icon: "🌾",
+    desc: "لهجة الريف الفلسطيني الدافئة — كاف مكشكشة وقاف صريحة وطيبة أهل الأرض",
+    category: "فلسطيني",
+    tags: [
+      "rural Palestinian fallahi village accent with hard emphatic qaf",
+      "warm earthy hospitable countryside delivery",
+    ],
+    stability: 0.5,
+  },
+  {
+    id: "ps-madani",
+    name: "مدنية شامية",
+    icon: "🏙️",
+    desc: "لهجة مدن القدس ويافا وحيفا — قاف مهموزة ونعومة حضرية راقية",
+    category: "فلسطيني",
+    tags: [
+      "urban Palestinian madani city accent, qaf pronounced as glottal stop",
+      "refined soft Levantine urban delivery",
+    ],
+    stability: 0.5,
+  },
+  {
+    id: "ps-nabulsi",
+    name: "نابلسية",
+    icon: "🏛️",
+    desc: "لهجة جبل النار — إيقاع نابلسي مميز بمدّات عريضة ونبرة تجارية ودودة",
+    category: "فلسطيني",
+    tags: [
+      "Nablus Palestinian accent with distinctive elongated vowels",
+      "friendly confident merchant-town cadence",
+    ],
+    stability: 0.5,
+  },
+  {
+    id: "ps-ghazzawi",
+    name: "غزاوية",
+    icon: "🌊",
+    desc: "لهجة غزة الساحلية — حدة بحرية صامدة بملامح قريبة من المصري",
+    category: "فلسطيني",
+    tags: [
+      "Gaza Palestinian coastal accent with slight Egyptian influence",
+      "resilient spirited seaside delivery",
+    ],
+    stability: 0.5,
+  },
 ];
 
-export const STYLE_CATEGORIES: StyleCategory[] = ["مهني", "سرد", "إعلان", "مشاعر"];
+export const STYLE_CATEGORIES: StyleCategory[] = ["مهني", "سرد", "إعلان", "مشاعر", "فلسطيني"];
 
 export function getStyle(id?: string): PerformanceStyle | null {
   return PERFORMANCE_STYLES.find((s) => s.id === id) ?? null;
