@@ -8,6 +8,7 @@ import {
   Brain,
   CreditCard,
   Drama,
+  FlaskConical,
   Home,
   Images,
   Library,
@@ -37,6 +38,7 @@ const groups: { label: string | null; items: { href: string; label: string; icon
       { href: "/songs", label: "استوديو الأغاني", icon: Music },
       { href: "/drama", label: "الاستوديو الدرامي", icon: Drama },
       { href: "/podcast", label: "البودكاست", icon: Podcast },
+      { href: "/voice", label: "معمل الصوت", icon: FlaskConical },
     ],
   },
   {

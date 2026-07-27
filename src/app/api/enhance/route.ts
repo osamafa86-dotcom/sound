@@ -16,8 +16,8 @@ export async function POST(req: NextRequest) {
   const verdict = await checkLimit(req, "enhance", user?.id ?? null);
   if (!verdict.allowed) return limitResponse(verdict);
 
-  const key = process.env.GEMINI_API_KEY ?? process.env.ANTHROPIC_API_KEY;
-  if (!process.env.GEMINI_API_KEY) {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) {
     return NextResponse.json(
       { error: "المستشار الصوتي يتطلب مفتاح Gemini" },
       { status: 503 }

@@ -5,8 +5,13 @@ import AudioPlayer from "@/components/AudioPlayer";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import WaveLine from "@/components/WaveLine";
 import { VOICES, type Voice } from "@/lib/voices";
-import { PERFORMANCE_STYLES, STYLE_CATEGORIES } from "@/lib/performance/styles";
-import { TAG_GROUPS, insertTagAt } from "@/lib/performance/tags";
+import {
+  LAYER_CATEGORIES,
+  PERFORMANCE_STYLES,
+  STYLE_CATEGORIES,
+  STYLE_LAYERS,
+} from "@/lib/performance/styles";
+import { LRI, PDI, SPOKEN_CUES, TAG_GROUPS, insertTagAt, stutterize } from "@/lib/performance/tags";
 import { authHeaders } from "@/lib/supabase";
 
 type CustomVoice = { id: string; name: string };
@@ -36,17 +41,86 @@ export default function TTSStudio() {
   const [perfStyle, setPerfStyle] = useState("auto");
   const [liveliness, setLiveliness] = useState(0.35);
   const [takes, setTakes] = useState(1);
+
+  // قاعدة الطبقات: حالة جسدية + بيئة صوتية تتراكب فوق الأسلوب
+  const [layers, setLayers] = useState<string[]>([]);
+  // موجه المخرج الحر — توجيه إضافي بأي لغة يُحقن فوق الأزرار
+  const [directorNote, setDirectorNote] = useState("");
+  // وصفات المخرج المحفوظة محلياً
+  type Recipe = { name: string; styleId: string; layers: string[]; note: string };
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [recipeName, setRecipeName] = useState("");
+
+  useEffect(() => {
+    // تأجيل القراءة لما بعد الرسم الأول — يرضي قاعدة عدم التزامن في التأثيرات
+    const t = setTimeout(() => {
+      try {
+        setRecipes(JSON.parse(localStorage.getItem("maqam-director-recipes") ?? "[]"));
+      } catch {
+        /* تجاهل */
+      }
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
+
+  function saveRecipe() {
+    const name = recipeName.trim();
+    if (!name) return;
+    const next = [
+      { name, styleId: perfStyle, layers, note: directorNote.trim() },
+      ...recipes.filter((r) => r.name !== name),
+    ].slice(0, 12);
+    setRecipes(next);
+    setRecipeName("");
+    localStorage.setItem("maqam-director-recipes", JSON.stringify(next));
+  }
+
+  function applyRecipe(r: Recipe) {
+    setPerfStyle(r.styleId);
+    setLayers(r.layers);
+    setDirectorNote(r.note);
+    setExpressive(true);
+  }
+
+  function deleteRecipe(name: string) {
+    const next = recipes.filter((r) => r.name !== name);
+    setRecipes(next);
+    localStorage.setItem("maqam-director-recipes", JSON.stringify(next));
+  }
+
+  function toggleLayer(id: string) {
+    setLayers((prev) => (prev.includes(id) ? prev.filter((l) => l !== id) : [...prev, id]));
+  }
+
+  /** التلعثم المتعمد — على الكلمة المحددة أو التي عند المؤشر */
+  function applyStutter() {
+    const el = textRef.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? start;
+    const next = stutterize(text, start, end);
+    setText(next.text);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(next.cursor, next.cursor);
+    });
+  }
   const [takesResults, setTakesResults] = useState<
     { url: string; blob: Blob; score: number | null; ext: string }[] | null
   >(null);
   const [takesMock, setTakesMock] = useState(false);
 
-  /** إدراج وسم أداء عند موضع المؤشر في النص */
+  /**
+   * إدراج وسم أداء عند موضع المؤشر — الوسم الإنجليزي يُعزل اتجاهياً
+   * كي يظهر في موضعه الصحيح داخل النص العربي، والثبات «الرصين» يتجاهل
+   * الوسوم رسمياً فنخفضه لـ«طبيعي» عند أول إدراج.
+   */
   function insertTag(tag: string) {
     const el = textRef.current;
     const cursor = el ? el.selectionStart : text.length;
-    const next = insertTagAt(text, cursor, tag);
+    const wrapped = tag.startsWith("[") ? `${LRI}${tag}${PDI}` : tag;
+    const next = insertTagAt(text, cursor, wrapped);
     setText(next.text);
+    if (tag.startsWith("[") && stability >= 0.75) setStability(0.5);
     requestAnimationFrame(() => {
       el?.focus();
       el?.setSelectionRange(next.cursor, next.cursor);
@@ -203,7 +277,11 @@ export default function TTSStudio() {
       fd.append("file", new File([wav], "pron.wav", { type: "audio/wav" }));
       if (pronWord.trim()) fd.append("word", pronWord.trim());
 
-      const res = await fetch("/api/pronunciation/from-audio", { method: "POST", body: fd });
+      const res = await fetch("/api/pronunciation/from-audio", {
+        method: "POST",
+        headers: await authHeaders(),
+        body: fd,
+      });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error ?? "تعذّر تحليل التسجيل");
 
@@ -224,7 +302,7 @@ export default function TTSStudio() {
     try {
       const res = await fetch("/api/pronunciation", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({ word: pronWord.trim(), alias: pronAlias.trim() }),
       });
       const data = await res.json().catch(() => null);
@@ -312,6 +390,8 @@ export default function TTSStudio() {
 
   const [speed, setSpeed] = useState(1);
   const [stability, setStability] = useState(0.5);
+  // مع «تلقائي» غير الملموس: يُترك الثبات للخادم ليطبق ثبات الأسلوب المصنف
+  const [stabilityTouched, setStabilityTouched] = useState(false);
   const [format, setFormat] = useState<"mp3" | "wav">("mp3");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ url: string; blob: Blob; mock: boolean; ext: string; fellBack: boolean } | null>(null);
@@ -392,7 +472,7 @@ export default function TTSStudio() {
     try {
       const res = await fetch("/api/enhance", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({ text, dialect }),
       });
       const data = await res.json().catch(() => null);
@@ -443,11 +523,15 @@ export default function TTSStudio() {
           text,
           voiceId,
           speed,
-          stability,
+          // مع «تلقائي» بلا لمس للمنزلق: الخادم يطبق ثبات الأسلوب المصنف
+          stability:
+            expressive && perfStyle === "auto" && !stabilityTouched ? undefined : stability,
           format,
           expressive,
-          // إيقاف المحرك التعبيري يعطّل الأسلوب أيضاً — كي لا يعيد تفعيله في الخادم
+          // إيقاف المحرك التعبيري يعطّل الأسلوب والطبقات والموجه أيضاً
           styleId: expressive ? perfStyle : "",
+          layerIds: expressive ? layers : [],
+          directorNote: expressive ? directorNote.trim() : "",
           liveliness,
           takes,
         }),
@@ -541,7 +625,12 @@ export default function TTSStudio() {
               <>
                 {/* مكتبة أساليب الأداء */}
                 <div className="mt-4">
-                  <p className="mb-2 text-xs font-semibold">أسلوب الأداء</p>
+                  <p className="mb-2 text-xs font-semibold">
+                    أسلوب الأداء{" "}
+                    <span className="font-normal text-muted">
+                      — يوجه النص كله؛ بينما «وسوم داخل النص» أدناه توجه لحظة بعينها
+                    </span>
+                  </p>
                   <div className="flex flex-wrap gap-1.5">
                     <button
                       onClick={() => setPerfStyle("auto")}
@@ -573,7 +662,11 @@ export default function TTSStudio() {
                         {PERFORMANCE_STYLES.filter((s) => s.category === cat).map((s) => (
                           <button
                             key={s.id}
-                            onClick={() => setPerfStyle(s.id)}
+                            onClick={() => {
+                              setPerfStyle(s.id);
+                              // ثبات الأسلوب المضبوط مخبرياً ينعكس على المنزلق فوراً
+                              setStability(s.stability);
+                            }}
                             title={s.desc}
                             className={`rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
                               perfStyle === s.id
@@ -613,6 +706,117 @@ export default function TTSStudio() {
                       ))}
                     </div>
                   ))}
+                  {/* دلالات منطوقة + التلعثم — تعمل على النص العربي نفسه */}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] text-muted">🗣️ دلالات منطوقة:</span>
+                    {SPOKEN_CUES.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => insertTag(c.cue)}
+                        className="rounded-lg border border-border-soft px-2 py-1 text-xs text-muted transition-colors hover:border-primary/50 hover:text-body"
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                    <button
+                      onClick={applyStutter}
+                      title="حدد كلمة (أو ضع المؤشر عليها) ثم اضغط — تصير: أـ أـ أنا"
+                      className="rounded-lg border border-gold/50 px-2 py-1 text-xs font-semibold text-gold transition-colors hover:bg-gold/10"
+                    >
+                      😨 تلعثم الكلمة المحددة
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[10px] leading-relaxed text-muted">
+                    💡 الترقيم نوتتك الموسيقية: الفاصلة (،) وقفة قصيرة · النقاط (...) تردد ووقفة
+                    درامية · التعجب المتكرر (!!!) صراخ · والتشكيل يحسم النطق (عَلَم / عِلْم).
+                    وتذكّر: الوسوم تستجيب بقوة مع ثبات «مبدع» أو «طبيعي» — و«الرصين» يتجاهلها.
+                  </p>
+                </div>
+
+                {/* قاعدة الطبقات: حالة جسدية + بيئة صوتية فوق الأسلوب */}
+                <div className="mt-4 border-t border-border-soft pt-3">
+                  <p className="mb-1 text-xs font-semibold">
+                    طبقات الأداء{" "}
+                    <span className="font-normal text-muted">
+                      — تتراكب فوق الأسلوب: مشهد + حالة جسدية + بيئة معاً
+                    </span>
+                  </p>
+                  {LAYER_CATEGORIES.map((cat) => (
+                    <div key={cat.id} className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] text-muted">
+                        {cat.icon} {cat.name}:
+                      </span>
+                      {STYLE_LAYERS.filter((l) => l.category === cat.id).map((l) => (
+                        <button
+                          key={l.id}
+                          onClick={() => toggleLayer(l.id)}
+                          className={`rounded-lg border px-2 py-1 text-xs transition-colors ${
+                            layers.includes(l.id)
+                              ? "border-primary bg-primary/15 font-semibold text-primary"
+                              : "border-border-soft text-muted hover:border-primary/50 hover:text-body"
+                          }`}
+                        >
+                          {l.icon} {l.name}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+
+                {/* موجه المخرج الحر */}
+                <div className="mt-4 border-t border-border-soft pt-3">
+                  <p className="mb-1.5 text-xs font-semibold">
+                    🎩 موجه المخرج{" "}
+                    <span className="font-normal text-muted">
+                      — للمحترفين: توجيه إضافي حر بأي لغة يُضاف فوق كل ما سبق
+                    </span>
+                  </p>
+                  <input
+                    value={directorNote}
+                    onChange={(e) => setDirectorNote(e.target.value)}
+                    maxLength={200}
+                    placeholder="مثال: like a 1950s Cairo radio host — أو: بأسلوب حكواتي شامي عجوز"
+                    className="w-full rounded-lg border border-border-soft bg-surface px-3 py-2 text-xs outline-none transition-colors focus:border-primary"
+                  />
+                </div>
+
+                {/* وصفات المخرج المحفوظة */}
+                <div className="mt-4 border-t border-border-soft pt-3">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs font-semibold">📋 وصفاتي:</span>
+                    {recipes.map((r) => (
+                      <span key={r.name} className="inline-flex items-center overflow-hidden rounded-lg border border-border-soft">
+                        <button
+                          onClick={() => applyRecipe(r)}
+                          title={`أسلوب + ${r.layers.length} طبقة${r.note ? " + موجه" : ""}`}
+                          className="px-2 py-1 text-xs text-muted transition-colors hover:bg-primary/10 hover:text-primary"
+                        >
+                          {r.name}
+                        </button>
+                        <button
+                          onClick={() => deleteRecipe(r.name)}
+                          className="border-s border-border-soft px-1.5 py-1 text-[10px] text-muted hover:text-primary"
+                          title="حذف الوصفة"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                    <input
+                      value={recipeName}
+                      onChange={(e) => setRecipeName(e.target.value)}
+                      maxLength={30}
+                      placeholder="اسم للتركيبة الحالية..."
+                      className="w-36 rounded-lg border border-border-soft bg-surface px-2 py-1 text-xs outline-none focus:border-primary"
+                    />
+                    <button
+                      onClick={saveRecipe}
+                      disabled={!recipeName.trim()}
+                      className="rounded-lg border border-primary px-2 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 disabled:opacity-40"
+                    >
+                      💾 احفظ
+                    </button>
+                  </div>
                 </div>
               </>
             )}
@@ -1187,7 +1391,10 @@ export default function TTSStudio() {
               max={1}
               step={0.05}
               value={stability}
-              onChange={(e) => setStability(Number(e.target.value))}
+              onChange={(e) => {
+                setStability(Number(e.target.value));
+                setStabilityTouched(true);
+              }}
               className="w-full"
             />
             <p className="mt-1 text-xs text-muted">
