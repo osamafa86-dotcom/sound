@@ -21,11 +21,11 @@ export default function SiteBanner() {
   if (!status) return null;
 
   const notice = status.maintenance
-    ? { text: status.maintenanceMessage, tone: "border-red-500/40 bg-red-500/10 text-red-200" }
+    ? { text: status.maintenanceMessage, tone: "border-primary/40 bg-rose text-primary-strong" }
     : status.banner
-      ? { text: status.banner, tone: "border-primary/40 bg-primary/10 text-body" }
+      ? { text: status.banner, tone: "border-border-soft bg-surface-raised text-body" }
       : status.demoMode
-        ? { text: "الموقع يعمل حالياً بوضع العرض التجريبي — المخرجات تجريبية وليست بالمحركات الحقيقية", tone: "border-amber-500/40 bg-amber-500/10 text-amber-200" }
+        ? { text: "الموقع يعمل حالياً بوضع العرض التجريبي — المخرجات تجريبية وليست بالمحركات الحقيقية", tone: "border-gold/40 bg-gold/10 text-amber-900" }
         : null;
 
   if (!notice) return null;

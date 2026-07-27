@@ -93,7 +93,7 @@ export default function Recorder({ onAudio }: { onAudio: (blob: Blob) => void })
       </div>
 
       {error && (
-        <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p>
+        <p className="rounded-xl border border-primary/40 bg-rose px-4 py-3 text-sm text-primary-strong">{error}</p>
       )}
 
       {previewUrl && !recording && (

@@ -105,7 +105,7 @@ export default function SaveToLibrary(props: Props) {
       >
         {state === "saving" ? "جارٍ الحفظ..." : "💾 احفظ في مكتبتي"}
       </button>
-      {error && <p className="mt-2 text-xs text-red-300">{error}</p>}
+      {error && <p className="mt-2 text-xs text-primary-strong">{error}</p>}
     </div>
   );
 }

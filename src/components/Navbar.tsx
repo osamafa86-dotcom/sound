@@ -61,13 +61,15 @@ export default function Navbar() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border-soft bg-surface/85 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-border-soft bg-surface-card/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-        <Link href="/" className="flex items-center gap-2" onClick={() => setOpen(false)}>
-          <span aria-hidden className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-primary to-accent text-lg font-bold text-white">
-            ♪
+        <Link href="/" className="flex items-center gap-2.5" onClick={() => setOpen(false)}>
+          <span aria-hidden className="flex h-9 w-9 items-center justify-center gap-[3px] rounded-xl bg-primary">
+            {[11, 20, 14, 22].map((h, i) => (
+              <span key={i} className="w-[3px] rounded-full bg-white" style={{ height: h }} />
+            ))}
           </span>
-          <span className="text-xl font-bold">
+          <span className="font-heading text-xl font-extrabold">
             مقام<span className="text-primary">.</span>
           </span>
         </Link>
@@ -79,7 +81,7 @@ export default function Navbar() {
               href={link.href}
               className={`rounded-lg px-3 py-2 text-sm transition-colors ${
                 isActive(link.href)
-                  ? "bg-surface-card font-semibold text-body"
+                  ? "bg-rose font-bold text-primary"
                   : "text-muted hover:text-body"
               }`}
             >
@@ -104,7 +106,7 @@ export default function Navbar() {
           ) : (
             <Link
               href="/login"
-              className="hidden rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-strong sm:block"
+              className="hidden rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-md shadow-primary/25 transition-colors hover:bg-primary-strong sm:block"
             >
               دخول
             </Link>
@@ -122,7 +124,7 @@ export default function Navbar() {
 
       {/* قائمة الموبايل */}
       {open && (
-        <nav className="border-t border-border-soft bg-surface px-4 py-3 md:hidden">
+        <nav className="border-t border-border-soft bg-surface-card px-4 py-3 md:hidden">
           <div className="flex flex-col gap-1">
             {visibleLinks.map((link) => (
               <Link
@@ -131,7 +133,7 @@ export default function Navbar() {
                 onClick={() => setOpen(false)}
                 className={`rounded-xl px-4 py-3 transition-colors ${
                   isActive(link.href)
-                    ? "bg-surface-card font-semibold text-body"
+                    ? "bg-rose font-bold text-primary"
                     : "text-muted hover:text-body"
                 }`}
               >
