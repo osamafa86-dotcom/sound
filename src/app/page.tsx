@@ -223,6 +223,31 @@ export default function Home() {
           </Link>
         </section>
 
+        {/* اكتشف المزيد */}
+        <section className="pb-16">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { href: "/gallery", icon: "🖼️", title: "معرض الإبداعات", text: "استمع لأجمل ما ولّده المجتمع من أصوات وأغانٍ." },
+              { href: "/voices", icon: "🎙️", title: "معرض الأصوات", text: "كتالوج الأصوات كاملاً — استمع وقارن واختر صوتك." },
+              { href: "/prompts", icon: "✨", title: "وكيل البرومبتات", text: "مختبر يصوغ ويختبر برومبتات موسيقية احترافية." },
+              { href: "/brain", icon: "🧠", title: "عقل المنصة", text: "ذاكرة نطق تتعلم من تصحيحاتك وتتحسن مع الوقت." },
+            ].map((s) => (
+              <Link
+                key={s.href}
+                href={s.href}
+                className="group rounded-2xl border border-border-soft bg-surface-card p-5 transition-all hover:-translate-y-1 hover:border-primary/50"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="grid h-11 w-11 place-items-center rounded-xl bg-rose text-xl">{s.icon}</span>
+                  <span className="text-primary opacity-0 transition-opacity group-hover:opacity-100">←</span>
+                </div>
+                <h3 className="mt-3 font-bold">{s.title}</h3>
+                <p className="mt-1 text-xs leading-relaxed text-muted">{s.text}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+
         {/* كيف يعمل */}
         <section className="pb-16 pt-4">
           <div className="mb-12 flex flex-col items-center gap-3">

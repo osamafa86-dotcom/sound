@@ -23,10 +23,14 @@ export default function Footer() {
           <nav className="flex flex-col gap-2 text-sm">
             <Link href="/tts" className="text-cream/75 transition-colors hover:text-cream">استوديو النص إلى صوت</Link>
             <Link href="/songs" className="text-cream/75 transition-colors hover:text-cream">استوديو الأغاني والمقامات</Link>
+            <Link href="/voices" className="text-cream/75 transition-colors hover:text-cream">معرض الأصوات</Link>
+            <Link href="/gallery" className="text-cream/75 transition-colors hover:text-cream">معرض الإبداعات</Link>
             <Link href="/drama" className="text-cream/75 transition-colors hover:text-cream">الاستوديو الدرامي</Link>
             <Link href="/podcast" className="text-cream/75 transition-colors hover:text-cream">البودكاست الذكي</Link>
+            <Link href="/prompts" className="text-cream/75 transition-colors hover:text-cream">وكيل البرومبتات</Link>
             <Link href="/library" className="text-cream/75 transition-colors hover:text-cream">مكتبتي</Link>
             <Link href="/pricing" className="text-cream/75 transition-colors hover:text-cream">الأسعار</Link>
+            <Link href="/support" className="text-cream/75 transition-colors hover:text-cream">الدعم والتواصل</Link>
           </nav>
         </div>
         <div>
