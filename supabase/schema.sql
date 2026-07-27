@@ -498,3 +498,70 @@ create index if not exists support_tickets_status_idx
   on public.support_tickets (status, created_at desc);
 
 alter table public.support_tickets enable row level security;
+
+-- ------------------------------------------------------------
+-- 15) بوابة الدفع — الاشتراكات وحزم النقاط (Stripe + عملات رقمية)
+-- ------------------------------------------------------------
+alter table public.profiles
+  add column if not exists plan text not null default 'free',
+  add column if not exists monthly_credits integer not null default 500,
+  add column if not exists stripe_customer_id text,
+  add column if not exists stripe_subscription_id text;
+
+create index if not exists profiles_stripe_sub_idx
+  on public.profiles (stripe_subscription_id)
+  where stripe_subscription_id is not null;
+
+-- سجل المدفوعات: مرجع المزود فريد — إعادة إرسال الويب هوك لا تمنح مرتين
+create table if not exists public.payments (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  provider text not null check (provider in ('stripe', 'coinbase')),
+  kind text not null check (kind in ('subscription', 'renewal', 'pack')),
+  plan_id text,
+  credits_granted integer not null default 0,
+  amount_usd numeric,
+  provider_ref text not null unique,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists payments_user_idx on public.payments (user_id, created_at desc);
+
+-- تُدار عبر الخادم فقط — لا سياسات وصول للعملاء
+alter table public.payments enable row level security;
+
+-- ترقية دالة الخصم: التجديد الشهري يحترم باقة المشترك المدفوعة
+-- (monthly_credits من الملف نفسه تتقدم على الحد المُمرَّر عند كونها أعلى)
+create or replace function public.consume_credits(
+  p_user_id uuid,
+  p_cost int,
+  p_monthly int
+) returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  cur_month text := to_char(now(), 'YYYY-MM');
+  bal int;
+begin
+  update public.profiles
+     set credits = greatest(credits, greatest(p_monthly, monthly_credits)),
+         credits_month = cur_month
+   where id = p_user_id
+     and credits_month is distinct from cur_month;
+
+  update public.profiles
+     set credits = credits - p_cost
+   where id = p_user_id
+     and credits >= p_cost
+   returning credits into bal;
+
+  if bal is null then
+    return -1;
+  end if;
+  return bal;
+end;
+$$;
+
+revoke all on function public.consume_credits(uuid, int, int) from public, anon, authenticated;

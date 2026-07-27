@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { CREDIT_COSTS, FREE_MONTHLY_CREDITS } from "@/lib/credits";
+import { CreditPacksSection, PlanCheckoutButton } from "@/components/CheckoutSection";
+import { PAID_PLANS } from "@/lib/payments/plans";
 
 export const metadata = { title: "الأسعار" };
 
@@ -20,12 +22,12 @@ const plans = [
       "مكتبة خاصة + النشر في المعرض",
       "عقل المنصة يتعلم ذوقك",
     ],
-    cta: { label: "ابدأ مجاناً الآن", href: "/login?mode=signup" },
+    planId: null,
     highlight: false,
   },
   {
     name: "المبدع",
-    price: "قريباً",
+    price: `$${PAID_PLANS.creator.usd}`,
     period: "شهرياً",
     credits: "٥٬٠٠٠ نقطة شهرياً",
     features: [
@@ -35,12 +37,12 @@ const plans = [
       "أغانٍ كاملة ومسلسلات صوتية بلا قلق",
       "دعم مباشر بأولوية",
     ],
-    cta: { label: "اطلب ترقية مبكرة", href: "/support" },
+    planId: "creator",
     highlight: true,
   },
   {
     name: "الاستوديو",
-    price: "قريباً",
+    price: `$${PAID_PLANS.studio.usd}`,
     period: "شهرياً",
     credits: "٢٠٬٠٠٠ نقطة شهرياً",
     features: [
@@ -50,7 +52,7 @@ const plans = [
       "وصول API خاص (عند التوفر)",
       "قناة دعم مخصصة",
     ],
-    cta: { label: "تواصل معنا", href: "/support" },
+    planId: "studio",
     highlight: false,
   },
 ];
@@ -109,19 +111,22 @@ export default function Pricing() {
                 </li>
               ))}
             </ul>
-            <Link
-              href={p.cta.href}
-              className={`mt-8 block w-full rounded-xl py-3 text-center font-semibold transition-colors ${
-                p.highlight
-                  ? "bg-primary text-white hover:bg-primary-strong"
-                  : "border border-border-soft hover:border-primary"
-              }`}
-            >
-              {p.cta.label}
-            </Link>
+            {p.planId ? (
+              <PlanCheckoutButton planId={p.planId} highlight={p.highlight} />
+            ) : (
+              <Link
+                href="/login?mode=signup"
+                className="mt-8 block w-full rounded-xl border border-border-soft py-3 text-center font-semibold transition-colors hover:border-primary"
+              >
+                ابدأ مجاناً الآن
+              </Link>
+            )}
           </div>
         ))}
       </div>
+
+      {/* حزم النقاط — تظهر تلقائياً عند تفعيل أي بوابة دفع */}
+      <CreditPacksSection />
 
       {/* جدول التكلفة — من نفس المصدر الذي يخصم به الخادم فعلياً */}
       <div className="mx-auto mt-14 max-w-2xl">
