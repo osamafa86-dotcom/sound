@@ -91,7 +91,7 @@ export default function DramaStudio() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
       <h1 className="text-3xl font-extrabold md:text-4xl">
-        🎭 الاستوديو <span className="text-gradient">الدرامي</span>
+        الاستوديو <span className="text-gradient">الدرامي</span>
       </h1>
       <WaveLine className="mt-3" />
       <p className="mt-2 max-w-2xl leading-relaxed text-muted">
