@@ -18,6 +18,7 @@ const groups: { label: string | null; items: { href: string; label: string; icon
       { href: "/songs", label: "استوديو الأغاني", icon: "🎼" },
       { href: "/drama", label: "الاستوديو الدرامي", icon: "🎭" },
       { href: "/podcast", label: "البودكاست", icon: "🎧" },
+      { href: "/voice", label: "معمل الصوت", icon: "🔬" },
     ],
   },
   {

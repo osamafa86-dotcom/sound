@@ -10,9 +10,10 @@ const API_BASE = "https://api.elevenlabs.io/v1";
 const DEFAULT_PREVIEW_TEXT =
   "أهلاً وسهلاً فيكم، هلّق رح نجرّب هالصوت ونشوف كيف بيطلع. الحكي العربي إلو نكهة تانية لما يكون طبيعي وقريب من القلب، وهيك منقدر نحكم عليه منيح.";
 
-/** الخطوة 1: توليد معاينات صوتية من وصف نصي */
+/** الخطوة 1: توليد معاينات صوتية من وصف نصي — النداء المكلف، فهنا يقع الخصم */
 export async function POST(req: NextRequest) {
-  const limit = await checkLimit(req, "voiceDesign");
+  const user = await getUserFromRequest(req);
+  const limit = await checkLimit(req, "voiceDesign", user?.id ?? null);
   if (!limit.allowed) return limitResponse(limit);
 
   const key = process.env.ELEVENLABS_API_KEY;
@@ -74,7 +75,8 @@ export async function PUT(req: NextRequest) {
   if (getSupabaseAdmin() && !user) {
     return NextResponse.json({ error: "سجّل الدخول لحفظ الصوت المصمم" }, { status: 401 });
   }
-  const limit = await checkLimit(req, "voiceDesign", user?.id ?? null);
+  // الحفظ نداء رخيص — نطاق «حفظ» بلا كلفة كي لا يُخصم التصميم مرتين
+  const limit = await checkLimit(req, "save", user?.id ?? null);
   if (!limit.allowed) return limitResponse(limit);
 
   const key = process.env.ELEVENLABS_API_KEY;
