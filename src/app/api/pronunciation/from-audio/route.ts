@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
-import { getUserFromRequest } from "@/lib/serverAuth";
 
 const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
@@ -29,9 +28,7 @@ const RESULT_SCHEMA = {
 };
 
 export async function POST(req: NextRequest) {
-  // تحليل صوتي متعدد الوسائط = كلفة تفريغ فعلية — نطاق stt بهوية المستخدم
-  const user = await getUserFromRequest(req);
-  const limit = await checkLimit(req, "stt", user?.id ?? null);
+  const limit = await checkLimit(req, "pronunciation");
   if (!limit.allowed) return limitResponse(limit);
 
   const key = process.env.GEMINI_API_KEY;

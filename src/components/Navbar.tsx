@@ -3,39 +3,57 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import {
+  AudioLines,
+  Brain,
+  CreditCard,
+  Drama,
+  Home,
+  Images,
+  Library,
+  LifeBuoy,
+  LogOut,
+  Menu,
+  Mic,
+  Music,
+  Podcast,
+  ShieldCheck,
+  Sparkles,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 /** مجموعات القائمة الجانبية — قابلة للنمو بلا ازدحام بفضل التمرير */
-const groups: { label: string | null; items: { href: string; label: string; icon: string }[] }[] = [
+const groups: { label: string | null; items: { href: string; label: string; icon: LucideIcon }[] }[] = [
   {
     label: null,
-    items: [{ href: "/", label: "الرئيسية", icon: "🏠" }],
+    items: [{ href: "/", label: "الرئيسية", icon: Home }],
   },
   {
     label: "الاستوديوهات",
     items: [
-      { href: "/tts", label: "النص إلى صوت", icon: "🎙️" },
-      { href: "/songs", label: "استوديو الأغاني", icon: "🎼" },
-      { href: "/drama", label: "الاستوديو الدرامي", icon: "🎭" },
-      { href: "/podcast", label: "البودكاست", icon: "🎧" },
-      { href: "/voice", label: "معمل الصوت", icon: "🔬" },
+      { href: "/tts", label: "النص إلى صوت", icon: Mic },
+      { href: "/songs", label: "استوديو الأغاني", icon: Music },
+      { href: "/drama", label: "الاستوديو الدرامي", icon: Drama },
+      { href: "/podcast", label: "البودكاست", icon: Podcast },
     ],
   },
   {
     label: "الاستكشاف",
     items: [
-      { href: "/voices", label: "معرض الأصوات", icon: "🎤" },
-      { href: "/gallery", label: "معرض الإبداعات", icon: "🖼️" },
-      { href: "/prompts", label: "وكيل البرومبتات", icon: "✨" },
-      { href: "/brain", label: "عقل المنصة", icon: "🧠" },
+      { href: "/voices", label: "معرض الأصوات", icon: AudioLines },
+      { href: "/gallery", label: "معرض الإبداعات", icon: Images },
+      { href: "/prompts", label: "وكيل البرومبتات", icon: Sparkles },
+      { href: "/brain", label: "عقل المنصة", icon: Brain },
     ],
   },
   {
     label: "حسابي",
     items: [
-      { href: "/library", label: "مكتبتي", icon: "📚" },
-      { href: "/pricing", label: "الأسعار", icon: "💳" },
-      { href: "/support", label: "الدعم والتواصل", icon: "🛟" },
+      { href: "/library", label: "مكتبتي", icon: Library },
+      { href: "/pricing", label: "الأسعار", icon: CreditCard },
+      { href: "/support", label: "الدعم والتواصل", icon: LifeBuoy },
     ],
   },
 ];
@@ -93,7 +111,7 @@ export default function Navbar() {
 
   const visibleGroups =
     isOwner && email
-      ? [...groups, { label: "الإدارة", items: [{ href: "/admin", label: "لوحة النظام", icon: "🛡️" }] }]
+      ? [...groups, { label: "الإدارة", items: [{ href: "/admin", label: "لوحة النظام", icon: ShieldCheck }] }]
       : groups;
 
   async function signOut() {
@@ -117,24 +135,29 @@ export default function Navbar() {
             </p>
           )}
           <div className="flex flex-col gap-0.5">
-            {g.items.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setOpen(false)}
-                className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-colors ${
-                  isActive(link.href)
-                    ? "bg-rose font-bold text-primary"
-                    : "text-muted hover:bg-surface-raised hover:text-body"
-                }`}
-              >
-                <span className="text-base leading-none">{link.icon}</span>
-                {link.label}
-                {isActive(link.href) && (
-                  <span className="ms-auto h-5 w-1 rounded-full bg-primary" />
-                )}
-              </Link>
-            ))}
+            {g.items.map((link) => {
+              const Icon = link.icon;
+              const active = isActive(link.href);
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setOpen(false)}
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors ${
+                    active
+                      ? "bg-rose font-bold text-primary"
+                      : "text-muted hover:bg-surface-raised hover:text-body"
+                  }`}
+                >
+                  <Icon
+                    className={`h-[18px] w-[18px] shrink-0 ${active ? "text-primary" : "text-faint"}`}
+                    strokeWidth={active ? 2.1 : 1.8}
+                  />
+                  {link.label}
+                  {active && <span className="ms-auto h-5 w-1 rounded-full bg-primary" />}
+                </Link>
+              );
+            })}
           </div>
         </div>
       ))}
@@ -150,8 +173,9 @@ export default function Navbar() {
           </p>
           <button
             onClick={signOut}
-            className="rounded-xl border border-border-strong px-3 py-2 text-sm font-semibold transition-colors hover:border-primary hover:text-primary"
+            className="flex items-center justify-center gap-2 rounded-xl border border-border-strong px-3 py-2 text-sm font-semibold transition-colors hover:border-primary hover:text-primary"
           >
+            <LogOut className="h-4 w-4" strokeWidth={1.8} />
             خروج
           </button>
         </div>
@@ -193,9 +217,9 @@ export default function Navbar() {
           onClick={() => setOpen(!open)}
           aria-label="القائمة"
           aria-expanded={open}
-          className="grid h-10 w-10 place-items-center rounded-xl border border-border-soft text-xl"
+          className="grid h-10 w-10 place-items-center rounded-xl border border-border-soft"
         >
-          {open ? "✕" : "☰"}
+          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </header>
 
@@ -219,7 +243,7 @@ export default function Navbar() {
                 aria-label="إغلاق"
                 className="grid h-9 w-9 place-items-center rounded-lg border border-border-soft"
               >
-                ✕
+                <X className="h-4 w-4" />
               </button>
             </div>
             {navList}

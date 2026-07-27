@@ -148,7 +148,7 @@ export default function PodcastStudio() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
       <h1 className="text-3xl font-extrabold md:text-4xl">
-        🎙️ البودكاست <span className="text-gradient">الذكي</span>
+        البودكاست <span className="text-gradient">الذكي</span>
       </h1>
       <WaveLine className="mt-3" />
       <p className="mt-2 max-w-2xl leading-relaxed text-muted">

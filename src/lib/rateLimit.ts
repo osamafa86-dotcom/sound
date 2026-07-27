@@ -49,10 +49,6 @@ export const LIMITS = {
   promptTest: { perVisitor: envInt("RATE_LIMIT_PROMPT_TEST", 6), global: 60, windowSec: 3600 },
   support: { perVisitor: envInt("RATE_LIMIT_SUPPORT", 5), global: 100, windowSec: 3600 },
   pay: { perVisitor: envInt("RATE_LIMIT_PAY", 10), global: 200, windowSec: 3600 },
-  // الحفظ في المكتبة رخيص (تخزين فقط) — نطاق مستقل كي لا يستهلك حصة التوليد
-  save: { perVisitor: envInt("RATE_LIMIT_SAVE", 60), global: 1000, windowSec: 3600 },
-  // عينات المعرض تُولَّد مرة لكل صوت ثم تُخزَّن — الحد للتوليد الأول فقط
-  sample: { perVisitor: envInt("RATE_LIMIT_SAMPLE", 40), global: 300, windowSec: 3600 },
 } satisfies Record<string, LimitRule>;
 
 export type LimitScope = keyof typeof LIMITS;
