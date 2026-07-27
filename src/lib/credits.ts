@@ -72,15 +72,34 @@ export async function consumeCredits(userId: string, scope: LimitScope): Promise
   return { allowed: true, balance, cost };
 }
 
-/** قراءة رصيد مستخدم — للعرض في المكتبة وصفحة الأسعار */
-export async function getCreditBalance(userId: string): Promise<number | null> {
+export type CreditProfile = {
+  balance: number;
+  /** free | creator | studio */
+  plan: string;
+  /** الباقة الشهرية الفعلية لهذا المستخدم (تعكس اشتراكه المدفوع) */
+  monthly: number;
+};
+
+/** قراءة رصيد وباقة مستخدم — للعرض في المكتبة وصفحة الأسعار */
+export async function getCreditProfile(userId: string): Promise<CreditProfile | null> {
   const admin = getSupabaseAdmin();
   if (!admin) return null;
-  const { data, error } = await admin
+
+  // أعمدة الباقات تأتي مع ترحيل الدفع — نتراجع للرصيد وحده قبل تشغيله
+  const full = await admin
     .from("profiles")
-    .select("credits")
+    .select("credits, plan, monthly_credits")
     .eq("id", userId)
     .single();
-  if (error || !data) return null;
-  return data.credits;
+  if (!full.error && full.data) {
+    return {
+      balance: full.data.credits,
+      plan: full.data.plan ?? "free",
+      monthly: full.data.monthly_credits ?? FREE_MONTHLY_CREDITS,
+    };
+  }
+
+  const basic = await admin.from("profiles").select("credits").eq("id", userId).single();
+  if (basic.error || !basic.data) return null;
+  return { balance: basic.data.credits, plan: "free", monthly: FREE_MONTHLY_CREDITS };
 }

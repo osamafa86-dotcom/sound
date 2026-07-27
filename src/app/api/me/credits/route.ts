@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CREDIT_COSTS, FREE_MONTHLY_CREDITS, getCreditBalance } from "@/lib/credits";
+import { CREDIT_COSTS, FREE_MONTHLY_CREDITS, getCreditProfile } from "@/lib/credits";
 import { getUserFromRequest } from "@/lib/serverAuth";
 import { createClient } from "@/lib/supabase/server";
 
@@ -22,11 +22,13 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const balance = await getCreditBalance(user.id);
+  const profile = await getCreditProfile(user.id);
   return NextResponse.json({
     signedIn: true,
-    balance,
-    monthly: FREE_MONTHLY_CREDITS,
+    balance: profile?.balance ?? null,
+    // الباقة الفعلية للمستخدم — المشترك المدفوع يرى حده الحقيقي لا المجاني
+    plan: profile?.plan ?? "free",
+    monthly: profile?.monthly ?? FREE_MONTHLY_CREDITS,
     costs: CREDIT_COSTS,
   });
 }
