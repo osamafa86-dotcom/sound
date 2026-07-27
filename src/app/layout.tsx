@@ -17,7 +17,6 @@ const tajawal = Tajawal({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://sound-five-inky.vercel.app"),
   title: {
     default: "مقام — استوديو الصوتيات بالذكاء الاصطناعي",
     template: "%s | مقام",
@@ -44,11 +43,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ar" dir="rtl" className={`${alexandria.variable} ${tajawal.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-surface text-body">
-        <SiteBanner />
+      <body className="min-h-full bg-surface text-body">
         <Navbar />
-        <main className="flex-1">{children}</main>
-        <Footer />
+        <div className="flex min-h-screen flex-col lg:ms-[264px]">
+          <SiteBanner />
+          <main className="flex-1">{children}</main>
+          <Footer />
+        </div>
       </body>
     </html>
   );

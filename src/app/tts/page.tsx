@@ -203,11 +203,7 @@ export default function TTSStudio() {
       fd.append("file", new File([wav], "pron.wav", { type: "audio/wav" }));
       if (pronWord.trim()) fd.append("word", pronWord.trim());
 
-      const res = await fetch("/api/pronunciation/from-audio", {
-        method: "POST",
-        headers: await authHeaders(),
-        body: fd,
-      });
+      const res = await fetch("/api/pronunciation/from-audio", { method: "POST", body: fd });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error ?? "تعذّر تحليل التسجيل");
 
@@ -228,7 +224,7 @@ export default function TTSStudio() {
     try {
       const res = await fetch("/api/pronunciation", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ word: pronWord.trim(), alias: pronAlias.trim() }),
       });
       const data = await res.json().catch(() => null);
@@ -396,7 +392,7 @@ export default function TTSStudio() {
     try {
       const res = await fetch("/api/enhance", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, dialect }),
       });
       const data = await res.json().catch(() => null);
