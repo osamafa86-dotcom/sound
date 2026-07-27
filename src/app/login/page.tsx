@@ -145,7 +145,7 @@ function LoginForm() {
               type="button"
               onClick={resendConfirmation}
               disabled={resending}
-              className="mt-2 rounded-lg border border-gold px-3 py-1.5 text-xs font-semibold text-gold transition-colors hover:bg-gold/10 disabled:opacity-50"
+              className="mt-2 rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-rose disabled:opacity-50"
             >
               {resending ? "جارٍ الإرسال..." : "📧 أعد إرسال رابط التأكيد"}
             </button>

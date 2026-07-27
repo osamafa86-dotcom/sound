@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { authHeaders } from "@/lib/supabase";
+import WaveLine from "@/components/WaveLine";
 
 const TOPICS = ["مشكلة تقنية", "ترقية الباقة", "اقتراح ميزة", "استفسار آخر"];
 
@@ -56,9 +57,10 @@ export default function SupportPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12">
-      <h1 className="text-3xl font-bold">
+      <h1 className="text-3xl font-extrabold md:text-4xl">
         الدعم و<span className="text-gradient">التواصل</span>
       </h1>
+      <WaveLine className="mt-3" />
       <p className="mt-2 leading-relaxed text-muted">
         مشكلة تقنية؟ تريد ترقية باقتك؟ عندك فكرة تطوّر المنصة؟ اكتب لنا وسنرد على بريدك.
       </p>
@@ -109,7 +111,7 @@ export default function SupportPage() {
         </div>
 
         {error && (
-          <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <p className="rounded-xl border border-primary/40 bg-rose px-4 py-3 text-sm text-primary-strong">
             {error}
           </p>
         )}

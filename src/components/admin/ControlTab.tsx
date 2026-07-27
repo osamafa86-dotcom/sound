@@ -118,7 +118,7 @@ export default function ControlTab({
               <label
                 key={r.scope}
                 className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm transition-colors ${
-                  disabled ? "border-red-500/40 bg-red-500/10" : "border-border-soft hover:border-primary/50"
+                  disabled ? "border-primary/40 bg-rose" : "border-border-soft hover:border-primary/50"
                 }`}
               >
                 <span>
@@ -145,7 +145,7 @@ export default function ControlTab({
         >
           {saving ? "جارٍ الحفظ…" : "احفظ وطبّق الآن"}
         </button>
-        {dirty && <span className="text-xs text-amber-300">لديك تغييرات غير محفوظة</span>}
+        {dirty && <span className="text-xs text-amber-700">لديك تغييرات غير محفوظة</span>}
         {message && <span className="text-sm text-muted">{message}</span>}
         {saved.updatedAt && (
           <span className="text-xs text-muted">

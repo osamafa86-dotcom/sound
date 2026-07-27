@@ -670,7 +670,7 @@ export default function TTSStudio() {
                 <button
                   onClick={runAdvisor}
                   disabled={advising || !text.trim()}
-                  className="rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-surface transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {advising ? "جارٍ التحليل..." : "✨ حلّل وشكّل النص"}
                 </button>
@@ -867,7 +867,7 @@ export default function TTSStudio() {
                 <button
                   onClick={submitClone}
                   disabled={cloning || !cloneName.trim() || !cloneFile || !consent}
-                  className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-surface transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {cloning ? "جارٍ الاستنساخ..." : "🧬 استنسخ الصوت"}
                 </button>
@@ -995,7 +995,7 @@ export default function TTSStudio() {
           </div>
 
           {/* تصميم صوت من وصف */}
-          <div className="rounded-xl border border-gold/30 bg-gold/5 p-4">
+          <div className="rounded-xl border border-gold/40 bg-gold/10 p-4">
             <button
               onClick={() => setDesignOpen(!designOpen)}
               className="flex w-full items-center justify-between text-sm font-bold"
@@ -1017,7 +1017,7 @@ export default function TTSStudio() {
                   maxLength={800}
                   rows={3}
                   placeholder="مثال: امرأة فلسطينية في الثلاثينات من نابلس، صوت دافئ وحنون بلهجة شامية، نبرة هادئة مناسبة لسرد القصص"
-                  className="resize-y rounded-lg border border-border-soft bg-surface px-3 py-2 text-sm leading-relaxed outline-none focus:border-gold"
+                  className="resize-y rounded-lg border border-border-soft bg-surface px-3 py-2 text-sm leading-relaxed outline-none focus:border-primary"
                 />
 
                 <button
@@ -1041,7 +1041,7 @@ export default function TTSStudio() {
                       onChange={(e) => setDesignName(e.target.value)}
                       maxLength={60}
                       placeholder="اسم الصوت... مثال: نور الفلسطينية"
-                      className="rounded-lg border border-border-soft bg-surface px-3 py-2 text-sm outline-none focus:border-gold"
+                      className="rounded-lg border border-border-soft bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
                     />
                     <p className="text-xs text-muted">استمع للثلاثة واحفظ الأفضل:</p>
                     {previews.map((p, i) => (

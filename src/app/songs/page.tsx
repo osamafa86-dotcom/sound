@@ -22,6 +22,7 @@ import {
   type SongSection,
 } from "@/lib/songSections";
 import type { AssistMode, AssistResult } from "@/lib/assistant/types";
+import WaveLine from "@/components/WaveLine";
 
 const STEPS = ["الكلمات", "المقام والأسلوب", "التوليد"] as const;
 
@@ -678,7 +679,7 @@ export default function SongsStudio() {
                     // لهجة الأداء الغنائي تتبع لهجة الكتابة حتى يغيّرها المستخدم بنفسه
                     setDeliveryDialectId(e.target.value);
                   }}
-                  className="rounded-xl border border-border-soft bg-surface p-3 text-sm outline-none transition-colors focus:border-gold"
+                  className="rounded-xl border border-border-soft bg-surface p-3 text-sm outline-none transition-colors focus:border-primary"
                 >
                   {DIALECTS.map((d) => (
                     <option key={d.id} value={d.id}>
@@ -690,7 +691,7 @@ export default function SongsStudio() {
                   value={lyricForm}
                   onChange={(e) => setLyricForm(e.target.value)}
                   title="قالب الكتابة الشعرية — بنية النص بغض النظر عن اللحن"
-                  className="rounded-xl border border-border-soft bg-surface p-3 text-sm outline-none transition-colors focus:border-gold"
+                  className="rounded-xl border border-border-soft bg-surface p-3 text-sm outline-none transition-colors focus:border-primary"
                 >
                   {LYRIC_FORMS.map((f) => (
                     <option key={f.id} value={f.id}>
@@ -833,7 +834,7 @@ export default function SongsStudio() {
                         <select
                           value={s.kind}
                           onChange={(e) => updateSection(i, { kind: e.target.value as SectionKind })}
-                          className="rounded-lg border border-border-soft bg-surface-raised px-2 py-1.5 text-sm font-semibold outline-none focus:border-gold"
+                          className="rounded-lg border border-border-soft bg-surface-raised px-2 py-1.5 text-sm font-semibold outline-none focus:border-primary"
                         >
                           {(Object.keys(SECTION_LABELS) as SectionKind[]).map((k) => (
                             <option key={k} value={k}>
@@ -856,7 +857,7 @@ export default function SongsStudio() {
                                 ),
                               })
                             }
-                            className="w-16 rounded-lg border border-border-soft bg-surface-raised px-2 py-1.5 text-center text-sm outline-none focus:border-gold"
+                            className="w-16 rounded-lg border border-border-soft bg-surface-raised px-2 py-1.5 text-center text-sm outline-none focus:border-primary"
                           />
                           ثانية
                         </label>
@@ -880,7 +881,7 @@ export default function SongsStudio() {
                           <button
                             onClick={() => applySections(sections.filter((_, j) => j !== i))}
                             title="حذف المقطع"
-                            className="rounded-lg border border-border-soft px-2 py-1 text-xs text-muted transition-colors hover:border-red-500/50 hover:text-red-400"
+                            className="rounded-lg border border-border-soft px-2 py-1 text-xs text-muted transition-colors hover:border-primary/60 hover:text-primary-strong"
                           >
                             ✕
                           </button>
@@ -892,7 +893,7 @@ export default function SongsStudio() {
                           onChange={(e) => updateSection(i, { lyrics: e.target.value })}
                           rows={Math.max(2, s.lyrics.split("\n").length)}
                           placeholder="أسطر هذا المقطع..."
-                          className="mt-3 w-full resize-y rounded-lg border border-border-soft bg-surface-raised p-3 text-sm leading-loose outline-none transition-colors focus:border-gold"
+                          className="mt-3 w-full resize-y rounded-lg border border-border-soft bg-surface-raised p-3 text-sm leading-loose outline-none transition-colors focus:border-primary"
                         />
                       ) : (
                         <p className="mt-2 text-xs text-muted">مقطع آلي بلا كلمات — تحدده المدة فقط.</p>
@@ -908,7 +909,7 @@ export default function SongsStudio() {
                       <button
                         key={k}
                         onClick={() => addSection(k)}
-                        className="rounded-full border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:border-gold hover:text-gold"
+                        className="rounded-full border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:border-primary hover:text-primary"
                       >
                         + {SECTION_LABELS[k]}
                       </button>
@@ -923,7 +924,7 @@ export default function SongsStudio() {
                   onChange={(e) => setLyrics(e.target.value)}
                   maxLength={3000}
                   placeholder={"اكتب كلمات أغنيتك هنا (فصحى أو لهجة)...\nأو استخدم المساعد بالأعلى ليكتبها لك من فكرة."}
-                  className="min-h-72 w-full resize-y rounded-2xl border border-border-soft bg-surface-card p-5 leading-loose outline-none transition-colors focus:border-gold"
+                  className="min-h-72 w-full resize-y rounded-2xl border border-border-soft bg-surface-card p-5 leading-loose outline-none transition-colors focus:border-primary"
                 />
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs text-muted">{lyrics.length} / 3000 حرف</span>
@@ -939,7 +940,7 @@ export default function SongsStudio() {
                     <button
                       onClick={() => applySections(parseSections(lyrics))}
                       disabled={!lyrics.trim()}
-                      className="rounded-lg border border-gold px-3 py-1.5 text-xs font-semibold text-gold transition-colors hover:bg-gold/10 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-rose disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       🧩 قسّم إلى مقاطع مُهيكلة
                     </button>
@@ -958,7 +959,7 @@ export default function SongsStudio() {
                   <ul className="mt-2 flex flex-col gap-1 text-xs">
                     {proofIssues.map((issue, i) => (
                       <li key={i} className="rounded-lg bg-surface px-3 py-1.5">
-                        <span className="text-red-300 line-through">{issue.original}</span>
+                        <span className="text-primary-strong line-through">{issue.original}</span>
                         {" ← "}
                         <span className="font-semibold text-accent">{issue.fixed}</span>
                         <span className="ms-2 text-muted">({issue.reason})</span>
@@ -1017,7 +1018,7 @@ export default function SongsStudio() {
                       title="اسمع سلّم المقام بأرباع نغماته"
                       className={`mt-3 rounded-full border px-3 py-1.5 text-xs transition-colors ${
                         playingMaqam === m.id
-                          ? "border-gold bg-gold/10 text-gold"
+                          ? "border-primary bg-rose text-primary"
                           : "border-border-soft text-muted hover:border-gold hover:text-gold"
                       }`}
                     >
@@ -1074,8 +1075,8 @@ export default function SongsStudio() {
                     onClick={() => pickAmbience(a.id)}
                     className={`rounded-full border px-4 py-2 text-sm transition-colors ${
                       ambience === a.id
-                        ? "border-gold bg-gold/10 text-gold"
-                        : "border-border-soft text-muted hover:border-gold/50 hover:text-body"
+                        ? "border-primary bg-rose text-primary"
+                        : "border-border-soft text-muted hover:border-primary/50 hover:text-body"
                     }`}
                   >
                     {a.name}
@@ -1356,7 +1357,7 @@ export default function SongsStudio() {
                   <button
                     onClick={() => generate()}
                     disabled={loading}
-                    className="rounded-xl border border-gold px-5 py-2.5 text-sm font-semibold text-gold transition-colors hover:bg-gold/10 disabled:opacity-50"
+                    className="rounded-xl border border-primary px-5 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-rose disabled:opacity-50"
                   >
                     🔁 ولّد نسخة أخرى بنفس الإعدادات
                   </button>
@@ -1385,7 +1386,7 @@ export default function SongsStudio() {
                       onClick={makeCover}
                       disabled={coverBusy}
                       title="غلاف ألبوم مولّد من عنوان الأغنية ومقامها"
-                      className="rounded-xl border border-border-soft px-5 py-2.5 text-sm font-semibold transition-colors hover:border-gold hover:text-gold disabled:opacity-50"
+                      className="rounded-xl border border-border-soft px-5 py-2.5 text-sm font-semibold transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
                     >
                       {coverBusy ? "جارٍ الرسم..." : coverUrl ? "🎨 غلاف آخر" : "🎨 غلاف الألبوم"}
                     </button>
@@ -1459,7 +1460,7 @@ export default function SongsStudio() {
                         onClick={() =>
                           generate({ regenerateSectionIndex: i, sourceSongId: result.elevenSongId })
                         }
-                        className="rounded-full border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:border-gold hover:text-gold disabled:opacity-50"
+                        className="rounded-full border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
                       >
                         {SECTION_LABELS[s.kind]} {i + 1}
                       </button>
@@ -1586,7 +1587,7 @@ export default function SongsStudio() {
                         <button
                           onClick={() => resumeJob(j)}
                           disabled={loading}
-                          className="rounded-lg border border-gold px-3 py-1.5 text-xs font-semibold text-gold transition-colors hover:bg-gold/10 disabled:opacity-50"
+                          className="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-rose disabled:opacity-50"
                         >
                           📡 تابع التوليد
                         </button>

@@ -3,6 +3,7 @@ import { VOICES } from "@/lib/voices";
 import { getVoiceScores } from "@/lib/brain";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { variantAvg, type PromptVariantRow } from "@/lib/promptVariants";
+import WaveLine from "@/components/WaveLine";
 
 /** لوحة العقل — شفافية كاملة: ماذا تعلمت المنصة ولماذا ترتب كما ترتب */
 export const dynamic = "force-dynamic";
@@ -67,9 +68,10 @@ export default async function BrainPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
-      <h1 className="text-3xl font-bold">
+      <h1 className="text-3xl font-extrabold md:text-4xl">
         🧠 عقل <span className="text-gradient">المنصة</span>
       </h1>
+      <WaveLine className="mt-3" />
       <p className="mt-2 max-w-3xl leading-relaxed text-muted">
         كل ما تراه هنا تعلمته المنصة من الاستخدام الفعلي: نجوم التقييم، الإشارات الضمنية
         (استماع كامل، حفظ، مشاركة...)، والنقد الذاتي الآلي. لا شيء مرتب يدوياً.

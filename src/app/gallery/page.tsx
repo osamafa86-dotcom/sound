@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import VoiceAvatar from "@/components/VoiceAvatar";
 import { MAQAMAT } from "@/lib/maqamat";
 import { VOICES } from "@/lib/voices";
+import WaveLine from "@/components/WaveLine";
 
 type GalleryItem = {
   id: string;
@@ -64,9 +65,10 @@ export default function PublicGallery() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
-      <h1 className="text-3xl font-bold">
+      <h1 className="text-3xl font-extrabold md:text-4xl">
         معرض <span className="text-gradient">الإبداعات</span>
       </h1>
+      <WaveLine className="mt-3" />
       <p className="mt-2 max-w-2xl leading-relaxed text-muted">
         أعمال حقيقية أنشأها مستخدمو مقام ونشروها بأنفسهم — استمع لما يصنعه الآخرون،
         وخذ الإلهام لعملك التالي.

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { PROMPT_TYPES } from "@/lib/promptSmith";
 import { PASS_SCORE, MAX_ROUNDS } from "@/lib/promptAgent";
 import { authHeaders } from "@/lib/supabase";
+import WaveLine from "@/components/WaveLine";
 
 type Crafted = {
   title: string;
@@ -244,9 +245,10 @@ export default function PromptsStudio() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
-      <h1 className="text-3xl font-bold">
+      <h1 className="text-3xl font-extrabold md:text-4xl">
         وكيل <span className="text-gradient">البرومبتات</span>
       </h1>
+      <WaveLine className="mt-3" />
       <p className="mt-2 max-w-2xl text-muted">
         غرفة صياغة كاملة: مهندس يكتب، وحكم ناقد يهاجم، ومحسِّن يعالج — جولات تراها
         أمامك حتى يتجاوز البرومبت عتبة الجودة ({PASS_SCORE}/100). وللصور: تجربة حية بصورة إثبات.
@@ -299,7 +301,7 @@ export default function PromptsStudio() {
         />
 
         {error && (
-          <p className="mt-3 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <p className="mt-3 rounded-xl border border-primary/40 bg-rose px-4 py-3 text-sm text-primary-strong">
             {error}
           </p>
         )}
@@ -396,7 +398,7 @@ export default function PromptsStudio() {
                   onClick={portToAll}
                   disabled={porting}
                   title="نسخ البرومبت بلهجات بقية منصات هذا النوع"
-                  className="rounded-xl border border-border-soft px-4 py-2 text-sm font-semibold transition-colors hover:border-gold hover:text-gold disabled:opacity-50"
+                  className="rounded-xl border border-border-soft px-4 py-2 text-sm font-semibold transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
                 >
                   {porting ? "جارٍ النقل..." : "🌐 لكل المنصات"}
                 </button>
@@ -467,7 +469,7 @@ export default function PromptsStudio() {
                   <button
                     onClick={refineFromTest}
                     disabled={working}
-                    className="mt-3 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-surface transition-opacity hover:opacity-90 disabled:opacity-50"
+                    className="mt-3 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                   >
                     🔁 حسّن البرومبت بما رأى الناقد
                   </button>
@@ -523,7 +525,7 @@ export default function PromptsStudio() {
               </button>
               <button
                 onClick={() => feedback(craftId, -1)}
-                className="rounded-lg border border-border-soft px-3 py-1.5 text-xs text-muted hover:border-red-500/50 hover:text-red-400"
+                className="rounded-lg border border-border-soft px-3 py-1.5 text-xs text-muted hover:border-primary/60 hover:text-primary-strong"
               >
                 ❌ ما نفع
               </button>
@@ -572,7 +574,7 @@ export default function PromptsStudio() {
                     onClick={() => feedback(c.id, -1)}
                     title="ما نفع"
                     className={`rounded-lg border px-2.5 py-1 text-xs ${
-                      c.feedback === -1 ? "border-red-500/60 text-red-400" : "border-border-soft text-muted hover:text-red-400"
+                      c.feedback === -1 ? "border-red-500/60 text-red-400" : "border-border-soft text-muted hover:text-primary-strong"
                     }`}
                   >
                     ❌

@@ -106,7 +106,7 @@ export function CreditPacksSection() {
       </p>
 
       {error && (
-        <p className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-center text-sm text-red-300">
+        <p className="mt-4 rounded-xl border border-primary/40 bg-rose px-4 py-3 text-center text-sm text-primary-strong">
           {error}
         </p>
       )}
@@ -131,7 +131,7 @@ export function CreditPacksSection() {
                 <button
                   onClick={() => startCheckout("pack", p.id, "coinbase", setBusy, setError)}
                   disabled={!!busy}
-                  className="rounded-lg border border-gold/50 px-3 py-2 text-xs font-semibold text-gold transition-colors hover:bg-gold/10 disabled:opacity-60"
+                  className="rounded-lg border border-primary/50 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-rose disabled:opacity-60"
                 >
                   {busy === `${p.id}:coinbase` ? "..." : "₿ عملة رقمية"}
                 </button>

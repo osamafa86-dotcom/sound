@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import VoiceAvatar from "@/components/VoiceAvatar";
 import { VOICES, type Voice } from "@/lib/voices";
 import { authHeaders } from "@/lib/supabase";
+import WaveLine from "@/components/WaveLine";
 
 /** صوت الكتالوج مُثرى بتقييمات المستخدمين من عقل المنصة */
 type CatalogVoice = Voice & { rating?: { avg: number; count: number } };
@@ -93,9 +94,10 @@ export default function VoicesGallery() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
-      <h1 className="text-3xl font-bold">
+      <h1 className="text-3xl font-extrabold md:text-4xl">
         معرض <span className="text-gradient">الأصوات</span>
       </h1>
+      <WaveLine className="mt-3" />
       <p className="mt-2 max-w-2xl leading-relaxed text-muted">
         {voices.length} صوتاً عربياً أصيلاً بمتحدثين أصليين — استمع لعينة حية من كل صوت،
         ثم انطلق به إلى الاستوديو. النجوم من تقييمات مستخدمي المنصة الحقيقية.
@@ -139,7 +141,7 @@ export default function VoicesGallery() {
       </div>
 
       {error && (
-        <p className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+        <p className="mt-4 rounded-xl border border-primary/40 bg-rose px-4 py-3 text-sm text-primary-strong">
           {error}
         </p>
       )}

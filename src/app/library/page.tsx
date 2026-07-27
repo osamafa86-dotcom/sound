@@ -329,7 +329,7 @@ export default function Library() {
                     className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
                       g.is_public
                         ? "border-gold/50 text-gold hover:bg-gold/10"
-                        : "border-border-soft text-muted hover:border-gold/50 hover:text-gold"
+                        : "border-border-soft text-muted hover:border-primary/50 hover:text-gold"
                     }`}
                     title={
                       g.is_public

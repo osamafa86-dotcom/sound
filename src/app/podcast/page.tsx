@@ -294,7 +294,7 @@ export default function PodcastStudio() {
         <button
           onClick={writeEpisode}
           disabled={writing || (source === "topic" ? !topic.trim() : !sourceText.trim())}
-          className="self-start rounded-xl bg-accent px-6 py-3 font-semibold text-surface transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="self-start rounded-xl bg-primary px-6 py-3 font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {writing
             ? "جارٍ إعداد الحلقة..."
@@ -362,7 +362,7 @@ export default function PodcastStudio() {
                         <div className="flex gap-2">
                           <button
                             onClick={saveLineEdit}
-                            className="rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-surface"
+                            className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-white"
                           >
                             ✓ حفظ
                           </button>
