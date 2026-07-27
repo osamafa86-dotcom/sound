@@ -11,19 +11,26 @@ export async function GET() {
   if (!user) return NextResponse.json({ generations: [] });
 
   const FIELDS = "id, kind, title, content, voice_id, maqam_id, style_id, provider, audio_path, created_at";
-  let { data, error } = await supabase
+  type Row = { audio_path: string | null; is_public?: boolean } & Record<string, unknown>;
+
+  const first = await supabase
     .from("generations")
     .select(`${FIELDS}, is_public`)
     .order("created_at", { ascending: false })
     .limit(100);
 
+  let data = first.data as Row[] | null;
+  let error = first.error;
+
   // قاعدة لم تُحدَّث بعد بعمود المعرض العام — نعمل بدونه بدل كسر المكتبة
   if (error && /is_public/.test(error.message)) {
-    ({ data, error } = await supabase
+    const fallback = await supabase
       .from("generations")
       .select(FIELDS)
       .order("created_at", { ascending: false })
-      .limit(100));
+      .limit(100);
+    data = fallback.data as Row[] | null;
+    error = fallback.error;
   }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
