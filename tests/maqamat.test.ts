@@ -29,6 +29,14 @@ describe("بيانات المقامات", () => {
     }
   });
 
+  it("كل مقام بأرباع نغمات يصرّح بها في برومبته الموسيقي", () => {
+    for (const m of MAQAMAT) {
+      if (m.scale.some((deg) => deg % 1 !== 0)) {
+        expect(m.stylePrompt.toLowerCase()).toMatch(/quarter|half-flat/);
+      }
+    }
+  });
+
   it("معرّفات الأساليب واللهجات والآلات فريدة", () => {
     for (const list of [SONG_STYLES, DIALECTS, INSTRUMENTS] as const) {
       const ids = list.map((x) => x.id);

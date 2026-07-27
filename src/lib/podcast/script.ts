@@ -14,6 +14,8 @@ const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
 export const PODCAST_LIMITS = {
   maxTopicChars: 500,
+  /** مادة مصدرية يرفعها المستخدم (مقال/سيناريو) لتتحول لحلقة */
+  maxSourceChars: 12000,
   maxLines: 40,
   /** أطوال الحلقة بالدقائق التقريبية وعدد الأسطر المقابل */
   lengths: {
@@ -86,16 +88,34 @@ function buildSchema(dialect: string) {
   };
 }
 
-function buildPrompt(topic: string, length: PodcastLength, tone: PodcastTone, dialect: string): string {
+function buildPrompt(
+  topic: string,
+  length: PodcastLength,
+  tone: PodcastTone,
+  dialect: string,
+  sourceText?: string
+): string {
   const catalog = voiceCatalogText(dialect);
   const target = PODCAST_LIMITS.lengths[length];
 
-  return `أنت معدّ ومخرج بودكاست عربي محترف داخل منصة «مقام».
-
-اكتب **حلقة بودكاست حوارية كاملة** بين مقدّمَين اثنين حول هذا الموضوع:
+  // مادة مصدرية: الحلقة تُبنى من محتوى المستخدم نفسه لا من معرفة النموذج
+  const subject = sourceText
+    ? `حوّل **هذه المادة التي كتبها المستخدم** إلى حلقة بودكاست حوارية كاملة:
+"""
+${sourceText}
+"""
+${topic ? `\n**توجيه من المستخدم**: ${topic}\n` : ""}
+**قاعدة الأمانة للمصدر**: كل المعلومات والوقائع والأمثلة تؤخذ من المادة أعلاه حصراً —
+لا تخترع معلومات من خارجها. دور المقدّمَين إعادة صياغتها حواراً مشوّقاً: يشرحان،
+يتساءلان، يضربان أمثلتها، ويلخصان — بلا إضافة وقائع جديدة.`
+    : `اكتب **حلقة بودكاست حوارية كاملة** بين مقدّمَين اثنين حول هذا الموضوع:
 """
 ${topic}
-"""
+"""`;
+
+  return `أنت معدّ ومخرج بودكاست عربي محترف داخل منصة «مقام».
+
+${subject}
 
 **١. المقدّمان**
 - شخصيتان بالضبط: \`host1\` و\`host2\`، باسمين عربيين طبيعيين.
@@ -129,7 +149,8 @@ export async function generatePodcast(
   topic: string,
   length: PodcastLength,
   tone: PodcastTone,
-  dialect: string
+  dialect: string,
+  sourceText?: string
 ): Promise<DramaScript> {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
@@ -137,7 +158,9 @@ export async function generatePodcast(
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: buildPrompt(topic, length, tone, dialect) }] }],
+        contents: [
+          { role: "user", parts: [{ text: buildPrompt(topic, length, tone, dialect, sourceText) }] },
+        ],
         generationConfig: {
           responseMimeType: "application/json",
           responseSchema: buildSchema(dialect),

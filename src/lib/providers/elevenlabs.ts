@@ -2,12 +2,22 @@ import { VOICES } from "@/lib/voices";
 import { pcm16ToWav } from "@/lib/mockAudio";
 import { findDictionary } from "@/lib/pronunciation";
 import { splitTextForTTS } from "@/lib/tts/split";
+import { buildCompositionPlan } from "./compositionPlan";
 import type { AudioResult, MusicProvider, MusicRequest, TTSProvider, TTSRequest } from "./types";
 
 const API_BASE = "https://api.elevenlabs.io/v1";
 
-/** نموذج التوليد — multilingual_v2 مستقر وممتاز مع العربية؛ قابل للترقية لـ v3 عبر متغير البيئة */
+/** نموذج التوليد المتوازن — multilingual_v2 مستقر وممتاز مع العربية */
 const MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? "eleven_multilingual_v2";
+/** المحرك التعبيري — الجيل الثالث بوسوم المشاعر والأفعال داخل النص */
+const V3_MODEL_ID = process.env.ELEVENLABS_V3_MODEL ?? "eleven_v3";
+
+/** الجيل الثالث يقبل ثلاث درجات ثبات فقط: 0 مبدع | 0.5 طبيعي | 1 رصين */
+export function snapStabilityV3(value: number): 0 | 0.5 | 1 {
+  if (value < 0.25) return 0;
+  if (value < 0.75) return 0.5;
+  return 1;
+}
 
 class ElevenLabsError extends Error {
   constructor(message: string, readonly status: number) {
@@ -65,11 +75,33 @@ export function elevenLabsTTS(apiKey: string): TTSProvider {
       // باقة Creator تتيح جودة 192kbps — قابلة للتخفيض عبر متغير البيئة عند تغيير الباقة
       const mp3Quality = process.env.ELEVENLABS_MP3_QUALITY ?? "mp3_44100_192";
       const outputFormat = wantWav ? "pcm_44100" : mp3Quality;
+      const expressive = !!req.expressive;
 
-      // ذاكرة النطق المتراكمة للمنصة — تُطبَّق تلقائياً على كل توليد
-      const dict = await findDictionary(apiKey).catch(() => null);
+      // ذاكرة النطق: قاموس المحرك للجيل الثاني — والجيل الثالث لا يدعمه
+      // (تتكفل به قواعد الاستبدال النصية المطبقة في المسار قبل الوصول هنا)
+      const dict = expressive ? null : await findDictionary(apiKey).catch(() => null);
+
+      // إعدادات الصوت حسب الجيل: الثالث يقبل ثلاث درجات ثبات بلا سرعة/حيوية،
+      // والثاني يدعم السرعة وقوة التعبير (style) وتعزيز الحضور
+      const voiceSettings = expressive
+        ? {
+            stability: snapStabilityV3(req.stability ?? 0.5),
+            similarity_boost: 0.75,
+            use_speaker_boost: true,
+          }
+        : {
+            stability: req.stability ?? 0.5,
+            similarity_boost: 0.75,
+            // النطاق المدعوم للسرعة في ElevenLabs هو 0.7–1.2
+            speed: Math.min(1.2, Math.max(0.7, req.speed ?? 1)),
+            ...(req.liveliness !== undefined && {
+              style: Math.min(1, Math.max(0, req.liveliness)),
+            }),
+            use_speaker_boost: req.speakerBoost ?? true,
+          };
 
       // النصوص الطويلة تُقسَّم عند حدود الجمل وتُدمج مخرجاتها (mp3 مباشرة، وwav عبر PCM خام)
+      // بادئة الأسلوب تُحقن في كل جزء كي يبقى الأداء موحداً عبر الأجزاء
       const chunks = splitTextForTTS(req.text);
       const buffers: Buffer[] = [];
       for (const chunk of chunks) {
@@ -78,14 +110,9 @@ export function elevenLabsTTS(apiKey: string): TTSProvider {
             `/text-to-speech/${elevenVoiceId}`,
             apiKey,
             {
-              text: chunk,
-              model_id: MODEL_ID,
-              voice_settings: {
-                stability: req.stability ?? 0.5,
-                similarity_boost: 0.75,
-                // النطاق المدعوم للسرعة في ElevenLabs هو 0.7–1.2
-                speed: Math.min(1.2, Math.max(0.7, req.speed ?? 1)),
-              },
+              text: req.stylePrefix ? `${req.stylePrefix} ${chunk}` : chunk,
+              model_id: expressive ? V3_MODEL_ID : MODEL_ID,
+              voice_settings: voiceSettings,
               ...(dict?.id && {
                 pronunciation_dictionary_locators: [
                   { pronunciation_dictionary_id: dict.id, ...(dict.versionId && { version_id: dict.versionId }) },
@@ -118,6 +145,41 @@ export async function elevenLabsTranscribe(apiKey: string, audio: Blob): Promise
     throw new ElevenLabsError("استجابة تفريغ غير متوقعة", 502);
   }
   return data.text;
+}
+
+/** تفريغ موقوت: كل كلمة مع بدايتها ونهايتها بالثواني — وقود الكاريوكي */
+export async function elevenLabsTranscribeWords(
+  apiKey: string,
+  audio: Blob
+): Promise<{ text: string; words: { text: string; start: number; end: number }[] }> {
+  const form = new FormData();
+  form.append("model_id", "scribe_v1");
+  form.append("timestamps_granularity", "word");
+  form.append("file", audio, "song.mp3");
+  const res = await apiCallMultipart("/speech-to-text", apiKey, form);
+  const data = (await res.json()) as {
+    text?: string;
+    words?: { text: string; start: number; end: number; type?: string }[];
+  };
+  if (typeof data.text !== "string") {
+    throw new ElevenLabsError("استجابة تفريغ غير متوقعة", 502);
+  }
+  const words = (data.words ?? [])
+    .filter((w) => (w.type ?? "word") === "word" && Number.isFinite(w.start))
+    .map((w) => ({ text: w.text, start: w.start, end: w.end }));
+  return { text: data.text, words };
+}
+
+/** عازل الصوت — يفصل الكلام عن الضجيج والموسيقى الخلفية ويعيد تسجيلاً نقياً */
+export async function elevenLabsIsolateAudio(apiKey: string, audio: Blob): Promise<AudioResult> {
+  const form = new FormData();
+  form.append("audio", audio, "noisy.webm");
+  const res = await apiCallMultipart("/audio-isolation", apiKey, form);
+  return {
+    audio: Buffer.from(await res.arrayBuffer()),
+    mimeType: res.headers.get("Content-Type")?.split(";")[0] || "audio/mpeg",
+    provider: "elevenlabs-isolation",
+  };
 }
 
 /** تحويل صوت إلى صوت (Speech-to-Speech) — يحافظ على الأداء والتوقيت بصوت آخر */
@@ -159,19 +221,56 @@ export async function elevenLabsCloneVoice(
   return data.voice_id;
 }
 
+/** نداء توليد موسيقى مع التقاط معرّف الأغنية من الترويسات — يفتح إعادة التوليد الجزئي */
+async function musicCall(
+  apiKey: string,
+  body: unknown
+): Promise<{ audio: Buffer; songId?: string }> {
+  const res = await fetch(`${API_BASE}/music`, {
+    method: "POST",
+    headers: { "xi-api-key": apiKey, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new ElevenLabsError(`ElevenLabs ${res.status}: ${detail.slice(0, 300)}`, res.status);
+  }
+
+  let songId: string | undefined;
+  res.headers.forEach((value, key) => {
+    if (/song[-_]?id/i.test(key)) songId = value;
+  });
+  return { audio: Buffer.from(await res.arrayBuffer()), songId };
+}
+
 export function elevenLabsMusic(apiKey: string): MusicProvider {
   return {
     id: "eleven-music",
     async generate(req: MusicRequest): Promise<AudioResult> {
+      // مقاطع مُهيكلة ← خطة تأليف كاملة: تحكم حقيقي في البنية والمدد لكل مقطع
+      const plan = buildCompositionPlan(req);
+      if (plan) {
+        const { audio, songId } = await musicCall(apiKey, {
+          model_id: "music_v1",
+          composition_plan: plan,
+        });
+        return { audio, mimeType: "audio/mpeg", provider: "eleven-music", providerSongId: songId };
+      }
+
       const instrumentalOnly = req.styleId === "instrumental" || !req.lyrics?.trim();
       const prompt = [
         req.stylePrompt,
+        ...(req.bpm ? [`${req.bpm} BPM`] : []),
+        ...(req.singer && !instrumentalOnly ? [`${req.singer} Arabic lead vocals`] : []),
+        ...(req.dialectEn && !instrumentalOnly
+          ? [`authentic ${req.dialectEn} Arabic dialect, native-speaker pronunciation`]
+          : []),
         instrumentalOnly
           ? "instrumental only, no vocals"
-          : `Arabic vocals singing these lyrics:\n${req.lyrics!.trim()}`,
+          : `Arabic vocals singing these lyrics exactly as written:\n${req.lyrics!.trim()}`,
       ].join("\n");
 
-      const audio = await apiCall("/music", apiKey, {
+      const { audio, songId } = await musicCall(apiKey, {
         prompt,
         music_length_ms: Math.min(300_000, Math.max(10_000, (req.durationSec ?? 60) * 1000)),
       });
@@ -180,6 +279,7 @@ export function elevenLabsMusic(apiKey: string): MusicProvider {
         audio,
         mimeType: "audio/mpeg",
         provider: "eleven-music",
+        providerSongId: songId,
       };
     },
   };

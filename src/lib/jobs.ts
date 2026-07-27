@@ -45,6 +45,8 @@ export interface JobsStore {
   /** يخزّن الناتج الصوتي ويعلّم المهمة مكتملة */
   complete(id: string, result: AudioResult, extra?: Pick<JobPatch, "stage" | "fellBack">): Promise<void>;
   getAudio(id: string): Promise<{ audio: Buffer; mimeType: string } | undefined>;
+  /** آخر مهام المستخدم — سجل «توليداتي» في الاستوديو */
+  listRecent(userId: string, limit?: number): Promise<SongJob[]>;
 }
 
 /* ------------------------- مخزن الذاكرة (تطوير) ------------------------- */
@@ -100,6 +102,8 @@ export const memoryJobsStore: JobsStore = {
     const entry = memoryJobs.get(id);
     if (!entry) return;
     entry.audio = result.audio;
+    // معرّف المحرك يُحفظ داخل الطلب ليتاح إعادة التوليد الجزئي لاحقاً
+    if (result.providerSongId) entry.job.request.elevenSongId = result.providerSongId;
     Object.assign(entry.job, {
       status: "done" as const,
       stage: extra?.stage ?? "اكتمل التوليد",
@@ -114,6 +118,13 @@ export const memoryJobsStore: JobsStore = {
     const entry = memoryJobs.get(id);
     if (!entry?.audio || !entry.job.mimeType) return undefined;
     return { audio: entry.audio, mimeType: entry.job.mimeType };
+  },
+  async listRecent(userId, limit = 10) {
+    return [...memoryJobs.values()]
+      .map((e) => e.job)
+      .filter((j) => j.userId === userId)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, limit);
   },
 };
 
@@ -201,6 +212,16 @@ export const supabaseJobsStore: JobsStore = {
       upsert: true,
     });
     if (upload.error) throw new Error(`تعذّر تخزين الناتج: ${upload.error.message}`);
+
+    // معرّف المحرك يُحفظ داخل jsonb الطلب (بلا تعديل مخطط) لإعادة التوليد الجزئي
+    let requestUpdate: Record<string, unknown> = {};
+    if (result.providerSongId) {
+      const { data: row } = await admin.from(TABLE).select("request").eq("id", id).maybeSingle();
+      if (row?.request) {
+        requestUpdate = { request: { ...row.request, elevenSongId: result.providerSongId } };
+      }
+    }
+
     await admin
       .from(TABLE)
       .update({
@@ -213,6 +234,7 @@ export const supabaseJobsStore: JobsStore = {
           ...(extra?.fellBack && { fellBack: extra.fellBack }),
         }),
         audio_path: path,
+        ...requestUpdate,
       })
       .eq("id", id);
   },
@@ -227,6 +249,17 @@ export const supabaseJobsStore: JobsStore = {
     const { data, error } = await admin.storage.from(BUCKET).download(row.audio_path);
     if (error || !data) return undefined;
     return { audio: Buffer.from(await data.arrayBuffer()), mimeType: row.mime_type };
+  },
+  async listRecent(userId, limit = 10) {
+    const admin = getSupabaseAdmin()!;
+    const { data, error } = await admin
+      .from(TABLE)
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error || !data) return [];
+    return (data as JobRow[]).map(rowToJob);
   },
 };
 
