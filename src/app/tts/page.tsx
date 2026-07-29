@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import WaveLine from "@/components/WaveLine";
+import MemberNotice from "@/components/MemberNotice";
 import { VOICES, type Voice } from "@/lib/voices";
 import {
   LAYER_CATEGORIES,
@@ -579,6 +580,7 @@ export default function TTSStudio() {
         استوديو <span className="text-gradient">النص إلى صوت</span>
       </h1>
       <WaveLine className="mt-3" />
+      <MemberNotice />
       <p className="mt-3 text-muted">
         اكتب نصك، اختر الصوت واللهجة، واضبط الأداء — ثم استمع وحمّل الناتج.
       </p>

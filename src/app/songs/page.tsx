@@ -23,6 +23,7 @@ import {
 } from "@/lib/songSections";
 import type { AssistMode, AssistResult } from "@/lib/assistant/types";
 import WaveLine from "@/components/WaveLine";
+import MemberNotice from "@/components/MemberNotice";
 
 const STEPS = ["الكلمات", "المقام والأسلوب", "التوليد"] as const;
 
@@ -628,6 +629,7 @@ export default function SongsStudio() {
         استوديو <span className="text-gradient">الأغاني والمقامات</span>
       </h1>
       <WaveLine className="mt-3" />
+      <MemberNotice />
       <p className="mt-3 text-muted">
         ثلاث خطوات: اكتب الكلمات، اختر المقام والأسلوب، ثم ولّد أغنيتك.
       </p>

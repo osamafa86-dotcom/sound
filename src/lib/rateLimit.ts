@@ -121,6 +121,24 @@ export function rateLimitFor(scope: LimitScope, signedIn: boolean): number {
 export type LimitVerdict = { allowed: boolean; message: string; status?: number };
 
 /**
+ * التوليد الصوتي للأعضاء حصراً — الزائر يتصفح ويستمع للعينات والمعارض بحرية،
+ * لكن أي توليد أو معالجة صوتية تتطلب حساباً. (المساعدات النصية تبقى مفتوحة.)
+ */
+export const MEMBER_ONLY_SCOPES: ReadonlySet<LimitScope> = new Set<LimitScope>([
+  "tts",
+  "songs",
+  "stt",
+  "sts",
+  "isolate",
+  "voiceClone",
+  "voiceDesign",
+  "drama",
+]);
+
+export const MEMBER_ONLY_MESSAGE =
+  "التوليد الصوتي متاح للأعضاء المسجلين — أنشئ حسابك المجاني خلال دقيقة واحصل على رصيد يتجدد كل شهر";
+
+/**
  * فحص واستهلاك طلب واحد: أمر المالك أولاً، ثم السقف العام، ثم حد الزائر/المستخدم.
  * تحديث لقطة الإعدادات هنا يجعلها جاهزة لبقية الطلب (اختيار المزوّد مثلاً).
  */
@@ -134,6 +152,17 @@ export async function checkLimit(
   const gate = gateFor(await getPlatformSettings(), scope);
   if (gate.blocked) {
     return { allowed: false, message: gate.message, status: 503 };
+  }
+
+  // صلاحيات الأعضاء: التوليد الصوتي يتطلب حساباً — على الإنتاج حيث نظام
+  // الحسابات مفعّل، وبمفتاح رجوع سريع دون نشر جديد
+  if (
+    !userId &&
+    MEMBER_ONLY_SCOPES.has(scope) &&
+    getSupabaseAdmin() &&
+    process.env.ALLOW_VISITOR_GENERATION !== "1"
+  ) {
+    return { allowed: false, message: MEMBER_ONLY_MESSAGE, status: 401 };
   }
 
   const globalOk = await consumeRateLimit(`${scope}:global`, rule.global, rule.windowSec);

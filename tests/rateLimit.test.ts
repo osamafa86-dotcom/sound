@@ -38,3 +38,21 @@ describe("تحديد معدل الاستخدام (عدّاد الذاكرة)", (
     expect(rateLimitFor("songs", false)).toBe(LIMITS.songs.perVisitor);
   });
 });
+
+describe("صلاحيات الأعضاء", () => {
+  it("كل نطاقات الصوت محجوزة للأعضاء — والتصفح والمساعدات النصية مفتوحة", async () => {
+    const { LIMITS, MEMBER_ONLY_SCOPES } = await import("@/lib/rateLimit");
+    // كل نطاق محجوز موجود فعلاً في الحدود
+    for (const scope of MEMBER_ONLY_SCOPES) {
+      expect(LIMITS).toHaveProperty(scope);
+    }
+    // الصوتية كلها محجوزة
+    for (const scope of ["tts", "songs", "stt", "sts", "isolate", "voiceClone", "voiceDesign", "drama"] as const) {
+      expect(MEMBER_ONLY_SCOPES.has(scope), `${scope} يجب أن يكون للأعضاء`).toBe(true);
+    }
+    // التصفح يبقى حراً: عينات المعرض والمساعدات النصية
+    for (const scope of ["sample", "lyrics", "enhance", "prompts", "support", "signals"] as const) {
+      expect(MEMBER_ONLY_SCOPES.has(scope), `${scope} يجب أن يبقى مفتوحاً`).toBe(false);
+    }
+  });
+});
