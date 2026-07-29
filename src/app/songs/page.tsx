@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import AudioPlayer from "@/components/AudioPlayer";
-import Karaoke from "@/components/Karaoke";
+import AudioPlayer, { type PlayerControl } from "@/components/AudioPlayer";
+import LyricsEditor from "@/components/LyricsEditor";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import SingAlongPanel from "@/components/SingAlongPanel";
 import StemsPanel from "@/components/StemsPanel";
@@ -270,48 +270,67 @@ export default function SongsStudio() {
   const [fixBusy, setFixBusy] = useState(false);
   const [fixMsg, setFixMsg] = useState("");
 
+  /**
+   * قلب محرر النص والصوت — تعليم النطق وإعادة الإنشاد:
+   * ١) يتعلم العقل النطق فيُطبَّق تلقائياً على كل توليد قادم (أصواتاً وأغانيَ)
+   * ٢) تصحيح الكلمات محلياً
+   * ٣) إعادة إنشاد المقطع المتأثر وحده إن أمكن — وإلا نسخة كاملة مصححة
+   * sectionIndexHint: فهرس المقطع من الخط الزمني (ضغطة الكلمة في المحرر) —
+   * الزمن أصدق من مطابقة النص لأن التفريغ قد يخالف الكتابة.
+   */
+  async function teachAndRegen(word: string, alias: string, sectionIndexHint?: number) {
+    if (!word || !alias || !result) return;
+    setError("");
+    const learn = await fetch("/api/pronunciation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ word, alias }),
+    });
+    const learnData = await learn.json().catch(() => null);
+    if (!learn.ok) throw new Error(learnData?.error ?? "تعذّر حفظ النطق");
+
+    const replaceIn = (text: string) => text.split(word).join(alias);
+    const nextSections = sections?.map((s) => ({ ...s, lyrics: replaceIn(s.lyrics) })) ?? null;
+    const byText = sections?.findIndex((s) => s.lyrics.includes(word)) ?? -1;
+    const affected =
+      sectionIndexHint !== undefined &&
+      sections &&
+      sectionIndexHint >= 0 &&
+      sectionIndexHint < sections.length
+        ? sectionIndexHint
+        : byText;
+    if (nextSections) applySections(nextSections);
+    else setLyrics(replaceIn(lyrics));
+
+    const canInpaint =
+      affected >= 0 && nextSections && result.elevenSongId && tier === "full" && !result.mock;
+    // التصحيح إصلاح موضعي — لا يفتح مقارنة محركين جديدة
+    if (canInpaint) {
+      setFixMsg(
+        `✓ تعلّم العقل نطق «${word}» — نعيد إنشاد ${SECTION_LABELS[nextSections[affected].kind]} ${affected + 1} وحده الآن`
+      );
+      await generate({
+        sections: nextSections,
+        regenerateSectionIndex: affected,
+        sourceSongId: result.elevenSongId,
+        compare: false,
+      });
+    } else {
+      setFixMsg(`✓ تعلّم العقل نطق «${word}» — نولّد نسخة مصححة كاملة`);
+      await generate(nextSections ? { sections: nextSections, compare: false } : { compare: false });
+    }
+  }
+
   async function fixPronunciation() {
     const word = fixWord.trim();
     const alias = fixAlias.trim();
     if (!word || !alias || fixBusy || !result) return;
     setFixBusy(true);
     setFixMsg("");
-    setError("");
     try {
-      // ١) تعليم العقل — يُطبَّق تلقائياً على كل توليد قادم (أصواتاً وأغانيَ)
-      const learn = await fetch("/api/pronunciation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ word, alias }),
-      });
-      const learnData = await learn.json().catch(() => null);
-      if (!learn.ok) throw new Error(learnData?.error ?? "تعذّر حفظ النطق");
-
-      // ٢) تصحيح الكلمات محلياً
-      const replaceIn = (text: string) => text.split(word).join(alias);
-      const nextSections = sections?.map((s) => ({ ...s, lyrics: replaceIn(s.lyrics) })) ?? null;
-      const affected = sections?.findIndex((s) => s.lyrics.includes(word)) ?? -1;
-      if (nextSections) applySections(nextSections);
-      else setLyrics(replaceIn(lyrics));
-
-      // ٣) إعادة غناء المقطع المتأثر وحده إن أمكن — وإلا نسخة كاملة مصححة
-      const canInpaint =
-        affected >= 0 && nextSections && result.elevenSongId && tier === "full" && !result.mock;
+      await teachAndRegen(word, alias);
       setFixWord("");
       setFixAlias("");
-      if (canInpaint) {
-        setFixMsg(
-          `✓ تعلّم العقل نطق «${word}» — نعيد غناء ${SECTION_LABELS[nextSections[affected].kind]} وحده الآن`
-        );
-        await generate({
-          sections: nextSections,
-          regenerateSectionIndex: affected,
-          sourceSongId: result.elevenSongId,
-        });
-      } else {
-        setFixMsg(`✓ تعلّم العقل نطق «${word}» — نولّد نسخة مصححة كاملة`);
-        await generate(nextSections ? { sections: nextSections } : undefined);
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
     } finally {
@@ -470,6 +489,7 @@ export default function SongsStudio() {
   /** عرض ناتج جديد: أدوات ما بعد التوليد تعود لنقطة الصفر ويُحتسب نسخةً */
   function presentSong(song: SongResult) {
     setKaraokeWords(null);
+    setKaraokeNote("");
     setActiveWord(-1);
     setShareCopied(false);
     setCoverUrl((prev) => {
@@ -658,10 +678,28 @@ export default function SongsStudio() {
     }
   }
 
-  // الكاريوكي والغلاف والمشاركة — أدوات ما بعد التوليد
+  // محرر النص والصوت والغلاف والمشاركة — أدوات ما بعد التوليد
   const [karaokeWords, setKaraokeWords] = useState<KaraokeWord[] | null>(null);
   const [karaokeBusy, setKaraokeBusy] = useState(false);
+  const [karaokeNote, setKaraokeNote] = useState("");
   const [activeWord, setActiveWord] = useState(-1);
+
+  // تشغيل كلمة بعينها من المحرر: انتقال إلى ما قبلها بقليل وإيقاف بُعيد نهايتها
+  const playerCtlRef = useRef<PlayerControl | null>(null);
+  const wordStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (wordStopRef.current) clearTimeout(wordStopRef.current);
+    };
+  }, []);
+  function playWord(w: KaraokeWord) {
+    const ctl = playerCtlRef.current;
+    if (!ctl) return;
+    if (wordStopRef.current) clearTimeout(wordStopRef.current);
+    ctl.seek(Math.max(0, w.start - 0.15));
+    const durMs = Math.max(700, (w.end - w.start + 0.5) * 1000);
+    wordStopRef.current = setTimeout(() => ctl.pause(), durMs);
+  }
   const [coverUrl, setCoverUrl] = useState("");
   const [coverBusy, setCoverBusy] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
@@ -673,10 +711,11 @@ export default function SongsStudio() {
     setActiveWord((prev) => (prev === idx ? prev : idx));
   }
 
-  async function startKaraoke() {
+  async function startKaraoke(auto = false) {
     if (!result || karaokeBusy) return;
     setKaraokeBusy(true);
-    setError("");
+    setKaraokeNote("");
+    if (!auto) setError("");
     try {
       const fd = new FormData();
       fd.append("audio", result.blob, `song.${result.ext}`);
@@ -690,11 +729,26 @@ export default function SongsStudio() {
       setKaraokeWords(data.words);
       setActiveWord(-1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+      // فشل المزامنة التلقائية لا يقاطع الاحتفال بالناتج — ملاحظة هادئة وزر يدوي
+      const message = e instanceof Error ? e.message : "حدث خطأ غير متوقع";
+      if (auto) setKaraokeNote(message);
+      else setError(message);
     } finally {
       setKaraokeBusy(false);
     }
   }
+
+  // المزامنة التلقائية: فور اكتمال أي توليد مغنّى تُعرض الكلمات متزامنة بلا ضغطة —
+  // محاولة واحدة لكل ناتج، وفشلها يترك زر المزامنة اليدوي طريقاً بديلاً
+  const autoSyncRef = useRef("");
+  useEffect(() => {
+    if (!result || result.mock || instrumental) return;
+    if (karaokeWords || karaokeBusy) return;
+    if (autoSyncRef.current === result.jobId) return;
+    autoSyncRef.current = result.jobId;
+    startKaraoke(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startKaraoke مستقرة ضمن هذا النطاق
+  }, [result, karaokeWords, karaokeBusy, instrumental]);
 
   async function makeCover() {
     if (!result || coverBusy) return;
@@ -1576,6 +1630,7 @@ export default function SongsStudio() {
                   }
                   mock={result.mock}
                   onTime={handlePlayerTime}
+                  controlRef={playerCtlRef}
                   signal={result.mock ? undefined : { maqamId, settings: { stylePrompt: result.prompt } }}
                   filename={`maqam-song-v${versions.length}.${result.ext}`}
                   note={
@@ -1634,7 +1689,7 @@ export default function SongsStudio() {
                   )}
                   {!result.mock && !instrumental && (
                     <button
-                      onClick={startKaraoke}
+                      onClick={() => startKaraoke()}
                       disabled={karaokeBusy || !!karaokeWords}
                       title="مزامنة الكلمات مع الغناء كلمةً كلمة + تصدير SRT/LRC"
                       className="rounded-xl border border-primary px-5 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
@@ -1663,8 +1718,33 @@ export default function SongsStudio() {
                   )}
                 </div>
 
+                {fixMsg && <p className="text-xs text-accent">{fixMsg}</p>}
+
+                {karaokeBusy && !karaokeWords && (
+                  <p className="animate-pulse rounded-xl border border-border-soft bg-surface-card px-4 py-3 text-sm text-muted">
+                    ⏳ جارٍ مزامنة الكلمات مع الغناء لفتح محرر النص والصوت...
+                  </p>
+                )}
+                {karaokeNote && !karaokeWords && !karaokeBusy && (
+                  <p className="rounded-xl border border-gold/40 bg-gold/10 px-4 py-2.5 text-xs">
+                    تعذّرت المزامنة التلقائية ({karaokeNote}) — جرّب زر «🎤 كاريوكي» بعد قليل.
+                  </p>
+                )}
                 {karaokeWords && (
-                  <Karaoke words={karaokeWords} activeIndex={activeWord} title={result.title} />
+                  <LyricsEditor
+                    words={karaokeWords}
+                    activeIndex={activeWord}
+                    title={result.title}
+                    sections={sections}
+                    canInpaint={
+                      !!(sections?.length && result.elevenSongId && tier === "full" && !result.mock)
+                    }
+                    busy={loading || fixBusy}
+                    onPlayWord={playWord}
+                    onFix={({ wrong, alias, sectionIndex }) =>
+                      teachAndRegen(wrong, alias, sectionIndex)
+                    }
+                  />
                 )}
 
                 {coverUrl && (
@@ -1731,9 +1811,11 @@ export default function SongsStudio() {
 
                 {!result.mock && !instrumental && (
                   <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
-                    <p className="text-sm font-semibold">🩹 سمعت كلمة منطوقة خطأ؟ صححها هنا:</p>
+                    <p className="text-sm font-semibold">
+                      🩹 تصحيح يدوي — لكلمة لم تجدها في محرر النص والصوت أعلاه:
+                    </p>
                     <p className="mt-1 text-xs text-muted">
-                      يتعلم العقل النطق الصحيح للأبد (لكل الأصوات والأغاني القادمة)، ويُعاد غناء
+                      يتعلم العقل النطق الصحيح للأبد (لكل الأصوات والأغاني القادمة)، ويُعاد إنشاد
                       المقطع المتأثر وحده — لا الأغنية كلها.
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -1760,7 +1842,6 @@ export default function SongsStudio() {
                         {fixBusy ? "جارٍ التعليم..." : "🧠 علّم وصحّح"}
                       </button>
                     </div>
-                    {fixMsg && <p className="mt-2 text-xs text-accent">{fixMsg}</p>}
                   </div>
                 )}
 

@@ -40,6 +40,22 @@ export function sectionsTotalSec(sections: SongSection[]): number {
   return sections.reduce((sum, s) => sum + s.durationSec, 0);
 }
 
+/**
+ * فهرس المقطع الذي تقع فيه لحظة تشغيل — حسب المدد التراكمية.
+ * خطة التأليف تفرض مدة كل مقطع لدى المحرك، فالخط الزمني موثوق:
+ * به يعرف محرر النص والصوت أي مقطع يعاد إنشاده عند تصحيح كلمة مسموعة.
+ */
+export function sectionIndexAtTime(sections: SongSection[], sec: number): number {
+  if (!sections.length) return -1;
+  let acc = 0;
+  for (let i = 0; i < sections.length; i++) {
+    acc += sections[i].durationSec;
+    if (sec < acc) return i;
+  }
+  // بعد نهاية آخر مقطع (انحراف بسيط في مدة الملف): آخر مقطع
+  return sections.length - 1;
+}
+
 /** إعادة بناء النص الكامل من المقاطع — للعرض والحفظ وعدّ الكلمات */
 export function joinSections(sections: SongSection[]): string {
   return sections
