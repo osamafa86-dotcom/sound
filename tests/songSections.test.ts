@@ -4,7 +4,9 @@ import {
   joinSections,
   parseSections,
   sanitizeSections,
+  sectionIndexAtTime,
   sectionsTotalSec,
+  type SongSection,
 } from "@/lib/songSections";
 
 describe("بنية الأغنية المُهيكلة", () => {
@@ -46,5 +48,21 @@ describe("بنية الأغنية المُهيكلة", () => {
     expect(clean![0].durationSec).toBe(120);
     expect(clean![1].durationSec).toBe(5);
     expect(sectionsTotalSec(clean!)).toBe(125);
+  });
+
+  it("لحظة التشغيل تُنسب لمقطعها بالمدد التراكمية — أساس تصحيح الكلمة المسموعة", () => {
+    const sections: SongSection[] = [
+      { kind: "intro", lyrics: "", durationSec: 10 },
+      { kind: "verse", lyrics: "س", durationSec: 20 },
+      { kind: "chorus", lyrics: "ل", durationSec: 15 },
+    ];
+    expect(sectionIndexAtTime(sections, 0)).toBe(0);
+    expect(sectionIndexAtTime(sections, 9.9)).toBe(0);
+    expect(sectionIndexAtTime(sections, 10)).toBe(1);
+    expect(sectionIndexAtTime(sections, 29.9)).toBe(1);
+    expect(sectionIndexAtTime(sections, 30)).toBe(2);
+    // بعد نهاية الخط الزمني (انحراف مدة الملف) ⟵ آخر مقطع، وقائمة فارغة ⟵ -1
+    expect(sectionIndexAtTime(sections, 60)).toBe(2);
+    expect(sectionIndexAtTime([], 5)).toBe(-1);
   });
 });

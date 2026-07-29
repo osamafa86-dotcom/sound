@@ -10,6 +10,12 @@ export type SignalContext = {
   settings?: Record<string, unknown>;
 };
 
+/** تحكم خارجي بالمشغّل — يتيح لمحرر النص والصوت تشغيل كلمة بعينها */
+export type PlayerControl = {
+  seek: (sec: number, autoplay?: boolean) => void;
+  pause: () => void;
+};
+
 /** عدد أعمدة شكل الموجة المرسومة */
 const BARS = 160;
 
@@ -56,6 +62,7 @@ export default function AudioPlayer({
   note,
   onTime,
   signal,
+  controlRef,
   children,
 }: {
   src: string;
@@ -67,6 +74,8 @@ export default function AudioPlayer({
   onTime?: (sec: number) => void;
   /** سياق إشارات التعلم الضمنية — يفعّل إشارات الاستماع الكامل والإعادة والتنزيل */
   signal?: SignalContext;
+  /** يُملأ بدوال تحكم خارجية (انتقال/إيقاف) — لمحرر النص والصوت */
+  controlRef?: React.MutableRefObject<PlayerControl | null>;
   /** إجراءات إضافية أسفل المشغّل — مثل زر الحفظ في المكتبة */
   children?: React.ReactNode;
 }) {
@@ -155,6 +164,25 @@ export default function AudioPlayer({
     }
     ctx.globalAlpha = 1;
   }, [peaks, progress]);
+
+  // تسليم دوال التحكم الخارجية — محرر النص والصوت يشغّل كلمة بعينها
+  useEffect(() => {
+    if (!controlRef) return;
+    controlRef.current = {
+      seek(sec, autoplay = true) {
+        const a = audioRef.current;
+        if (!a) return;
+        a.currentTime = Math.max(0, sec);
+        if (autoplay) a.play().catch(() => {});
+      },
+      pause() {
+        audioRef.current?.pause();
+      },
+    };
+    return () => {
+      controlRef.current = null;
+    };
+  }, [controlRef]);
 
   // تتبع سلس للتقدم أثناء التشغيل
   useEffect(() => {

@@ -2,7 +2,7 @@ import { VOICES } from "@/lib/voices";
 import { pcm16ToWav } from "@/lib/mockAudio";
 import { findDictionary } from "@/lib/pronunciation";
 import { splitTextForTTS } from "@/lib/tts/split";
-import { buildCompositionPlan } from "./compositionPlan";
+import { buildCompositionPlan, buildElevenMusicPrompt } from "./compositionPlan";
 import type { AudioResult, MusicProvider, MusicRequest, TTSProvider, TTSRequest } from "./types";
 
 const API_BASE = "https://api.elevenlabs.io/v1";
@@ -243,12 +243,24 @@ async function musicCall(
   return { audio: Buffer.from(await res.arrayBuffer()), songId };
 }
 
+/**
+ * نموذج Eleven Music: الأحدث (music_v2 — حزيران 2026) افتراضياً بجودة أعلى
+ * وإخراج 48kHz/192kbps، وELEVEN_MUSIC_MODEL=music_v1 مفتاح رجوع للسلوك القديم.
+ */
+function elevenMusicModel(): string {
+  return process.env.ELEVEN_MUSIC_MODEL ?? "music_v2";
+}
+
 export function elevenLabsMusic(apiKey: string): MusicProvider {
   return {
     id: "eleven-music",
     async generate(req: MusicRequest): Promise<AudioResult> {
-      // مقاطع مُهيكلة ← خطة تأليف كاملة: تحكم حقيقي في البنية والمدد لكل مقطع
-      const plan = buildCompositionPlan(req);
+      const model = elevenMusicModel();
+      const isRegen = !!req.sourceSongId && req.regenerateIndex !== undefined;
+
+      // الترقيع الجزئي (source_from) لغة خطة v1 المثبتة حياً — يبقى عليها،
+      // وكذلك كامل مسار الخطة عند فرض v1 عبر البيئة
+      const plan = isRegen || model === "music_v1" ? buildCompositionPlan(req) : null;
       if (plan) {
         const { audio, songId } = await musicCall(apiKey, {
           model_id: "music_v1",
@@ -257,21 +269,11 @@ export function elevenLabsMusic(apiKey: string): MusicProvider {
         return { audio, mimeType: "audio/mpeg", provider: "eleven-music", providerSongId: songId };
       }
 
-      const instrumentalOnly = req.styleId === "instrumental" || !req.lyrics?.trim();
-      const prompt = [
-        req.stylePrompt,
-        ...(req.bpm ? [`${req.bpm} BPM`] : []),
-        ...(req.singer && !instrumentalOnly ? [`${req.singer} Arabic lead vocals`] : []),
-        ...(req.dialectEn && !instrumentalOnly
-          ? [`authentic ${req.dialectEn} Arabic dialect, native-speaker pronunciation`]
-          : []),
-        instrumentalOnly
-          ? "instrumental only, no vocals"
-          : `Arabic vocals singing these lyrics exactly as written:\n${req.lyrics!.trim()}`,
-      ].join("\n");
-
+      // النموذج الأحدث: البنية والكلمات داخل البرومبت — v2 يفهمها نصاً
+      // (ويتجاهل فرض مدد الخطة أصلاً، فلا نفقد تحكماً فعلياً)
       const { audio, songId } = await musicCall(apiKey, {
-        prompt,
+        model_id: model,
+        prompt: buildElevenMusicPrompt(req),
         music_length_ms: Math.min(300_000, Math.max(10_000, (req.durationSec ?? 60) * 1000)),
       });
 
