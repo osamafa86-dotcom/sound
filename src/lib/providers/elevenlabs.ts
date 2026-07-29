@@ -2,7 +2,11 @@ import { VOICES } from "@/lib/voices";
 import { pcm16ToWav } from "@/lib/mockAudio";
 import { findDictionary } from "@/lib/pronunciation";
 import { splitTextForTTS } from "@/lib/tts/split";
-import { buildCompositionPlan, buildElevenMusicPrompt } from "./compositionPlan";
+import {
+  buildCompositionPlan,
+  buildElevenMusicPrompt,
+  isInstrumentalRequest,
+} from "./compositionPlan";
 import type { AudioResult, MusicProvider, MusicRequest, TTSProvider, TTSRequest } from "./types";
 
 const API_BASE = "https://api.elevenlabs.io/v1";
@@ -275,6 +279,8 @@ export function elevenLabsMusic(apiKey: string): MusicProvider {
         model_id: model,
         prompt: buildElevenMusicPrompt(req),
         music_length_ms: Math.min(300_000, Math.max(10_000, (req.durationSec ?? 60) * 1000)),
+        // ضمانة صلبة للآلي بدل الاتكال على البرومبت وحده
+        ...(isInstrumentalRequest(req) && { force_instrumental: true }),
       });
 
       return {

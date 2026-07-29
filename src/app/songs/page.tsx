@@ -120,9 +120,11 @@ export default function SongsStudio() {
   const [versions, setVersions] = useState<SongResult[]>([]);
   const [error, setError] = useState("");
 
-  // 🧪 وضع المقارنة التجريبي (للمسجلين): Lyria 3 Pro × Eleven Music لكل توليد كامل
+  // 🧪 وضع المقارنة (للمسجلين، اختياري): Lyria 3 Pro × Eleven Music لكل توليد كامل.
+  // الافتراضي نسخة واحدة بالسلسلة الكاملة — أثبتت جولة التجربة أن فرض محرك واحد
+  // لكل نسخة يُفقد الرجوع التلقائي بين المحركين فيتراجع الأداء المحسوس.
   const [signedIn, setSignedIn] = useState(false);
-  const [compareMode, setCompareMode] = useState(true);
+  const [compareMode, setCompareMode] = useState(false);
   const [compareSlots, setCompareSlots] = useState<CompareSlot[] | null>(null);
   const [compareNote, setCompareNote] = useState("");
   /** إشارتا الفوز/الخسارة تُبثان مرة واحدة لكل مقارنة */
@@ -1456,9 +1458,10 @@ export default function SongsStudio() {
                       </span>
                     </p>
                     <p className="mt-1 text-xs leading-relaxed text-muted">
-                      يولّد أغنيتك نسختين متوازيتين — Lyria 3 Pro (محرك Google Flow Music)
-                      وEleven Music — لتقارن الجودة والأداء والنطق وتعتمد الأفضل.
-                      يُحسب توليدَين من حدك.
+                      الافتراضي نسخة واحدة بأقوى سلسلة: Lyria 3 Pro (محرك Google Flow
+                      Music) مع رجوع تلقائي إلى Eleven Music v2 عند تعذّره. فعّل المقارنة
+                      عندما تريد الحكم بنفسك: نسختان متوازيتان من المحركين، وتُحسبان
+                      توليدَين من حدك.
                     </p>
                   </div>
                   {signedIn ? (
