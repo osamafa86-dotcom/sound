@@ -4,8 +4,8 @@ import { getVoiceTuning } from "@/lib/brain";
 import { TTS_SAMPLE_ONE_IN, autoEvalTTS, sampleOneIn } from "@/lib/autoEval";
 import { getCustomVoice } from "@/lib/customVoices";
 import { applyPronunciationRules, listRules } from "@/lib/pronunciation";
-import { classifyStyle, getStyle, styleTagPrefix } from "@/lib/performance/styles";
-import { hasAudioTags } from "@/lib/performance/tags";
+import { classifyStyle, getStyle, layerTagPrefix, styleTagPrefix } from "@/lib/performance/styles";
+import { hasAudioTags, stripAudioTags, stripBidiMarks } from "@/lib/performance/tags";
 import { elevenLabsTranscribe } from "@/lib/providers/elevenlabs";
 import { pronunciationAccuracy } from "@/lib/textCompare";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
@@ -22,7 +22,8 @@ export async function POST(req: NextRequest) {
   if (!verdict.allowed) return limitResponse(verdict);
 
   const body = await req.json().catch(() => null);
-  let text: string = body?.text?.trim();
+  // علامات الاتجاه غير المرئية (تُدرج للعرض السليم في المحرر) لا تصل للمحرك
+  let text: string = stripBidiMarks(body?.text?.trim() ?? "");
 
   if (!text) {
     return NextResponse.json({ error: "النص مطلوب" }, { status: 400 });
@@ -52,9 +53,31 @@ export async function POST(req: NextRequest) {
   }
   const style = getStyle(styleId);
 
-  // المحرك التعبيري يُفعَّل بأسلوب أداء أو وسوم داخل النص أو طلب صريح
+  // قاعدة الطبقات: حالة جسدية وبيئة صوتية تتراكب فوق الأسلوب الأساسي
+  const layerIds: string[] = Array.isArray(body?.layerIds)
+    ? body.layerIds.filter((l: unknown) => typeof l === "string").slice(0, 4)
+    : [];
+  const layersPrefix = layerTagPrefix(layerIds);
+
+  // موجه المخرج الحر — توجيه إضافي يُحقن كوسم (بلا أقواس متداخلة أو أسطر)
+  const directorNote =
+    typeof body?.directorNote === "string"
+      ? body.directorNote.replace(/[[\]\n\r]/g, " ").trim().slice(0, 200)
+      : "";
+
+  // المحرك التعبيري يُفعَّل بأسلوب أو طبقات أو موجه أو وسوم داخل النص أو طلب صريح
+  const textHasTags = hasAudioTags(text);
   const expressive =
-    body?.expressive === true || !!style || (body?.expressive !== false && hasAudioTags(text));
+    body?.expressive === true ||
+    !!style ||
+    !!layersPrefix ||
+    !!directorNote ||
+    (body?.expressive !== false && textHasTags);
+
+  // المحرك الكلاسيكي يقرأ الوسوم ككلمات («ساد»!) — تُنزع قبل وصوله
+  if (!expressive && textHasTags) {
+    text = stripAudioTags(text);
+  }
 
   // الجيل الثالث لا يدعم قواميس النطق — ذاكرة النطق تُطبَّق نصياً قبل التوليد
   const elevenKey = process.env.ELEVENLABS_API_KEY;
@@ -72,10 +95,19 @@ export async function POST(req: NextRequest) {
     speed: body?.speed,
     format: body?.format,
     expressive,
-    stylePrefix: style ? styleTagPrefix(style) : undefined,
+    // بادئة مركّبة: أسلوب + طبقات + موجه المخرج — بترتيب العموم فالخصوص
+    stylePrefix:
+      [style ? styleTagPrefix(style) : "", layersPrefix, directorNote ? `[${directorNote}]` : ""]
+        .filter(Boolean)
+        .join(" ") || undefined,
     liveliness: Number.isFinite(body?.liveliness) ? Number(body.liveliness) : undefined,
     speakerBoost: body?.speakerBoost !== false,
   };
+
+  // الثبات «الرصين» يتجاهل الوسوم رسمياً — وجودها في النص يسقف الثبات عند «طبيعي»
+  if (expressive && textHasTags && (request.stability ?? 0.5) >= 0.75) {
+    request.stability = 0.5;
+  }
 
   // عقل المنصة: عند غياب الإعدادات تُطبَّق القيم المتعلمة من التوليدات عالية التقييم
   if (request.stability === undefined || request.speed === undefined) {

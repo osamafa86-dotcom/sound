@@ -1,4 +1,18 @@
 import Link from "next/link";
+import {
+  AudioLines,
+  Brain,
+  Images,
+  Languages,
+  Library,
+  Mic,
+  Music,
+  Music4,
+  Play,
+  SlidersHorizontal,
+  Sparkles,
+  type LucideIcon,
+} from "lucide-react";
 import WaveBars from "@/components/WaveBars";
 import WaveLine from "@/components/WaveLine";
 import { MAQAMAT } from "@/lib/maqamat";
@@ -17,8 +31,8 @@ function MockPlayer() {
         <span className="rounded-full bg-rose px-3 py-1 text-xs font-semibold text-primary">وضع تجريبي</span>
       </div>
       <div dir="ltr" className="flex items-center gap-3">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-sm text-white shadow-md shadow-primary/30">
-          ▶
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-white shadow-md shadow-primary/30">
+          <Play className="h-4 w-4 fill-white" strokeWidth={0} />
         </span>
         <span className="w-9 text-center text-xs tabular-nums text-faint">0:00</span>
         <div className="flex min-w-0 flex-1 items-center gap-[3px]">
@@ -42,26 +56,26 @@ function MockPlayer() {
   );
 }
 
-const features = [
+const features: { title: string; text: string; icon: LucideIcon }[] = [
   {
     title: "جودة استوديو",
     text: "محركات ذكاء اصطناعي من الطراز الأول: ElevenLabs وAzure وGoogle Lyria، بصوت 44.1kHz نقي.",
-    icon: "🎚️",
+    icon: SlidersHorizontal,
   },
   {
     title: "عربي أولاً",
     text: "فصحى ولهجات (سعودية، مصرية، أردنية، إماراتية...) وواجهة عربية كاملة من اليمين لليسار.",
-    icon: "🗣️",
+    icon: Languages,
   },
   {
     title: "مقامات حقيقية",
     text: "بياتي، حجاز، راست، صبا... طبقة ذكاء اصطناعي وسيطة تترجم المقام إلى برومبت موسيقي احترافي.",
-    icon: "🎼",
+    icon: Music4,
   },
   {
     title: "مكتبتك الخاصة",
     text: "كل ما تولّده يُحفظ في مكتبتك، جاهزاً للاستماع والتنزيل والمشاركة في أي وقت.",
-    icon: "📚",
+    icon: Library,
   },
 ];
 
@@ -123,15 +137,17 @@ export default function Home() {
             <div className="mt-9 flex flex-wrap gap-3.5">
               <Link
                 href="/tts"
-                className="rounded-xl bg-primary px-6 py-3 font-semibold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary-strong hover:shadow-primary/40"
+                className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 font-semibold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary-strong hover:shadow-primary/40"
               >
-                🎙️ جرّب النص إلى صوت
+                <Mic className="h-[18px] w-[18px]" strokeWidth={2} />
+                جرّب النص إلى صوت
               </Link>
               <Link
                 href="/songs"
-                className="rounded-xl border border-border-strong bg-surface-card px-6 py-3 font-semibold transition-colors hover:border-primary hover:text-primary"
+                className="flex items-center gap-2 rounded-xl border border-border-strong bg-surface-card px-6 py-3 font-semibold transition-colors hover:border-primary hover:text-primary"
               >
-                🎼 استوديو الأغاني والمقامات
+                <Music className="h-[18px] w-[18px] text-primary" strokeWidth={2} />
+                استوديو الأغاني والمقامات
               </Link>
             </div>
             <div className="mt-8 flex flex-wrap items-center gap-3 text-sm font-medium text-muted">
@@ -191,7 +207,9 @@ export default function Home() {
             className="card-lift group rounded-3xl border border-border-soft bg-surface-card p-8 transition-all hover:-translate-y-1 hover:border-primary/60"
           >
             <div className="flex items-start justify-between">
-              <span className="grid h-14 w-14 place-items-center rounded-2xl bg-rose text-3xl">🎙️</span>
+              <span className="grid h-14 w-14 place-items-center rounded-2xl bg-rose">
+                <Mic className="h-7 w-7 text-primary" strokeWidth={1.7} />
+              </span>
               <span className="font-heading text-5xl font-extrabold leading-none text-primary/20">٠١</span>
             </div>
             <h2 className="mt-5 text-2xl font-bold">استوديو النص إلى صوت</h2>
@@ -209,7 +227,9 @@ export default function Home() {
             className="card-lift group rounded-3xl border border-border-soft bg-surface-card p-8 transition-all hover:-translate-y-1 hover:border-primary/60"
           >
             <div className="flex items-start justify-between">
-              <span className="grid h-14 w-14 place-items-center rounded-2xl bg-rose text-3xl">🎼</span>
+              <span className="grid h-14 w-14 place-items-center rounded-2xl bg-rose">
+                <Music className="h-7 w-7 text-primary" strokeWidth={1.7} />
+              </span>
               <span className="font-heading text-5xl font-extrabold leading-none text-primary/20">٠٢</span>
             </div>
             <h2 className="mt-5 text-2xl font-bold">استوديو الأغاني والمقامات</h2>
@@ -226,19 +246,21 @@ export default function Home() {
         {/* اكتشف المزيد */}
         <section className="pb-16">
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              { href: "/gallery", icon: "🖼️", title: "معرض الإبداعات", text: "استمع لأجمل ما ولّده المجتمع من أصوات وأغانٍ." },
-              { href: "/voices", icon: "🎙️", title: "معرض الأصوات", text: "كتالوج الأصوات كاملاً — استمع وقارن واختر صوتك." },
-              { href: "/prompts", icon: "✨", title: "وكيل البرومبتات", text: "مختبر يصوغ ويختبر برومبتات موسيقية احترافية." },
-              { href: "/brain", icon: "🧠", title: "عقل المنصة", text: "ذاكرة نطق تتعلم من تصحيحاتك وتتحسن مع الوقت." },
-            ].map((s) => (
+            {([
+              { href: "/gallery", icon: Images, title: "معرض الإبداعات", text: "استمع لأجمل ما ولّده المجتمع من أصوات وأغانٍ." },
+              { href: "/voices", icon: AudioLines, title: "معرض الأصوات", text: "كتالوج الأصوات كاملاً — استمع وقارن واختر صوتك." },
+              { href: "/prompts", icon: Sparkles, title: "وكيل البرومبتات", text: "مختبر يصوغ ويختبر برومبتات موسيقية احترافية." },
+              { href: "/brain", icon: Brain, title: "عقل المنصة", text: "ذاكرة نطق تتعلم من تصحيحاتك وتتحسن مع الوقت." },
+            ] as { href: string; icon: LucideIcon; title: string; text: string }[]).map((s) => (
               <Link
                 key={s.href}
                 href={s.href}
                 className="group rounded-2xl border border-border-soft bg-surface-card p-5 transition-all hover:-translate-y-1 hover:border-primary/50"
               >
                 <div className="flex items-center justify-between">
-                  <span className="grid h-11 w-11 place-items-center rounded-xl bg-rose text-xl">{s.icon}</span>
+                  <span className="grid h-11 w-11 place-items-center rounded-xl bg-rose">
+                    <s.icon className="h-5 w-5 text-primary" strokeWidth={1.8} />
+                  </span>
                   <span className="text-primary opacity-0 transition-opacity group-hover:opacity-100">←</span>
                 </div>
                 <h3 className="mt-3 font-bold">{s.title}</h3>
@@ -255,12 +277,17 @@ export default function Home() {
             <WaveLine />
           </div>
           <div className="grid gap-6 lg:grid-cols-2">
-            {[
-              { title: "🎙️ النص إلى صوت", steps: ttsSteps },
-              { title: "🎼 الأغاني والمقامات", steps: songSteps },
-            ].map((studio) => (
+            {([
+              { title: "النص إلى صوت", icon: Mic, steps: ttsSteps },
+              { title: "الأغاني والمقامات", icon: Music, steps: songSteps },
+            ] as { title: string; icon: LucideIcon; steps: typeof ttsSteps }[]).map((studio) => (
               <div key={studio.title} className="rounded-3xl border border-border-soft bg-surface-card p-8">
-                <h3 className="mb-2 text-xl font-bold">{studio.title}</h3>
+                <h3 className="mb-2 flex items-center gap-2.5 text-xl font-bold">
+                  <span className="grid h-9 w-9 place-items-center rounded-lg bg-rose">
+                    <studio.icon className="h-[18px] w-[18px] text-primary" strokeWidth={1.9} />
+                  </span>
+                  {studio.title}
+                </h3>
                 <ol className="flex flex-col">
                   {studio.steps.map((s, i) => (
                     <li
@@ -289,8 +316,10 @@ export default function Home() {
           <div className="glow-card card-lift relative overflow-hidden rounded-3xl border border-primary/25 p-8 md:p-10">
             <div className="grid items-center gap-8 md:grid-cols-2">
               <div className="rounded-2xl border border-border-soft bg-surface p-6 text-center">
-                <p className="text-5xl">🧠</p>
-                <p className="mt-3 font-heading text-lg font-bold">كل هذا التعلم مكشوف بشفافية</p>
+                <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-rose">
+                  <Brain className="h-8 w-8 text-primary" strokeWidth={1.6} />
+                </span>
+                <p className="mt-4 font-heading text-lg font-bold">كل هذا التعلم مكشوف بشفافية</p>
                 <p className="mt-2 text-sm leading-relaxed text-muted">
                   صفحة «العقل» تريك الإشارات المجمعة ودرجات النقد الذاتي وترتيب الأصوات
                   بأدلته وسلالات كل مقام — لا صندوق أسود.
@@ -344,7 +373,9 @@ export default function Home() {
                 key={f.title}
                 className="rounded-2xl border border-border-soft bg-surface-card p-6 transition-all hover:-translate-y-1 hover:border-primary/50"
               >
-                <span className="grid h-12 w-12 place-items-center rounded-xl bg-rose text-2xl">{f.icon}</span>
+                <span className="grid h-12 w-12 place-items-center rounded-xl bg-rose">
+                  <f.icon className="h-[22px] w-[22px] text-primary" strokeWidth={1.8} />
+                </span>
                 <h3 className="mt-4 text-lg font-bold">{f.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted">{f.text}</p>
               </div>
@@ -401,9 +432,10 @@ export default function Home() {
               </Link>
               <Link
                 href="/brain"
-                className="rounded-xl border border-cream/40 px-8 py-3.5 font-bold text-cream transition-colors hover:border-cream hover:bg-cream/10"
+                className="flex items-center gap-2 rounded-xl border border-cream/40 px-8 py-3.5 font-bold text-cream transition-colors hover:border-cream hover:bg-cream/10"
               >
-                🧠 شاهد ماذا تعلمت المنصة
+                <Brain className="h-[18px] w-[18px]" strokeWidth={1.9} />
+                شاهد ماذا تعلمت المنصة
               </Link>
             </div>
             <WaveBars bars={24} tone="cream" className="relative mt-10 h-10 opacity-70" />

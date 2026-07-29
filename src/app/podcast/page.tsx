@@ -3,6 +3,7 @@
 import { useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
 import WaveLine from "@/components/WaveLine";
+import MemberNotice from "@/components/MemberNotice";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import { VOICES } from "@/lib/voices";
 import { authHeaders } from "@/lib/supabase";
@@ -148,9 +149,10 @@ export default function PodcastStudio() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
       <h1 className="text-3xl font-extrabold md:text-4xl">
-        🎙️ البودكاست <span className="text-gradient">الذكي</span>
+        البودكاست <span className="text-gradient">الذكي</span>
       </h1>
       <WaveLine className="mt-3" />
+      <MemberNotice />
       <p className="mt-2 max-w-2xl leading-relaxed text-muted">
         اكتب موضوعاً واحداً، فيؤلّف الذكاء الاصطناعي حلقة حوارية كاملة بين مقدّمَين
         بأصوات مختلفة — بمحتوى حقيقي وحوار طبيعي، جاهزة للنشر.

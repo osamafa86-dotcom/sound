@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
 import Recorder from "@/components/Recorder";
 import WaveLine from "@/components/WaveLine";
+import MemberNotice from "@/components/MemberNotice";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import { VOICES, type Voice } from "@/lib/voices";
 import { authHeaders } from "@/lib/supabase";
@@ -173,6 +174,7 @@ export default function VoiceLab() {
         معمل <span className="text-gradient">الصوت</span>
       </h1>
       <WaveLine className="mt-3" />
+      <MemberNotice />
       <p className="mt-2 text-muted">
         سجّل صوتك أو ارفع تسجيلاً — ثم فرّغه نصياً، أو حوّله لصوت آخر، أو استنسخ نسختك الرقمية.
       </p>
