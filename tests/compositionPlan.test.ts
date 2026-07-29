@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCompositionPlan } from "@/lib/providers/compositionPlan";
+import { buildCompositionPlan, buildElevenMusicPrompt } from "@/lib/providers/compositionPlan";
 import type { MusicRequest } from "@/lib/providers/types";
 
 const base: MusicRequest = {
@@ -70,5 +70,50 @@ describe("مترجم خطة التأليف (Eleven Music)", () => {
     })!;
     expect(plan.sections[0].lines).toEqual([]);
     expect(plan.negative_global_styles).toContain("vocals");
+  });
+});
+
+describe("برومبت Music v2 — البنية والكلمات داخل النص", () => {
+  it("مقاطع مُهيكلة: عناوين مرقمة بمددها والكلمات كما كُتبت والمقدمة آلية", () => {
+    const prompt = buildElevenMusicPrompt({
+      ...base,
+      singer: "female",
+      bpm: 96,
+      dialectEn: "Palestinian",
+      sections: [
+        { kind: "intro", lyrics: "", durationSec: 10 },
+        { kind: "verse", lyrics: "سطر أول\nسطر ثانٍ", durationSec: 30 },
+        { kind: "verse", lyrics: "مقطع ثانٍ", durationSec: 25 },
+        { kind: "chorus", lyrics: "لازمتنا", durationSec: 20 },
+      ],
+    });
+    expect(prompt).toContain("Arabic maqam Hijaz, oud and qanun");
+    expect(prompt).toContain("96 BPM");
+    expect(prompt).toContain("female Arabic lead vocals");
+    expect(prompt).toContain("Palestinian Arabic dialect");
+    expect(prompt).toContain("[Intro 1 — ~10s] (instrumental)");
+    expect(prompt).toContain("[Verse 1 — ~30s]\nسطر أول\nسطر ثانٍ");
+    expect(prompt).toContain("[Verse 2 — ~25s]\nمقطع ثانٍ");
+    expect(prompt).toContain("[Chorus 1 — ~20s]\nلازمتنا");
+    expect(prompt).toContain("exactly as written including diacritics");
+  });
+
+  it("بلا مقاطع: كلمات حرة تُغنى كما كُتبت", () => {
+    const prompt = buildElevenMusicPrompt({ ...base, lyrics: "يا ليل يا عين", singer: "male" });
+    expect(prompt).toContain("male Arabic lead vocals");
+    expect(prompt).toContain("Arabic vocals singing these lyrics exactly as written:\nيا ليل يا عين");
+  });
+
+  it("آلي: لا غناء ولا توجيهات مغنٍ حتى مع وجود كلمات", () => {
+    const prompt = buildElevenMusicPrompt({
+      ...base,
+      styleId: "instrumental",
+      lyrics: "تُتجاهل",
+      singer: "female",
+      dialectEn: "Egyptian",
+    });
+    expect(prompt).toContain("instrumental only, no vocals");
+    expect(prompt).not.toContain("lead vocals");
+    expect(prompt).not.toContain("Egyptian");
   });
 });

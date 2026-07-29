@@ -59,6 +59,63 @@ const SECTION_STYLE: Record<
   },
 };
 
+const SECTION_EN: Record<SectionKind, string> = {
+  intro: "Intro",
+  verse: "Verse",
+  chorus: "Chorus",
+  bridge: "Bridge",
+  outro: "Outro",
+};
+
+/**
+ * برومبت Music v2 — النموذج الأحدث يفهم البنية والكلمات داخل النص مباشرة
+ * (خطة التأليف المهيكلة بقيت لغة v1، وv2 يتجاهل فرض المدد أصلاً):
+ * ترويسة الأسلوب ثم المقاطع بعناوينها ومددها التقريبية وكلماتها كما كُتبت.
+ */
+export function buildElevenMusicPrompt(req: MusicRequest): string {
+  const hasSectionLyrics = !!req.sections?.some((s) => s.lyrics.trim());
+  const instrumentalOnly =
+    req.styleId === "instrumental" || (!req.lyrics?.trim() && !hasSectionLyrics);
+
+  const header = [
+    req.stylePrompt,
+    ...(req.bpm ? [`${req.bpm} BPM`] : []),
+    ...(req.singer && !instrumentalOnly ? [`${req.singer} Arabic lead vocals`] : []),
+    ...(req.dialectEn && !instrumentalOnly
+      ? [`authentic ${req.dialectEn} Arabic dialect, native-speaker pronunciation`]
+      : []),
+  ];
+
+  if (instrumentalOnly) {
+    return [...header, "instrumental only, no vocals"].join("\n");
+  }
+
+  if (req.sections?.length) {
+    const counts = new Map<SectionKind, number>();
+    const body = req.sections
+      .map((s) => {
+        const n = (counts.get(s.kind) ?? 0) + 1;
+        counts.set(s.kind, n);
+        const label = `[${SECTION_EN[s.kind]} ${n} — ~${s.durationSec}s]`;
+        return s.kind === "intro" || s.kind === "outro" || !s.lyrics.trim()
+          ? `${label} (instrumental)`
+          : `${label}\n${s.lyrics.trim()}`;
+      })
+      .join("\n\n");
+    return [
+      ...header,
+      "Sing the lyrics exactly as written including diacritics.",
+      "Song structure with lyrics:",
+      body,
+    ].join("\n");
+  }
+
+  return [
+    ...header,
+    `Arabic vocals singing these lyrics exactly as written:\n${req.lyrics!.trim()}`,
+  ].join("\n");
+}
+
 /** يبني خطة التأليف من الطلب — null عندما لا مقاطع (فيبقى مسار البرومبت الواحد) */
 export function buildCompositionPlan(req: MusicRequest): ElevenCompositionPlan | null {
   if (!req.sections?.length) return null;
