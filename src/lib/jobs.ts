@@ -44,6 +44,8 @@ export interface JobsStore {
   update(id: string, patch: JobPatch): Promise<void>;
   /** يخزّن الناتج الصوتي ويعلّم المهمة مكتملة */
   complete(id: string, result: AudioResult, extra?: Pick<JobPatch, "stage" | "fellBack">): Promise<void>;
+  /** يحفظ الطلب بعد تحويرات المنفّذ (كالتشكيل التلقائي) — فتقرأه الواجهة مع الحالة */
+  saveRequest(id: string, request: MusicRequest): Promise<void>;
   getAudio(id: string): Promise<{ audio: Buffer; mimeType: string } | undefined>;
   /** آخر مهام المستخدم — سجل «توليداتي» في الاستوديو */
   listRecent(userId: string, limit?: number): Promise<SongJob[]>;
@@ -97,6 +99,13 @@ export const memoryJobsStore: JobsStore = {
   async update(id, patch) {
     const entry = memoryJobs.get(id);
     if (entry) Object.assign(entry.job, patch, { updatedAt: Date.now() });
+  },
+  async saveRequest(id, request) {
+    const entry = memoryJobs.get(id);
+    if (entry) {
+      entry.job.request = request;
+      entry.job.updatedAt = Date.now();
+    }
   },
   async complete(id, result, extra) {
     const entry = memoryJobs.get(id);
@@ -203,6 +212,13 @@ export const supabaseJobsStore: JobsStore = {
   async update(id, patch) {
     const admin = getSupabaseAdmin()!;
     await admin.from(TABLE).update(patchToRow(patch)).eq("id", id);
+  },
+  async saveRequest(id, request) {
+    const admin = getSupabaseAdmin()!;
+    await admin
+      .from(TABLE)
+      .update({ request, updated_at: new Date().toISOString() })
+      .eq("id", id);
   },
   async complete(id, result, extra) {
     const admin = getSupabaseAdmin()!;

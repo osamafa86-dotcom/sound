@@ -6,7 +6,7 @@ import LyricsEditor from "@/components/LyricsEditor";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import SingAlongPanel from "@/components/SingAlongPanel";
 import StemsPanel from "@/components/StemsPanel";
-import { findActiveWord, type KaraokeWord } from "@/lib/karaoke";
+import { alignWordsToLyrics, findActiveWord, type KaraokeWord } from "@/lib/karaoke";
 import { HERITAGE_STYLE_IDS, LYRIC_FORMS, heritageStyle } from "@/lib/heritage/palestinian";
 import { emitSignal } from "@/lib/signalClient";
 import { AMBIENCES, DIALECTS, INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
@@ -41,6 +41,9 @@ type JobStatusResponse = {
   fellBack?: string;
   error?: string;
   elevenSongId?: string;
+  /** الكلمات كما غُنّيت فعلاً — بعد التشكيل التلقائي على الخادم */
+  lyrics?: string;
+  sections?: SongSection[];
 };
 
 type RecentJob = {
@@ -78,6 +81,9 @@ type SongResult = {
   elevenSongId?: string;
   /** مُعالج بلمسة الماستر (تطبيع + fade + قص صمت) */
   mastered?: boolean;
+  /** الكلمات كما غُنّيت فعلاً (بعد التشكيل التلقائي) — تتبناها الواجهة */
+  finalLyrics?: string;
+  finalSections?: SongSection[];
 };
 
 type ImageBriefResponse = {
@@ -291,6 +297,17 @@ export default function SongsStudio() {
     const learnData = await learn.json().catch(() => null);
     if (!learn.ok) throw new Error(learnData?.error ?? "تعذّر حفظ النطق");
 
+    // قاعدة ثانية بالمفتاح العاري من الحركات — كي تصيب الذاكرة النصوص
+    // القادمة قبل تشكيلها التلقائي كما تصيب نص الجلسة المشكّل
+    const bareWord = word.replace(/[ً-ْٰـ]/g, "");
+    if (bareWord && bareWord !== word) {
+      await fetch("/api/pronunciation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ word: bareWord, alias }),
+      }).catch(() => {});
+    }
+
     const replaceIn = (text: string) => text.split(word).join(alias);
     const nextSections = sections?.map((s) => ({ ...s, lyrics: replaceIn(s.lyrics) })) ?? null;
     const byText = sections?.findIndex((s) => s.lyrics.includes(word)) ?? -1;
@@ -485,11 +502,17 @@ export default function SongsStudio() {
       elevenSongId: status.elevenSongId,
       maqamName: snapshot.maqamName,
       title: snapshot.title,
+      finalLyrics: status.lyrics,
+      finalSections: status.sections,
     };
   }
 
   /** عرض ناتج جديد: أدوات ما بعد التوليد تعود لنقطة الصفر ويُحتسب نسخةً */
   function presentSong(song: SongResult) {
+    // الكلمات كما غُنّيت فعلاً (بعد التشكيل التلقائي على الخادم) تتبناها الواجهة —
+    // فيتطابق ما تراه في النص والمحرر مع ما نُطق حرفياً
+    if (song.finalSections?.length && sections) applySections(song.finalSections);
+    else if (song.finalLyrics && !sections) setLyrics(song.finalLyrics);
     setKaraokeWords(null);
     setKaraokeNote("");
     setActiveWord(-1);
@@ -728,7 +751,8 @@ export default function SongsStudio() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error ?? "تعذّرت مزامنة الكلمات");
-      setKaraokeWords(data.words);
+      // عرض الكلمات بصورتها المكتوبة المشكّلة لا بصورة التفريغ العارية
+      setKaraokeWords(alignWordsToLyrics(data.words, lyrics));
       setActiveWord(-1);
     } catch (e) {
       // فشل المزامنة التلقائية لا يقاطع الاحتفال بالناتج — ملاحظة هادئة وزر يدوي
