@@ -19,6 +19,7 @@ export async function runSongJob(jobId: string): Promise<void> {
   const provider = getMusicProvider({
     tier: job.tier,
     instrumental: job.request.styleId === "instrumental",
+    force: job.request.forceProvider,
   });
   await store.update(jobId, {
     status: "running",

@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AudioPlayer from "@/components/AudioPlayer";
 import Karaoke from "@/components/Karaoke";
 import SaveToLibrary from "@/components/SaveToLibrary";
+import SingAlongPanel from "@/components/SingAlongPanel";
+import StemsPanel from "@/components/StemsPanel";
 import { findActiveWord, type KaraokeWord } from "@/lib/karaoke";
 import { HERITAGE_STYLE_IDS, LYRIC_FORMS, heritageStyle } from "@/lib/heritage/palestinian";
 import { emitSignal } from "@/lib/signalClient";
 import { AMBIENCES, DIALECTS, INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
 import { authHeaders } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 import {
   MAX_SECTIONS,
   SECTION_LABELS,
@@ -85,6 +88,23 @@ type ImageBriefResponse = {
   stylePromptEn: string;
 };
 
+/** وضع المقارنة التجريبي: النسخة نفسها من المحركين معاً للحكم على الجودة والنطق */
+type CompareEngine = "lyria" | "eleven-music";
+
+const ENGINE_LABELS: Record<CompareEngine, string> = {
+  lyria: "Lyria 3 Pro — جوجل",
+  "eleven-music": "Eleven Music",
+};
+
+type CompareSlot = {
+  provider: CompareEngine;
+  jobId: string;
+  status: "running" | "done" | "failed";
+  stage: string;
+  song?: SongResult;
+  error?: string;
+};
+
 export default function SongsStudio() {
   const [step, setStep] = useState(0);
   const [lyrics, setLyrics] = useState("");
@@ -99,6 +119,32 @@ export default function SongsStudio() {
   /** كل نسخ هذه الجلسة بالأحدث أولاً — للمقارنة واختيار الأفضل */
   const [versions, setVersions] = useState<SongResult[]>([]);
   const [error, setError] = useState("");
+
+  // 🧪 وضع المقارنة التجريبي (للمسجلين): Lyria 3 Pro × Eleven Music لكل توليد كامل
+  const [signedIn, setSignedIn] = useState(false);
+  const [compareMode, setCompareMode] = useState(true);
+  const [compareSlots, setCompareSlots] = useState<CompareSlot[] | null>(null);
+  const [compareNote, setCompareNote] = useState("");
+  /** إشارتا الفوز/الخسارة تُبثان مرة واحدة لكل مقارنة */
+  const compareSignaledRef = useRef(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    if (!supabase) return;
+    let cancelled = false;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!cancelled) setSignedIn(!!data.user);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function updateCompareSlot(index: number, patch: Partial<CompareSlot>) {
+    setCompareSlots((prev) =>
+      prev ? prev.map((s, i) => (i === index ? { ...s, ...patch } : s)) : prev
+    );
+  }
 
   const [idea, setIdea] = useState("");
   const [dialectId, setDialectId] = useState<string>(DIALECTS[0].id);
@@ -300,6 +346,8 @@ export default function SongsStudio() {
 
   const maqam = MAQAMAT.find((m) => m.id === maqamId)!;
   const instrumental = styleId === "instrumental";
+  /** المقارنة ستسري على التوليد القادم — لتسمية زر التوليد وحالة البطاقة */
+  const wantCompareUi = compareMode && signedIn && tier === "full";
 
   function toggleInstrument(id: string) {
     // تعديل يدوي للآلات يفك ارتباط الأجواء الجاهزة (تبقى الآلات كما اختار)
@@ -374,8 +422,12 @@ export default function SongsStudio() {
     }
   }
 
-  /** متابعة مهمة حتى الاكتمال وجلب ناتجها — تخدم التوليد الجديد واستعادة المهام معاً */
-  async function watchJob(jobId: string, snapshot: { maqamName: string; title: string }) {
+  /** متابعة مهمة حتى الاكتمال وإرجاع ناتجها — بلا لمس حالة العرض (تخدم المقارنة أيضاً) */
+  async function watchJobCore(
+    jobId: string,
+    snapshot: { maqamName: string; title: string },
+    onStage?: (stage: string) => void
+  ): Promise<SongResult> {
     // استعلام دوري عن حالة المهمة حتى الاكتمال (مهلة قصوى ٢٠٠ محاولة × ١.٥ ثانية = ٥ دقائق)
     let status: JobStatusResponse | null = null;
     for (let attempt = 0; attempt < 200; attempt++) {
@@ -385,7 +437,7 @@ export default function SongsStudio() {
       if (!sres.ok) {
         throw new Error(status?.error ?? "تعذّر متابعة حالة المهمة");
       }
-      setStage(status?.stage ?? "");
+      onStage?.(status?.stage ?? "");
       if (status?.status === "done") break;
       if (status?.status === "failed") {
         throw new Error(status.error ?? "فشل التوليد، حاول مجدداً");
@@ -400,7 +452,7 @@ export default function SongsStudio() {
       throw new Error("تعذّر جلب الملف الصوتي");
     }
     const blob = await ares.blob();
-    const song: SongResult = {
+    return {
       url: URL.createObjectURL(blob),
       blob,
       jobId,
@@ -413,7 +465,10 @@ export default function SongsStudio() {
       maqamName: snapshot.maqamName,
       title: snapshot.title,
     };
-    // أدوات ما بعد التوليد تعود لنقطة الصفر مع كل ناتج جديد
+  }
+
+  /** عرض ناتج جديد: أدوات ما بعد التوليد تعود لنقطة الصفر ويُحتسب نسخةً */
+  function presentSong(song: SongResult) {
     setKaraokeWords(null);
     setActiveWord(-1);
     setShareCopied(false);
@@ -423,6 +478,41 @@ export default function SongsStudio() {
     });
     setResult(song);
     setVersions((prev) => [song, ...prev]);
+  }
+
+  /** متابعة مهمة وعرض ناتجها — التوليد المفرد واستعادة المهام */
+  async function watchJob(jobId: string, snapshot: { maqamName: string; title: string }) {
+    const song = await watchJobCore(jobId, snapshot, setStage);
+    presentSong(song);
+  }
+
+  /** اعتماد نسخة من المقارنة: تصبح الناتج الرئيسي وتُفتح عليها كل أدوات ما بعد التوليد */
+  function adoptCompareVersion(index: number) {
+    if (!compareSlots) return;
+    const winner = compareSlots[index];
+    if (!winner.song) return;
+    const loser = compareSlots.find((_, i) => i !== index);
+    // فوز صريح وخسارة صريحة بين المحركين — وقود ترتيب المحركات في عقل المنصة
+    if (!compareSignaledRef.current) {
+      compareSignaledRef.current = true;
+      if (!winner.song.mock) {
+        emitSignal({
+          kind: "version_chosen",
+          maqamId,
+          settings: { stylePrompt: winner.song.prompt, engine: winner.provider },
+          meta: { compare: true, provider: winner.provider, over: loser?.provider },
+        });
+      }
+      if (loser?.song && !loser.song.mock) {
+        emitSignal({
+          kind: "version_rejected",
+          maqamId,
+          settings: { stylePrompt: loser.song.prompt, engine: loser.provider },
+          meta: { compare: true, provider: loser.provider },
+        });
+      }
+    }
+    presentSong(winner.song);
   }
 
   async function generate(extras?: Record<string, unknown>) {
@@ -443,9 +533,15 @@ export default function SongsStudio() {
     setLoading(true);
     setStage("جارٍ إنشاء المهمة...");
     setResult(null);
+    setCompareSlots(null);
+    setCompareNote("");
+    compareSignaledRef.current = false;
     try {
       // تبديل المقام بضغطة: المقام الفعلي قد يصل تجاوزاً قبل تحديث الحالة
       const effectiveMaqamId = (extras?.maqamId as string) ?? maqamId;
+      // المقارنة: للمسجلين وللنسخة الكاملة، وليست لإعادة التوليد الجزئي (ميزة Eleven وحده)
+      const wantCompare =
+        compareMode && signedIn && tier === "full" && extras?.regenerateSectionIndex === undefined;
       // أولوية البرومبت: موجز الصورة ثم المساعد — ما دام المقام الفعلي هو المقترح
       const aiStylePrompt =
         imageBrief && imageBrief.maqamId === effectiveMaqamId && styleId === "instrumental"
@@ -474,6 +570,7 @@ export default function SongsStudio() {
           dialectId: instrumental ? undefined : deliveryDialectId,
           // «نسخة أخرى»: رقم النسخة يدفع المحرك للتنويع بدل تكرار التوزيع
           variation: versions.length,
+          compare: wantCompare,
           ...extras,
         }),
       });
@@ -483,7 +580,7 @@ export default function SongsStudio() {
       }
 
       const maqamName = MAQAMAT.find((m) => m.id === effectiveMaqamId)?.name ?? "";
-      await watchJob(created.jobId as string, {
+      const snapshot = {
         maqamName,
         title:
           assist?.title && assist.title !== "مسودة تجريبية"
@@ -493,7 +590,45 @@ export default function SongsStudio() {
               : tier === "preview"
                 ? `معاينة بمقام ${maqamName}`
                 : `أغنية بمقام ${maqamName}`,
-      });
+      };
+
+      if (created.compareNote) setCompareNote(created.compareNote);
+
+      if (created.compare && Array.isArray(created.jobs) && created.jobs.length === 2) {
+        // نسختان متوازيتان: تُتابعان معاً وتظهر كلٌّ منهما فور اكتمالها
+        const slots: CompareSlot[] = (
+          created.jobs as { jobId: string; provider: CompareEngine }[]
+        ).map((j) => ({
+          provider: j.provider,
+          jobId: j.jobId,
+          status: "running" as const,
+          stage: "بانتظار البدء",
+        }));
+        setCompareSlots(slots);
+        setStage("🧪 جارٍ توليد النسختين للمقارنة...");
+        const outcomes = await Promise.all(
+          slots.map(async (slot, i) => {
+            try {
+              const song = await watchJobCore(slot.jobId, snapshot, (stage) =>
+                updateCompareSlot(i, { stage })
+              );
+              updateCompareSlot(i, { status: "done", song });
+              return true;
+            } catch (e) {
+              updateCompareSlot(i, {
+                status: "failed",
+                error: e instanceof Error ? e.message : "فشل التوليد",
+              });
+              return false;
+            }
+          })
+        );
+        if (!outcomes.some(Boolean)) {
+          throw new Error("فشل التوليد في المحركين معاً — حاول مجدداً");
+        }
+      } else {
+        await watchJob(created.jobId as string, snapshot);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
     } finally {
@@ -1250,6 +1385,48 @@ export default function SongsStudio() {
               )}
             </div>
 
+            {tier === "full" && (
+              <div
+                className={`rounded-2xl border p-4 transition-colors ${
+                  compareMode && signedIn
+                    ? "border-accent/60 bg-accent/5"
+                    : "border-border-soft bg-surface-card"
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold">
+                      🧪 وضع المقارنة بين المحركين{" "}
+                      <span className="rounded-full bg-gold/15 px-2 py-0.5 text-[10px] font-semibold text-gold">
+                        تجريبي
+                      </span>
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted">
+                      يولّد أغنيتك نسختين متوازيتين — Lyria 3 Pro (محرك Google Flow Music)
+                      وEleven Music — لتقارن الجودة والأداء والنطق وتعتمد الأفضل.
+                      يُحسب توليدَين من حدك.
+                    </p>
+                  </div>
+                  {signedIn ? (
+                    <button
+                      onClick={() => setCompareMode((v) => !v)}
+                      className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
+                        compareMode
+                          ? "border-accent bg-accent/10 text-accent"
+                          : "border-border-soft text-muted hover:text-body"
+                      }`}
+                    >
+                      {compareMode ? "✓ مفعّل" : "معطّل"}
+                    </button>
+                  ) : (
+                    <span className="shrink-0 text-xs text-muted">
+                      سجّل دخولك لتفعيل المقارنة
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="rounded-2xl border border-border-soft bg-surface-card p-6">
               <h2 className="mb-4 text-xl font-bold">ملخص أغنيتك</h2>
               <dl className="grid gap-3 text-sm sm:grid-cols-2">
@@ -1301,8 +1478,90 @@ export default function SongsStudio() {
                 ? stage || "جارٍ التلحين والتوليد..."
                 : tier === "preview"
                   ? "🎧 ولّد المعاينة"
-                  : "🎼 ولّد الأغنية"}
+                  : wantCompareUi
+                    ? "🧪 ولّد النسختين للمقارنة"
+                    : "🎼 ولّد الأغنية"}
             </button>
+
+            {compareNote && (
+              <p className="rounded-xl border border-gold/40 bg-gold/10 px-4 py-2.5 text-sm">
+                {compareNote}
+              </p>
+            )}
+
+            {compareSlots && (
+              <div className="rounded-2xl border border-accent/40 bg-surface-card p-5">
+                <h3 className="text-sm font-bold">🧪 المقارنة بين المحركين</h3>
+                <p className="mt-1 text-xs leading-relaxed text-muted">
+                  استمع للنسختين ثم اعتمد الأفضل — اختيارك يُسجَّل في عقل المنصة ويحسم أي
+                  محرك يتصدر للأغاني العربية، وتُفتح على النسخة المعتمدة كل أدوات ما بعد
+                  التوليد.
+                </p>
+                <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                  {compareSlots.map((slot, i) => (
+                    <div
+                      key={slot.jobId}
+                      className="flex flex-col gap-2 rounded-xl border border-border-soft bg-surface p-3"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span dir="ltr" className="text-sm font-bold">
+                          {ENGINE_LABELS[slot.provider]}
+                        </span>
+                        {slot.song && result?.jobId === slot.song.jobId && (
+                          <span className="rounded-full bg-accent/15 px-3 py-1 text-xs font-semibold text-accent">
+                            ✓ المعتمدة
+                          </span>
+                        )}
+                      </div>
+                      {slot.status === "running" && (
+                        <p className="animate-pulse text-xs text-muted">
+                          ⏳ {slot.stage || "جارٍ التوليد..."}
+                        </p>
+                      )}
+                      {slot.status === "failed" && (
+                        <p className="rounded-lg border border-primary/40 bg-rose px-3 py-2 text-xs text-primary-strong">
+                          {slot.error}
+                        </p>
+                      )}
+                      {slot.status === "done" && slot.song && (
+                        <>
+                          <AudioPlayer
+                            src={slot.song.url}
+                            title={`«${slot.song.title}»`}
+                            mock={slot.song.mock}
+                            filename={`maqam-${slot.provider}.${slot.song.ext}`}
+                            signal={
+                              slot.song.mock
+                                ? undefined
+                                : {
+                                    maqamId,
+                                    settings: {
+                                      stylePrompt: slot.song.prompt,
+                                      engine: slot.provider,
+                                    },
+                                  }
+                            }
+                            note={
+                              slot.song.fellBack
+                                ? "تعذّر هذا المحرك فعُرض بديل تجريبي — لا يصلح للمقارنة."
+                                : undefined
+                            }
+                          />
+                          {result?.jobId !== slot.song.jobId && (
+                            <button
+                              onClick={() => adoptCompareVersion(i)}
+                              className="self-start rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-strong"
+                            >
+                              ⭐ اعتمد هذه النسخة
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {result && (
               <div className="flex flex-col gap-4">
@@ -1503,6 +1762,23 @@ export default function SongsStudio() {
                     </div>
                     {fixMsg && <p className="mt-2 text-xs text-accent">{fixMsg}</p>}
                   </div>
+                )}
+
+                {/* المرحلة 8: فصل المسارات (للأغاني المغناة) وغناء المستخدم على اللحن */}
+                {!result.mock && !instrumental && (
+                  <StemsPanel
+                    key={`stems-${result.url}`}
+                    song={{ blob: result.blob, title: result.title }}
+                  />
+                )}
+                {!result.mock && (
+                  <SingAlongPanel
+                    key={`sing-${result.url}`}
+                    song={{ blob: result.blob, title: result.title }}
+                    isInstrumental={instrumental}
+                    maqamId={maqamId}
+                    styleId={styleId}
+                  />
                 )}
 
                 {result.prompt && (
