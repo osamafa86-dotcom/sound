@@ -66,6 +66,15 @@ export function integrations(): IntegrationStatus[] {
       critical: false,
     },
     {
+      id: "facebook",
+      name: "Meta (فيسبوك)",
+      powers: ["ربط صفحات فيسبوك", "نشر الأعمال على الصفحات"],
+      configured: has("FACEBOOK_APP_ID") && has("FACEBOOK_APP_SECRET"),
+      envVars: ["FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET"],
+      model: process.env.FACEBOOK_GRAPH_VERSION ?? "v25.0",
+      critical: false,
+    },
+    {
       id: "supabase",
       name: "Supabase (حسابات ومكتبة)",
       powers: ["تسجيل الدخول", "المكتبة السحابية", "التقييمات"],
@@ -100,6 +109,7 @@ export function features(forceMock = false): FeatureStatus[] {
   const claude = has("ANTHROPIC_API_KEY");
   const supabase = has("NEXT_PUBLIC_SUPABASE_URL") && has("NEXT_PUBLIC_SUPABASE_ANON_KEY");
   const service = has("SUPABASE_SERVICE_ROLE_KEY");
+  const facebook = has("FACEBOOK_APP_ID") && has("FACEBOOK_APP_SECRET");
 
   const state = (live: boolean, fallbackMock = true): FeatureStatus["state"] =>
     forceMock ? "mock" : live ? "live" : fallbackMock ? "mock" : "off";
@@ -113,6 +123,8 @@ export function features(forceMock = false): FeatureStatus[] {
     { id: "podcast", name: "البودكاست الذكي", path: "/podcast", state: state(gemini && eleven, false), note: gemini && eleven ? "سيناريو وإلقاء متعدد الأصوات" : "يحتاج مفتاحي Gemini وElevenLabs" },
     { id: "audiobook", name: "استوديو الكتب الصوتية", path: "/audiobook", state: state(eleven), note: eleven ? "فهرسة محلية وإلقاء بـ ElevenLabs" : "الفهرسة تعمل، والإلقاء بوضع تجريبي" },
     { id: "library", name: "المكتبة السحابية والحسابات", path: "/library", state: supabase ? "live" : "off", note: supabase ? "Supabase Auth + Storage" : "مكتبة محلية في المتصفح فقط" },
+    { id: "share", name: "المشاركة برابط عام", path: "/library", state: service ? "live" : "off", note: service ? "صفحات /s/… بوسوم OG" : "تحتاج SUPABASE_SERVICE_ROLE_KEY" },
+    { id: "facebook", name: "النشر على فيسبوك", path: "/library", state: facebook && service ? "live" : "off", note: facebook ? (service ? "ربط الصفحات ونشر الروابط" : "يحتاج SUPABASE_SERVICE_ROLE_KEY أيضاً") : "يحتاج FACEBOOK_APP_ID وFACEBOOK_APP_SECRET" },
     { id: "jobs", name: "المهام الطويلة الدائمة", path: "/songs", state: service ? "live" : "mock", note: service ? "جدول song_jobs في Supabase" : "ذاكرة الخادم (تُفقد بين النسخ)" },
     { id: "limits", name: "حدود الاستهلاك الذرّية", path: "-", state: service ? "live" : "mock", note: service ? "دالة consume_rate_limit" : "عدّاد في ذاكرة النسخة" },
     { id: "pricing", name: "الكريدت والدفع", path: "/pricing", state: "off", note: "المرحلة 6 — لم تُنفّذ بعد" },

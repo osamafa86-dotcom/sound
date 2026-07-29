@@ -42,6 +42,8 @@ export const LIMITS = {
   drama: { perVisitor: envInt("RATE_LIMIT_DRAMA", 5), global: 50, windowSec: 3600 },
   // الفصل وحدة الطلب لا الكتاب، فالحد أعلى: كتاب من عشرين فصلاً يحتاج عشرين طلباً
   audiobook: { perVisitor: envInt("RATE_LIMIT_AUDIOBOOK", 40), global: 400, windowSec: 3600 },
+  // النشر لا يكلّف المزوّدين شيئاً، لكن الإفراط فيه يعرّض التطبيق لحظر فيسبوك
+  facebook: { perVisitor: envInt("RATE_LIMIT_FACEBOOK", 10), global: 200, windowSec: 3600 },
 } satisfies Record<string, LimitRule>;
 
 export type LimitScope = keyof typeof LIMITS;

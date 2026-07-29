@@ -2,6 +2,11 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
+/** هل ضُبطت مفاتيح Supabase؟ إنشاء العميل بدونها يرمي استثناءً */
+export function supabaseConfigured(): boolean {
+  return !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+}
+
 /** عميل Supabase على الخادم — يقرأ جلسة المستخدم من الكوكيز ويخضع لسياسات RLS */
 export async function createClient() {
   const cookieStore = await cookies();

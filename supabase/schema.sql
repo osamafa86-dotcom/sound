@@ -307,3 +307,32 @@ create index if not exists usage_time_idx on public.usage_events (created_at des
 
 -- ملاحظة: صلاحية المالك لا تُخزَّن في القاعدة بل في متغير البيئة OWNER_EMAILS،
 -- فلا يمكن منح أحدٍ نفسه صلاحية المالك بتعديل صف في الجدول.
+
+
+-- ============================================================
+-- 11) المشاركة العامة والنشر على فيسبوك
+-- ============================================================
+
+-- رابط عام اختياري لكل عمل: معرّف غير قابل للتخمين + مفتاح تشغيل/إيقاف.
+-- الملف نفسه يبقى خاصاً في التخزين؛ الخادم وحده يكشف ما عُلّم is_public.
+alter table public.generations
+  add column if not exists share_id text,
+  add column if not exists is_public boolean not null default false;
+
+create unique index if not exists generations_share_id_idx
+  on public.generations (share_id) where share_id is not null;
+
+-- صفحات فيسبوك المربوطة — رمز كل صفحة مشفّر بـ AES-256-GCM قبل التخزين.
+-- رمز الصفحة بلا تاريخ انتهاء، فمن يقرأه ينشر على صفحة صاحبه بلا حدّ زمني:
+-- لذلك RLS مفعّلة بلا أي سياسة (لا وصول من المتصفح إطلاقاً) والتشفير فوقها.
+create table if not exists public.facebook_pages (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  page_id text not null,
+  name text not null,
+  category text,
+  access_token text not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, page_id)
+);
+
+alter table public.facebook_pages enable row level security;

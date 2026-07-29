@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
+import { shareUrl, siteOrigin } from "@/lib/share";
 
 /** قائمة أعمال المستخدم الحالي */
-export async function GET() {
+export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -12,20 +13,25 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("generations")
-    .select("id, kind, title, content, voice_id, maqam_id, style_id, provider, audio_path, created_at")
+    .select(
+      "id, kind, title, content, voice_id, maqam_id, style_id, provider, audio_path, created_at, share_id, is_public"
+    )
     .order("created_at", { ascending: false })
     .limit(100);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // روابط مؤقتة موقّعة للاستماع والتنزيل (الملفات خاصة بأصحابها)
+  // روابط مؤقتة موقّعة للاستماع والتنزيل (الملفات خاصة بأصحابها)،
+  // ورابط المشاركة العامة يُبنى هنا لأن الخادم وحده يعرف أصل الموقع الحقيقي
+  const origin = siteOrigin(req);
   const generations = await Promise.all(
     (data ?? []).map(async (g) => {
-      if (!g.audio_path) return { ...g, url: null };
+      const share_url = g.is_public && g.share_id ? shareUrl(g.share_id, origin) : null;
+      if (!g.audio_path) return { ...g, url: null, share_url };
       const { data: signed } = await supabase.storage
         .from("audio")
         .createSignedUrl(g.audio_path, 60 * 60);
-      return { ...g, url: signed?.signedUrl ?? null };
+      return { ...g, url: signed?.signedUrl ?? null, share_url };
     })
   );
 
