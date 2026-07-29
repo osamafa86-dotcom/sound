@@ -67,15 +67,19 @@ const SECTION_EN: Record<SectionKind, string> = {
   outro: "Outro",
 };
 
+/** طلب آلي: أسلوب آلي صريح، أو لا كلمات في النص الحر ولا في المقاطع */
+export function isInstrumentalRequest(req: MusicRequest): boolean {
+  const hasSectionLyrics = !!req.sections?.some((s) => s.lyrics.trim());
+  return req.styleId === "instrumental" || (!req.lyrics?.trim() && !hasSectionLyrics);
+}
+
 /**
  * برومبت Music v2 — النموذج الأحدث يفهم البنية والكلمات داخل النص مباشرة
  * (خطة التأليف المهيكلة بقيت لغة v1، وv2 يتجاهل فرض المدد أصلاً):
  * ترويسة الأسلوب ثم المقاطع بعناوينها ومددها التقريبية وكلماتها كما كُتبت.
  */
 export function buildElevenMusicPrompt(req: MusicRequest): string {
-  const hasSectionLyrics = !!req.sections?.some((s) => s.lyrics.trim());
-  const instrumentalOnly =
-    req.styleId === "instrumental" || (!req.lyrics?.trim() && !hasSectionLyrics);
+  const instrumentalOnly = isInstrumentalRequest(req);
 
   const header = [
     req.stylePrompt,
