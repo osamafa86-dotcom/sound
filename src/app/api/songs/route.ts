@@ -2,6 +2,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { AMBIENCES, DIALECTS, MAQAMAT, INSTRUMENTS, SONG_STYLES } from "@/lib/maqamat";
 import { applyPronunciationRules, listRules } from "@/lib/pronunciation";
 import { getJobsStore, type GenerationTier } from "@/lib/jobs";
+import { comparisonAvailable } from "@/lib/providers";
 import { runSongJob } from "@/lib/songWorker";
 import { buildStylePrompt } from "@/lib/stylePrompt";
 import { heritageDeliveryEn, heritageStyle } from "@/lib/heritage/palestinian";
@@ -159,9 +160,66 @@ export async function POST(req: NextRequest) {
     ...(sourceSongId && { regenerateIndex, sourceSongId }),
   };
 
-  const job = await getJobsStore().create(tier, request, user?.id ?? null);
+  // وضع المقارنة التجريبي (للمسجلين): النسخة نفسها من المحركين معاً — Lyria 3 Pro
+  // مقابل Eleven Music — للحكم على الجودة والأداء والنطق العربي جنباً إلى جنب.
+  // لا يسري على إعادة التوليد الجزئي (ميزة Eleven وحده) ويستهلك توليدَين من الحد.
+  const compareRequested = body.compare === true;
+  let compare =
+    compareRequested &&
+    !!user &&
+    tier === "full" &&
+    regenerateIndex === undefined &&
+    comparisonAvailable();
+  let compareNote: string | undefined;
+  if (compareRequested && !compare) {
+    compareNote = !user
+      ? "وضع المقارنة متاح للمسجلين فقط — وُلّدت نسخة واحدة"
+      : !comparisonAvailable()
+        ? "وضع المقارنة يتطلب تفعيل المحركين معاً — وُلّدت نسخة واحدة"
+        : undefined;
+  }
+  if (compare) {
+    const second = await checkLimit(req, "songs", user!.id);
+    if (!second.allowed) {
+      compare = false;
+      compareNote = "وضع المقارنة يحتاج توليدَين وقد بلغت حدك الحالي — وُلّدت نسخة واحدة";
+    }
+  }
+
+  const store = getJobsStore();
+  if (compare) {
+    const lyriaJob = await store.create(
+      tier,
+      { ...request, forceProvider: "lyria" },
+      user!.id
+    );
+    const elevenJob = await store.create(
+      tier,
+      { ...request, forceProvider: "eleven-music" },
+      user!.id
+    );
+    // تنفيذ متوازٍ بعد إرسال الاستجابة — زمن الانتظار زمن الأبطأ لا مجموعهما
+    after(() => Promise.all([runSongJob(lyriaJob.id), runSongJob(elevenJob.id)]));
+    return NextResponse.json(
+      {
+        jobId: lyriaJob.id,
+        jobs: [
+          { jobId: lyriaJob.id, provider: "lyria" },
+          { jobId: elevenJob.id, provider: "eleven-music" },
+        ],
+        stylePrompt,
+        compare: true,
+      },
+      { status: 202 }
+    );
+  }
+
+  const job = await store.create(tier, request, user?.id ?? null);
   // التنفيذ بعد إرسال الاستجابة — after() تضمن إكمال العمل على Vercel Serverless
   after(() => runSongJob(job.id));
 
-  return NextResponse.json({ jobId: job.id, stylePrompt }, { status: 202 });
+  return NextResponse.json(
+    { jobId: job.id, stylePrompt, ...(compareNote && { compareNote }) },
+    { status: 202 }
+  );
 }

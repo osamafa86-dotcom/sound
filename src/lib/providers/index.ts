@@ -41,7 +41,12 @@ export function availableVoices() {
  * يمكن فرض مزوّد بعينه عبر MUSIC_PROVIDER=lyria|elevenlabs.
  * (مستوى المعاينة يتحكم بالمدة عبر durationSec في الطلب نفسه)
  */
-export function getMusicProvider(_opts?: { tier?: "preview" | "full"; instrumental?: boolean }): MusicProvider {
+export function getMusicProvider(opts?: {
+  tier?: "preview" | "full";
+  instrumental?: boolean;
+  /** فرض محرك مهمة بعينها — وضع المقارنة بين المحركين */
+  force?: "lyria" | "eleven-music";
+}): MusicProvider {
   if (settingsSnapshot().forceMock) return mockMusic;
   const elevenKey = process.env.ELEVENLABS_API_KEY;
   const geminiKey = process.env.GEMINI_API_KEY;
@@ -50,11 +55,25 @@ export function getMusicProvider(_opts?: { tier?: "preview" | "full"; instrument
   const eleven = elevenKey ? elevenLabsMusic(elevenKey) : null;
   const lyria = geminiKey ? lyriaMusic(geminiKey) : null;
 
+  // فرض المهمة الواحدة (المقارنة) يتقدم على فرض البيئة — بلا سلسلة رجوع بين المحركين
+  // كي تعكس كل نسخة محركها الحقيقي (الرجوع للوضع التجريبي يتكفل به منفّذ المهمة)
+  if (opts?.force === "eleven-music" && eleven) return eleven;
+  if (opts?.force === "lyria" && lyria) return lyria;
+
   if (forced === "elevenlabs" && eleven) return eleven;
   if (forced === "lyria" && lyria) return lyria;
 
   if (lyria && eleven) return withFallback(lyria, eleven);
   return lyria ?? eleven ?? mockMusic;
+}
+
+/** وضع المقارنة متاح فقط عندما يكون المحركان مفعّلين معاً ولا يفرض المالك الوضع التجريبي */
+export function comparisonAvailable(): boolean {
+  return (
+    !settingsSnapshot().forceMock &&
+    !!process.env.ELEVENLABS_API_KEY &&
+    !!process.env.GEMINI_API_KEY
+  );
 }
 
 /** يغلّف مزوّدين: يجرّب الأساسي ثم يعود للبديل مع تسجيل السبب */
