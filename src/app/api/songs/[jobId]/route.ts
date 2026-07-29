@@ -22,5 +22,8 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ jobId: str
     ...(job.error && { error: job.error }),
     // يفتح زر «أعد توليد هذا المقطع فقط» في الواجهة
     ...(job.request.elevenSongId && { elevenSongId: job.request.elevenSongId }),
+    // الكلمات كما غُنّيت فعلاً (بعد التشكيل التلقائي) — تتبناها الواجهة والمحرر
+    ...(job.status === "done" && job.request.lyrics && { lyrics: job.request.lyrics }),
+    ...(job.status === "done" && job.request.sections?.length && { sections: job.request.sections }),
   });
 }

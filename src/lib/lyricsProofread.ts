@@ -11,6 +11,21 @@ import { sanitizeSections, type SongSection } from "./songSections";
 
 const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
+const ARABIC_MARKS = /[ً-ْٰ]/g;
+const ARABIC_LETTERS = /[ء-ي]/g;
+
+/**
+ * هل النص بحاجة لتشكيل؟ كثافة الحركات مقابل الحروف العربية —
+ * محرك الغناء ينطق النص كما كُتب، والنص العاري يُترك للتخمين فيتكسر الأداء.
+ * نص مشكّل مسبقاً (من المدقق أو المستخدم) يمر بلا إعادة تشكيل.
+ */
+export function needsTashkeel(text: string): boolean {
+  const letters = text.match(ARABIC_LETTERS)?.length ?? 0;
+  if (letters < 20) return false;
+  const marks = text.match(ARABIC_MARKS)?.length ?? 0;
+  return marks / letters < 0.15;
+}
+
 export type ProofreadIssue = {
   original: string;
   fixed: string;

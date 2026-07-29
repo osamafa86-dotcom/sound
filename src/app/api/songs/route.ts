@@ -156,6 +156,7 @@ export async function POST(req: NextRequest) {
     singer,
     bpm,
     dialectEn: deliveryDialect?.en,
+    dialectId: deliveryDialect?.id,
     ...(picked?.variantId && { variantId: picked.variantId }),
     ...(sourceSongId && { regenerateIndex, sourceSongId }),
   };

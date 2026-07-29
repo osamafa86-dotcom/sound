@@ -7,6 +7,46 @@ export type KaraokeWord = { text: string; start: number; end: number };
 
 export type KaraokeLine = { start: number; end: number; text: string };
 
+const ARABIC_MARKS = /[ً-ْٰـ]/g;
+const EDGE_PUNCT = /^[^\p{L}\p{N}\p{M}]+|[^\p{L}\p{N}\p{M}]+$/gu;
+
+/** توحيد كلمة للمقارنة: بلا حركات ولا ترقيم، وتطبيع الهمزات والتاء المربوطة */
+function normalizeWord(w: string): string {
+  return w
+    .replace(ARABIC_MARKS, "")
+    .replace(EDGE_PUNCT, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة$/, "ه");
+}
+
+/**
+ * محاذاة كلمات التفريغ مع النص المكتوب المشكّل — التفريغ يعيد الكلمات عارية
+ * من الحركات، فنستبدل بكل كلمة مطابقة صورتَها المكتوبة بتشكيلها الكامل
+ * (مع إبقاء توقيتها)، فيعرض المحرر النص كما كُتب وغُنّي لا كما فُرّغ.
+ * كلمات الترويسات («لازمة:») والكلمات غير المطابقة تُتخطى بنافذة قصيرة.
+ */
+export function alignWordsToLyrics(words: KaraokeWord[], written: string): KaraokeWord[] {
+  const tokens = written.split(/\s+/).filter(Boolean);
+  if (!tokens.length) return words;
+  const norms = tokens.map(normalizeWord);
+
+  let cursor = 0;
+  const WINDOW = 4;
+  return words.map((w) => {
+    const wn = normalizeWord(w.text);
+    if (!wn) return w;
+    for (let j = cursor; j < Math.min(cursor + WINDOW, tokens.length); j++) {
+      if (norms[j] && norms[j] === wn) {
+        cursor = j + 1;
+        const display = tokens[j].replace(EDGE_PUNCT, "");
+        return display ? { ...w, text: display } : w;
+      }
+    }
+    return w;
+  });
+}
+
 /** آخر كلمة بدأت قبل اللحظة الحالية — أو -1 قبل أول كلمة */
 export function findActiveWord(words: KaraokeWord[], sec: number): number {
   let active = -1;
