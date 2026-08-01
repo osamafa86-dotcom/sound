@@ -85,8 +85,10 @@ export async function POST(req: NextRequest) {
     .join(". ");
 
   // المقاطع المُهيكلة (النسخة الكاملة فقط) — المعاينة تبقى مقطعاً سريعاً واحداً
+  // السقف 180 ثانية موحّد مع حد Lyria (المحرك الأساسي): مجموع أطول يُرسل
+  // لمحرك هدفه 180 يجعله يضغط الأداء ويقصّ الكلمات — تراجع جودة مباشر
   let sections = tier === "full" ? sanitizeSections(body.sections) : undefined;
-  const MAX_TOTAL_SEC = 300;
+  const MAX_TOTAL_SEC = 180;
   if (sections) {
     const total = sectionsTotalSec(sections);
     // تجاوز سقف المنصة: تقليص المدد نسبياً بدل الرفض
