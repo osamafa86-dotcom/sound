@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "مقام",
+    "slug": "maqam",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "maqam",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#fbf8f4"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.maqam.app",
+      "infoPlist": {
+        "UIBackgroundModes": ["audio"]
+      }
+    },
+    "android": {
+      "package": "com.maqam.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#c0453e",
+        "foregroundImage": "./assets/adaptive-icon.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "يحتاج التطبيق للميكروفون لتسجيل صوتك في معمل الصوت."
+        }
+      ],
+      "expo-sharing"
+    ]
+  }
+}
