@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { buildLrc, buildSrt, type KaraokeWord } from "@/lib/karaoke";
+import { buildLrc, buildSrt, sectionIndexFromStarts, type KaraokeWord } from "@/lib/karaoke";
 import { SECTION_LABELS, sectionIndexAtTime, type SongSection } from "@/lib/songSections";
 
 /** يقصّ علامات الترقيم من طرفي الكلمة المفرّغة ويبقي الحروف والتشكيل */
@@ -19,6 +19,7 @@ export default function LyricsEditor({
   activeIndex,
   title,
   sections,
+  sectionStarts,
   canInpaint,
   busy,
   onPlayWord,
@@ -28,6 +29,8 @@ export default function LyricsEditor({
   activeIndex: number;
   title?: string;
   sections: SongSection[] | null;
+  /** بدايات المقاطع المقيسة من التفريغ — تتقدم على المدد المخططة عند توفرها */
+  sectionStarts?: number[] | null;
   /** إعادة إنشاد المقطع وحده متاحة (بنية مقاطع + معرّف المحرك + نسخة كاملة فعلية) */
   canInpaint: boolean;
   /** الصفحة الأم منشغلة بتوليد — يجمّد التصحيح */
@@ -69,7 +72,9 @@ export default function LyricsEditor({
 
   const sectionIdx =
     selected >= 0 && sections?.length
-      ? sectionIndexAtTime(sections, words[selected].start)
+      ? sectionStarts?.length === sections.length
+        ? sectionIndexFromStarts(sectionStarts, words[selected].start)
+        : sectionIndexAtTime(sections, words[selected].start)
       : -1;
   const sectionLabel =
     sectionIdx >= 0 && sections ? `${SECTION_LABELS[sections[sectionIdx].kind]} ${sectionIdx + 1}` : "";

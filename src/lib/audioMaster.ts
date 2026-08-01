@@ -1,19 +1,38 @@
+import {
+  PEAK_CEILING,
+  TARGET_LUFS,
+  dbToLinear,
+  gainToTarget,
+  integratedLufs,
+  limitPeaks,
+} from "./loudness";
+
 /**
  * لمسة الماستر — معالجة نهائية في المتصفح (بلا خوادم ولا تكلفة):
- * 1. قص الصمت الزائد من الأطراف
- * 2. ضبط علو الصوت (تطبيع الذروة إلى -1dBFS)
- * 3. دخول وخروج ناعمان (fade in/out)
- * الناتج WAV ستيريو بجودة الملف الأصلية.
+ * 1. قص الصمت الزائد من الأطراف (مع إرجاع مقدار القص ليُزاح توقيت الكاريوكي)
+ * 2. جهارة بمعيار البث: قياس LUFS متكامل (ITU-R BS.1770) وضبط نحو -14 LUFS
+ *    — كما تطبّع Spotify وYouTube — بدل تطبيع الذروة الأعمى
+ * 3. محدد ذروة بنظرة أمامية يمسك القمم عند ~-1dB بلا قصّ صلب
+ * 4. دخول وخروج ناعمان قصيران لا يوهنان أول كلمة ولا يقصّان الذيل
+ * الناتج WAV ستيريو بمعدل عينات الملف الأصلي.
  */
 
 const SILENCE_THRESHOLD = 0.004; // ≈ -48dBFS
 const EDGE_PAD_SEC = 0.12;
-const FADE_IN_SEC = 0.35;
-const FADE_OUT_SEC = 0.9;
-const TARGET_PEAK = 0.891; // -1dBFS
-const MAX_BOOST = 4;
+const FADE_IN_SEC = 0.12;
+const FADE_OUT_SEC = 0.5;
 
-export async function masterAudio(blob: Blob): Promise<Blob> {
+export type MasterResult = {
+  blob: Blob;
+  /** الثواني المقصوصة من مقدمة الملف — تُطرح من توقيتات الكاريوكي المحفوظة */
+  trimmedLeadSec: number;
+  /** false عندما يعود الملف الأصلي كما هو (أقصر من ثانية) — لا يُعلَّم mastered */
+  changed: boolean;
+  /** الجهارة المقيسة قبل الضبط — للعرض التشخيصي إن لزم */
+  measuredLufs: number | null;
+};
+
+export async function masterAudio(blob: Blob): Promise<MasterResult> {
   const raw = await blob.arrayBuffer();
   const probe = new AudioContext();
   let decoded: AudioBuffer;
@@ -23,13 +42,13 @@ export async function masterAudio(blob: Blob): Promise<Blob> {
     await probe.close().catch(() => {});
   }
 
-  const channels = Math.min(2, decoded.numberOfChannels);
+  const channelCount = Math.min(2, decoded.numberOfChannels);
   const rate = decoded.sampleRate;
+  const datas = Array.from({ length: channelCount }, (_, c) => decoded.getChannelData(c));
 
   // حدود المحتوى المسموع (أقصى قيمة مطلقة عبر القنوات)
   let start = 0;
   let end = decoded.length - 1;
-  const datas = Array.from({ length: channels }, (_, c) => decoded.getChannelData(c));
   const loudAt = (i: number) => datas.some((d) => Math.abs(d[i]) > SILENCE_THRESHOLD);
   while (start < end && !loudAt(start)) start++;
   while (end > start && !loudAt(end)) end--;
@@ -38,47 +57,46 @@ export async function masterAudio(blob: Blob): Promise<Blob> {
   start = Math.max(0, start - pad);
   end = Math.min(decoded.length - 1, end + pad);
   const length = end - start + 1;
-  if (length < rate) return blob; // أقصر من ثانية بعد القص — الملف ليس موسيقى فعلية
+  if (length < rate) {
+    // أقصر من ثانية بعد القص — ليس موسيقى فعلية، يعود الأصل بلا وسم معالجة
+    return { blob, trimmedLeadSec: 0, changed: false, measuredLufs: null };
+  }
 
-  // ذروة المقطع المقصوص لتحديد كسب التطبيع
-  let peak = 0;
-  for (const d of datas) {
-    for (let i = start; i <= end; i++) {
-      const v = Math.abs(d[i]);
-      if (v > peak) peak = v;
+  const channels = datas.map((d) => d.slice(start, end + 1));
+
+  // ١) الجهارة: قياس متكامل ثم كسب نحو الهدف (برفع مقصوص يحمي شبه الصامت)
+  const measuredLufs = integratedLufs(channels, rate);
+  const gain = measuredLufs === null ? 1 : dbToLinear(gainToTarget(measuredLufs, TARGET_LUFS));
+  if (gain !== 1) {
+    for (const c of channels) {
+      for (let i = 0; i < c.length; i++) c[i] *= gain;
     }
   }
-  const gain = peak > 0 ? Math.min(MAX_BOOST, TARGET_PEAK / peak) : 1;
 
-  const trimmed = new AudioBuffer({ numberOfChannels: channels, length, sampleRate: rate });
-  for (let c = 0; c < channels; c++) {
-    trimmed.copyToChannel(datas[c].subarray(start, end + 1), c);
+  // ٢) الحواف: دخول قصير لا يوهن أول كلمة وخروج ناعم لا يبتر الذيل
+  const fadeIn = Math.min(Math.round(FADE_IN_SEC * rate), Math.floor(length / 8));
+  const fadeOut = Math.min(Math.round(FADE_OUT_SEC * rate), Math.floor(length / 8));
+  for (const c of channels) {
+    for (let i = 0; i < fadeIn; i++) c[i] *= i / fadeIn;
+    for (let i = 0; i < fadeOut; i++) c[length - 1 - i] *= i / fadeOut;
   }
 
-  const offline = new OfflineAudioContext(channels, length, rate);
-  const source = offline.createBufferSource();
-  source.buffer = trimmed;
-  const g = offline.createGain();
-  const durationSec = length / rate;
-  const fadeIn = Math.min(FADE_IN_SEC, durationSec / 4);
-  const fadeOut = Math.min(FADE_OUT_SEC, durationSec / 4);
-  g.gain.setValueAtTime(0, 0);
-  g.gain.linearRampToValueAtTime(gain, fadeIn);
-  g.gain.setValueAtTime(gain, durationSec - fadeOut);
-  g.gain.linearRampToValueAtTime(0, durationSec);
-  source.connect(g).connect(offline.destination);
-  source.start();
+  // ٣) محدد الذروة — بعد الكسب كي يمسك ما دفعه الرفع فوق السقف
+  limitPeaks(channels, rate, PEAK_CEILING);
 
-  const rendered = await offline.startRendering();
-  return new Blob([encodeWavStereo(rendered)], { type: "audio/wav" });
+  return {
+    blob: new Blob([encodeWavStereo(channels, rate)], { type: "audio/wav" }),
+    trimmedLeadSec: start / rate,
+    changed: true,
+    measuredLufs,
+  };
 }
 
 /** ترميز WAV بعدد قنوات الملف (١ أو ٢) بعمق 16-bit */
-function encodeWavStereo(buffer: AudioBuffer): ArrayBuffer {
-  const channels = buffer.numberOfChannels;
-  const rate = buffer.sampleRate;
-  const frames = buffer.length;
-  const bytesPerFrame = channels * 2;
+function encodeWavStereo(channels: Float32Array[], rate: number): ArrayBuffer {
+  const numCh = channels.length;
+  const frames = Math.min(...channels.map((c) => c.length));
+  const bytesPerFrame = numCh * 2;
   const out = new ArrayBuffer(44 + frames * bytesPerFrame);
   const view = new DataView(out);
 
@@ -92,7 +110,7 @@ function encodeWavStereo(buffer: AudioBuffer): ArrayBuffer {
   writeStr(12, "fmt ");
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true);
-  view.setUint16(22, channels, true);
+  view.setUint16(22, numCh, true);
   view.setUint32(24, rate, true);
   view.setUint32(28, rate * bytesPerFrame, true);
   view.setUint16(32, bytesPerFrame, true);
@@ -101,10 +119,9 @@ function encodeWavStereo(buffer: AudioBuffer): ArrayBuffer {
   view.setUint32(40, frames * bytesPerFrame, true);
 
   let offset = 44;
-  const chans = Array.from({ length: channels }, (_, c) => buffer.getChannelData(c));
   for (let i = 0; i < frames; i++) {
-    for (let c = 0; c < channels; c++) {
-      const s = Math.max(-1, Math.min(1, chans[c][i]));
+    for (let c = 0; c < numCh; c++) {
+      const s = Math.max(-1, Math.min(1, channels[c][i]));
       view.setInt16(offset, Math.round(s * 32767), true);
       offset += 2;
     }

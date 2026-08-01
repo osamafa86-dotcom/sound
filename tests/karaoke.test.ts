@@ -5,8 +5,11 @@ import {
   buildSrt,
   findActiveWord,
   groupWords,
+  measureSectionStarts,
+  sectionIndexFromStarts,
   type KaraokeWord,
 } from "@/lib/karaoke";
+import type { SongSection } from "@/lib/songSections";
 
 const words: KaraokeWord[] = [
   { text: "في", start: 0.5, end: 0.8 },
@@ -81,5 +84,51 @@ describe("محاذاة التفريغ مع النص المكتوب المشكّ�
 
   it("نص مكتوب فارغ ⟵ الكلمات كما وصلت", () => {
     expect(alignWordsToLyrics(transcript, "")).toEqual(transcript);
+  });
+});
+
+describe("قياس بدايات المقاطع من التفريغ الموقوت", () => {
+  const sungWords: KaraokeWord[] = [
+    { text: "يا", start: 12, end: 12.4 },
+    { text: "ليل", start: 12.5, end: 13 },
+    { text: "يا", start: 13.1, end: 13.4 },
+    { text: "عين", start: 13.5, end: 14 },
+    { text: "غنوا", start: 30, end: 30.5 },
+    { text: "معي", start: 30.6, end: 31 },
+  ];
+  const sections: SongSection[] = [
+    { kind: "intro", lyrics: "", durationSec: 10 },
+    { kind: "verse", lyrics: "يَا لَيْل يَا عِين", durationSec: 20 },
+    { kind: "chorus", lyrics: "غَنُّوا مَعِي", durationSec: 15 },
+  ];
+
+  it("البدايات الحقيقية من مطابقة الكلمات — لا من المدد المخططة", () => {
+    const starts = measureSectionStarts(sungWords, sections)!;
+    expect(starts).toEqual([0, 12, 30]);
+    // الخريطة: قبل ١٢ مقدمة، وبعد ٣٠ لازمة — رغم أن الخطة تقول اللازمة تبدأ عند ٣٠=١٠+٢٠
+    expect(sectionIndexFromStarts(starts, 5)).toBe(0);
+    expect(sectionIndexFromStarts(starts, 13)).toBe(1);
+    expect(sectionIndexFromStarts(starts, 45)).toBe(2);
+  });
+
+  it("مقطع لم يُطابَق يُقدَّر من جاره ومدته المخططة دون كسر الرتابة", () => {
+    const other: SongSection[] = [
+      { kind: "verse", lyrics: "يَا لَيْل يَا عِين", durationSec: 20 },
+      { kind: "bridge", lyrics: "كلمات مختلفة تماماً هنا", durationSec: 10 },
+      { kind: "chorus", lyrics: "غَنُّوا مَعِي", durationSec: 15 },
+    ];
+    const starts = measureSectionStarts(sungWords, other)!;
+    expect(starts[0]).toBe(12);
+    expect(starts[1]).toBeGreaterThanOrEqual(12);
+    expect(starts[1]).toBeLessThanOrEqual(30);
+    expect(starts[2]).toBe(30);
+  });
+
+  it("تفريغ بلا أي مطابقة ⟵ null (لا ثقة بالقياس)", () => {
+    expect(
+      measureSectionStarts(sungWords, [
+        { kind: "verse", lyrics: "نص آخر كلياً بلا تقاطع", durationSec: 30 },
+      ])
+    ).toBeNull();
   });
 });
