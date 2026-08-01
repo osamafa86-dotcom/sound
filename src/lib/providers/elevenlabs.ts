@@ -159,6 +159,8 @@ export async function elevenLabsTranscribeWords(
   const form = new FormData();
   form.append("model_id", "scribe_v1");
   form.append("timestamps_granularity", "word");
+  // تثبيت العربية يمنع أخطاء كشف اللغة على الغناء الملحّن (ج/ح وأشباهها)
+  form.append("language_code", "ar");
   form.append("file", audio, "song.mp3");
   const res = await apiCallMultipart("/speech-to-text", apiKey, form);
   const data = (await res.json()) as {

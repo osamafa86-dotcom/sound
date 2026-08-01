@@ -80,6 +80,12 @@ export default function LyricsEditor({
     sectionIdx >= 0 && sections ? `${SECTION_LABELS[sections[sectionIdx].kind]} ${sectionIdx + 1}` : "";
   const inpaintHere = canInpaint && sectionIdx >= 0;
 
+  // مطابقة الغناء للنص المكتوب — من أعلام المحاذاة (كاشف انحراف المحرك)
+  const judged = words.filter((w) => w.matched !== undefined);
+  const adherence = judged.length
+    ? Math.round((judged.filter((w) => w.matched).length / judged.length) * 100)
+    : null;
+
   async function submit() {
     if (!wrong.trim() || !alias.trim() || fixBusy || busy) return;
     setFixBusy(true);
@@ -118,6 +124,19 @@ export default function LyricsEditor({
       <p className="mt-1 text-xs text-muted">
         اضغط أي كلمة لتسمعها وحدها وتصحح نطقها في مكانها — سمعتها خطأ؟ عدّلها ويُعاد إنشاد
         مقطعها فقط.
+        {adherence !== null && adherence < 100 && (
+          <>
+            {" "}
+            <span
+              className="rounded-full bg-gold/15 px-2 py-0.5 font-semibold text-gold"
+              title="نسبة كلمات الغناء المسموع المطابقة لنصك المكتوب — المخالفة تحتها نقاط"
+            >
+              مطابقة الغناء للنص: {adherence}٪
+            </span>{" "}
+            الكلمات المنقّطة غُنّيت مختلفة عن نصك (انحراف من المحرك أو خطأ سمع من التفريغ)
+            — اضغطها لتصحيحها.
+          </>
+        )}
       </p>
 
       <p dir="rtl" className="mt-3 max-h-56 overflow-y-auto text-lg leading-loose">
@@ -127,8 +146,14 @@ export default function LyricsEditor({
               ref={i === activeIndex ? activeRef : undefined}
               onClick={() => pick(i)}
               disabled={busy || fixBusy}
-              title="اسمعها وصحح نطقها"
+              title={
+                w.matched === false
+                  ? "غُنّيت مختلفة عن النص المكتوب — اضغط لسماعها وتصحيحها"
+                  : "اسمعها وصحح نطقها"
+              }
               className={`rounded px-0.5 transition-colors disabled:cursor-default ${
+                w.matched === false ? "underline decoration-dotted decoration-gold underline-offset-4" : ""
+              } ${
                 i === selected
                   ? "bg-primary/15 font-bold text-primary ring-1 ring-primary"
                   : i === activeIndex

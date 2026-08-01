@@ -108,7 +108,7 @@ export function buildElevenMusicPrompt(req: MusicRequest): string {
       .join("\n\n");
     return [
       ...header,
-      "Sing the lyrics exactly as written including diacritics.",
+      "Sing the lyrics exactly as written including diacritics. Do not improvise, add, replace, or skip any words.",
       "Song structure with lyrics:",
       body,
     ].join("\n");
@@ -148,7 +148,8 @@ export function buildCompositionPlan(req: MusicRequest): ElevenCompositionPlan |
     "low quality",
     "distorted",
     "out of tune",
-    ...(instrumental ? ["vocals"] : []),
+    // الكلمات مقدسة: لا ارتجال ولا استبدال — أعلى شكوى جودة عربية
+    ...(instrumental ? ["vocals"] : ["improvised or altered lyrics", "mumbled words"]),
   ];
 
   const kindCounts = new Map<SectionKind, number>();
