@@ -37,7 +37,7 @@ export function variantAvg(v: Pick<PromptVariantRow, "score_sum" | "score_count"
 
 /**
  * اختيار برومبت المقام لتوليدة واحدة:
- * سلالة غير مجرَّبة تأخذ نصف فرص الظهور حتى تنضج، ثم الأفضل متوسطاً
+ * سلالة غير مجرَّبة تأخذ ربع فرص الظهور حتى تنضج، ثم الأفضل متوسطاً
  * مع استكشاف 15٪ — وبرومبت الكود عند غياب القاعدة أو السلالات.
  */
 export async function pickMaqamPrompt(
@@ -59,7 +59,9 @@ export async function pickMaqamPrompt(
   const fresh = variants.filter((v) => v.score_count < MIN_EVALS_TO_TRUST);
 
   let chosen: PromptVariantRow;
-  if (fresh.length && Math.random() < 0.5) {
+  // السلالة غير الناضجة تأخذ ربع الفرص لا نصفها: استكشاف كافٍ للنضوج
+  // دون أن تسيطر سلالة مجهولة الجودة على نصف توليدات المستخدمين
+  if (fresh.length && Math.random() < 0.25) {
     chosen = fresh[Math.floor(Math.random() * fresh.length)];
   } else if (Math.random() < EXPLORE_RATE) {
     chosen = variants[Math.floor(Math.random() * variants.length)];
