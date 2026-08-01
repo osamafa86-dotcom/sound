@@ -47,6 +47,78 @@ export function alignWordsToLyrics(words: KaraokeWord[], written: string): Karao
   });
 }
 
+import type { SongSection } from "./songSections";
+
+/**
+ * حدود المقاطع الفعلية من التفريغ الموقوت — الزمن المخطط يكذب:
+ * المحركات (Lyria خاصة) لا تلتزم بمدد المقاطع، فبدل جمع durationSec تراكمياً
+ * نطابق كلمات كل مقطع مع كلمات التفريغ ونستخرج لحظة بدايته الحقيقية.
+ * مقطع لم يُطابَق (آلي أو غناء حر) يُقدَّر من جاره + مدته المخططة.
+ * الناتج مصفوفة بدايات رتيبة بطول المقاطع، أو null عند تعذر أي مطابقة.
+ */
+export function measureSectionStarts(
+  words: KaraokeWord[],
+  sections: SongSection[]
+): number[] | null {
+  if (!words.length || !sections.length) return null;
+  const wordNorms = words.map((w) => normalizeWord(w.text));
+
+  const starts: (number | null)[] = sections.map(() => null);
+  let cursor = 0;
+  let anyMatched = false;
+
+  for (let i = 0; i < sections.length; i++) {
+    const sectionWords = sections[i].lyrics
+      .split(/\s+/)
+      .map(normalizeWord)
+      .filter(Boolean);
+    if (!sectionWords.length) continue; // آلي (مقدمة/خاتمة) — يُقدَّر لاحقاً
+
+    let firstMatch = -1;
+    let matched = 0;
+    let c = cursor;
+    for (const sw of sectionWords) {
+      for (let j = c; j < Math.min(c + 6, words.length); j++) {
+        if (wordNorms[j] && wordNorms[j] === sw) {
+          if (firstMatch < 0) firstMatch = j;
+          matched++;
+          c = j + 1;
+          break;
+        }
+      }
+    }
+    if (firstMatch >= 0 && matched / sectionWords.length >= 0.5) {
+      starts[i] = words[firstMatch].start;
+      cursor = c;
+      anyMatched = true;
+    }
+  }
+  if (!anyMatched) return null;
+
+  // تقدير غير المُطابَق: بداية الجار السابق + مدته المخططة، بلا تجاوز التالي المعلوم
+  const resolved: number[] = [];
+  for (let i = 0; i < sections.length; i++) {
+    let s = starts[i];
+    if (s === null) {
+      s = i === 0 ? 0 : resolved[i - 1] + sections[i - 1].durationSec;
+      const nextKnown = starts.slice(i + 1).find((v) => v !== null);
+      if (nextKnown !== null && nextKnown !== undefined) s = Math.min(s, nextKnown);
+    }
+    resolved.push(i === 0 ? Math.max(0, s) : Math.max(resolved[i - 1], s));
+  }
+  return resolved;
+}
+
+/** فهرس المقطع للحظة تشغيل حسب البدايات المقيسة — آخر بداية لا تتجاوزها */
+export function sectionIndexFromStarts(starts: number[], sec: number): number {
+  let idx = 0;
+  for (let i = 0; i < starts.length; i++) {
+    if (starts[i] <= sec) idx = i;
+    else break;
+  }
+  return idx;
+}
+
 /** آخر كلمة بدأت قبل اللحظة الحالية — أو -1 قبل أول كلمة */
 export function findActiveWord(words: KaraokeWord[], sec: number): number {
   let active = -1;

@@ -111,6 +111,33 @@ export default function SingAlongPanel({
       playerRef.current = player;
 
       recorder.start();
+      // معايرة الكمون تلقائياً: الفارق بين بدء التسجيل وبدء العزف الفعلي
+      // + كمون إخراج الجهاز — بدل ترك المستخدم يخمّن قيمة التزامن
+      const recStartedAt = performance.now();
+      player.addEventListener(
+        "playing",
+        () => {
+          const delta = performance.now() - recStartedAt;
+          let outputMs = 60;
+          try {
+            const Ctx =
+              window.AudioContext ??
+              (window as unknown as { webkitAudioContext: typeof AudioContext })
+                .webkitAudioContext;
+            const ctx = new Ctx();
+            const latency =
+              (ctx as AudioContext & { outputLatency?: number }).outputLatency ??
+              ctx.baseLatency ??
+              0.06;
+            outputMs = Math.round(latency * 1000);
+            ctx.close().catch(() => {});
+          } catch {
+            // بيئة بلا AudioContext — يبقى التقدير الافتراضي
+          }
+          setAdvanceMs(Math.min(400, Math.max(0, Math.round(delta) + outputMs)));
+        },
+        { once: true }
+      );
       await player.play();
       setElapsed(0);
       timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
@@ -246,9 +273,9 @@ export default function SingAlongPanel({
             </label>
             <label
               className="flex items-center gap-2"
-              title="التسجيل في المتصفح يتأخر قليلاً عن العزف — هذا يقدّم صوتك ليتطابق مع اللحن"
+              title="قيست تلقائياً لحظة بدء التسجيل — عدّلها فقط إن سمعت انزياحاً بعد المزج"
             >
-              <span className="text-muted">تقديم التزامن</span>
+              <span className="text-muted">تقديم التزامن (مُعاير تلقائياً)</span>
               <input
                 type="range"
                 min={0}

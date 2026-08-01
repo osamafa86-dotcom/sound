@@ -6,7 +6,12 @@ import LyricsEditor from "@/components/LyricsEditor";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import SingAlongPanel from "@/components/SingAlongPanel";
 import StemsPanel from "@/components/StemsPanel";
-import { alignWordsToLyrics, findActiveWord, type KaraokeWord } from "@/lib/karaoke";
+import {
+  alignWordsToLyrics,
+  findActiveWord,
+  measureSectionStarts,
+  type KaraokeWord,
+} from "@/lib/karaoke";
 import { replaceWholeWord } from "@/lib/textCompare";
 import { HERITAGE_STYLE_IDS, LYRIC_FORMS, heritageStyle } from "@/lib/heritage/palestinian";
 import { emitSignal } from "@/lib/signalClient";
@@ -522,6 +527,7 @@ export default function SongsStudio() {
     else if (song.finalLyrics && !sections) setLyrics(song.finalLyrics);
     setKaraokeWords(null);
     setKaraokeNote("");
+    setKaraokeStarts(null);
     setActiveWord(-1);
     setShareCopied(false);
     setCoverUrl((prev) => {
@@ -720,6 +726,8 @@ export default function SongsStudio() {
   const [karaokeWords, setKaraokeWords] = useState<KaraokeWord[] | null>(null);
   const [karaokeBusy, setKaraokeBusy] = useState(false);
   const [karaokeNote, setKaraokeNote] = useState("");
+  /** بدايات المقاطع المقيسة من التفريغ — أصدق من المدد المخططة (Lyria يتجاهلها) */
+  const [karaokeStarts, setKaraokeStarts] = useState<number[] | null>(null);
   const [activeWord, setActiveWord] = useState(-1);
 
   /** مرآة حية للناتج الحالي — حارس تقادم للعمليات غير المتزامنة بعد await */
@@ -792,7 +800,10 @@ export default function SongsStudio() {
       if (!res.ok) throw new Error(data?.error ?? "تعذّرت مزامنة الكلمات");
       if (resultRef.current?.jobId !== forJobId) return;
       // عرض الكلمات بصورتها المكتوبة المشكّلة لا بصورة التفريغ العارية
-      setKaraokeWords(alignWordsToLyrics(data.words, lyrics));
+      const aligned = alignWordsToLyrics(data.words, lyrics);
+      setKaraokeWords(aligned);
+      // حدود المقاطع الحقيقية تُقاس من التوقيتات لا من المدد المخططة
+      setKaraokeStarts(sections?.length ? measureSectionStarts(aligned, sections) : null);
       setActiveWord(-1);
     } catch (e) {
       if (resultRef.current?.jobId !== forJobId) return;
@@ -864,17 +875,37 @@ export default function SongsStudio() {
     const oldUrl = result.url;
     try {
       const { masterAudio } = await import("@/lib/audioMaster");
-      const blob = await masterAudio(result.blob);
+      const mastered = await masterAudio(result.blob);
       if (resultRef.current?.jobId !== forJobId) return;
+      if (!mastered.changed) {
+        setError("المقطع أقصر من أن يحتاج معالجة ماستر — بقي كما هو");
+        return;
+      }
       const song: SongResult = {
         ...result,
-        blob,
-        url: URL.createObjectURL(blob),
+        blob: mastered.blob,
+        url: URL.createObjectURL(mastered.blob),
         ext: "wav",
         mastered: true,
       };
       setResult(song);
       setVersions((prev) => prev.map((v, i) => (i === 0 ? song : v)));
+      // قص مقدمة الملف يُزيح توقيتات الكاريوكي — تُصحح بدل أن تنحرف
+      if (mastered.trimmedLeadSec > 0) {
+        const lead = mastered.trimmedLeadSec;
+        setKaraokeWords((prev) =>
+          prev
+            ? prev.map((w) => ({
+                ...w,
+                start: Math.max(0, w.start - lead),
+                end: Math.max(0, w.end - lead),
+              }))
+            : prev
+        );
+        setKaraokeStarts((prev) =>
+          prev ? prev.map((s) => Math.max(0, s - lead)) : prev
+        );
+      }
       // الرابط القديم لم يعد مرجعاً في أي مكان — يُبطل فلا يتراكم WAV ضخم
       URL.revokeObjectURL(oldUrl);
     } catch {
@@ -1834,6 +1865,7 @@ export default function SongsStudio() {
                     activeIndex={activeWord}
                     title={result.title}
                     sections={sections}
+                    sectionStarts={karaokeStarts}
                     canInpaint={
                       !!(sections?.length && result.elevenSongId && tier === "full" && !result.mock)
                     }
