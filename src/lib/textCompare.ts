@@ -4,6 +4,19 @@
  * والألف والتاء المربوطة، الترقيم والمسافات الزائدة.
  */
 
+/**
+ * استبدال كلمة كاملة فقط — لا كجزء من كلمة أخرى: تصحيح «من» إلى «مِنْ»
+ * يجب ألا يصيب «منها» أو «زمن». الحدود بالحروف والحركات لا \b اللاتينية
+ * (التي لا تفهم العربية)، والبديل يُحصَّن من رموز مجموعات الاستبدال.
+ */
+export function replaceWholeWord(text: string, word: string, alias: string): string {
+  if (!word) return text;
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const safeAlias = alias.replace(/\$/g, "$$$$");
+  const boundary = new RegExp(`(^|[^\\p{L}\\p{M}])${escaped}(?=$|[^\\p{L}\\p{M}])`, "gmu");
+  return text.replace(boundary, `$1${safeAlias}`);
+}
+
 /** تطبيع عربي للمقارنة الصوتية العادلة */
 export function normalizeArabic(text: string): string {
   return text

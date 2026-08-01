@@ -72,6 +72,31 @@ export async function consumeCredits(userId: string, scope: LimitScope): Promise
   return { allowed: true, balance, cost };
 }
 
+/**
+ * استرداد كلفة مسار بعد تعذّر تسليم قيمته الفعلية — عدالة العملة:
+ * لا دفع مقابل فشل أو ناتج تجريبي. نمط القراءة ثم التحديث يكفي هنا
+ * (كما في منح الدفع): الاسترداد نادر وأسوأ سباقاته نقاط زائدة لصالح المستخدم.
+ */
+export async function refundCredits(userId: string, scope: LimitScope): Promise<void> {
+  const cost = CREDIT_COSTS[scope] ?? 0;
+  if (!cost || creditsDisabled()) return;
+  const admin = getSupabaseAdmin();
+  if (!admin) return;
+
+  const { data: profile, error } = await admin
+    .from("profiles")
+    .select("credits")
+    .eq("id", userId)
+    .single();
+  if (error || !profile) return;
+
+  const { error: upErr } = await admin
+    .from("profiles")
+    .update({ credits: (profile.credits ?? 0) + cost })
+    .eq("id", userId);
+  if (upErr) console.error("refund_credits failed:", upErr.message);
+}
+
 export type CreditProfile = {
   balance: number;
   /** free | creator | studio */

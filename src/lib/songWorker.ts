@@ -1,11 +1,12 @@
 import { getJobsStore } from "./jobs";
+import { refundCredits } from "./credits";
 import { getMusicProvider, mockMusic } from "./providers";
 import { isInstrumentalRequest } from "./providers/compositionPlan";
 import { needsTashkeel, proofreadLyrics } from "./lyricsProofread";
 import { joinSections, parseSections } from "./songSections";
 import { SONG_SAMPLE_ONE_IN, autoEvalSong, sampleOneIn } from "./autoEval";
 import { logUsage } from "./usage";
-import type { MusicRequest } from "./providers/types";
+import type { AudioResult, MusicRequest } from "./providers/types";
 
 const PROVIDER_LABELS: Record<string, string> = {
   "eleven-music": "Eleven Music",
@@ -74,43 +75,81 @@ export async function runSongJob(jobId: string): Promise<void> {
     stage: `جارٍ التلحين والتوليد عبر ${PROVIDER_LABELS[provider.id] ?? provider.id}...`,
   });
 
+  // ١) التوليد — منفصل تماماً عن التخزين: توليد مدفوع ناجح لا يُهدر بعطل رفع
+  let result: AudioResult | null = null;
+  let fellBack: string | undefined;
   try {
-    const result = await provider.generate(job.request);
-    await store.complete(jobId, result);
-    if (result.provider !== "mock") {
-      await logUsage("songs", job.userId);
-      // النقد الذاتي بالعينات: حكم Gemini الصوتي على الالتزام المقامي
-      const geminiKey = process.env.GEMINI_API_KEY;
-      if (geminiKey && sampleOneIn(SONG_SAMPLE_ONE_IN)) {
-        await autoEvalSong({
-          geminiKey,
-          audio: result.audio,
-          mimeType: result.mimeType,
-          maqamId: job.request.maqamId,
-          variantId: job.request.variantId,
-        });
-      }
-    }
+    result = await provider.generate(job.request);
   } catch (e) {
     const reason = e instanceof Error ? e.message : "unknown";
-    if (provider.id === "mock") {
+    if (provider.id !== "mock") {
+      // المحرك الحقيقي غير متاح (شبكة/باقة/إعداد) — معاينة سلّم المقام بديلاً
+      console.error("Music provider failed, falling back to mock:", reason);
+      try {
+        result = await mockMusic.generate(job.request);
+        fellBack = reason.slice(0, 200);
+      } catch {
+        result = null;
+      }
+    }
+    if (!result) {
       await store.update(jobId, { status: "failed", stage: "فشل التوليد", error: reason });
+      await refundSong(job.userId);
       return;
     }
-    // المحرك الحقيقي غير متاح (شبكة/باقة/إعداد) — نرجع لمعاينة سلّم المقام
-    console.error("Music provider failed, falling back to mock:", reason);
+  }
+
+  // ٢) التخزين بإعادة محاولة — عطل الرفع العابر لا يعيد التوليد ولا يحوّله تجريبياً
+  let stored = false;
+  for (let attempt = 1; attempt <= 3 && !stored; attempt++) {
     try {
-      const result = await mockMusic.generate(job.request);
-      await store.complete(jobId, result, {
-        stage: "اكتمل التوليد (وضع تجريبي)",
-        fellBack: reason.slice(0, 200),
-      });
-    } catch (mockError) {
-      await store.update(jobId, {
-        status: "failed",
-        stage: "فشل التوليد",
-        error: mockError instanceof Error ? mockError.message : "unknown",
-      });
+      await store.complete(
+        jobId,
+        result,
+        fellBack ? { stage: "اكتمل التوليد (وضع تجريبي)", fellBack } : undefined
+      );
+      stored = true;
+    } catch (e) {
+      console.error(`storing song output failed (attempt ${attempt}):`, e);
+      if (attempt < 3) await new Promise((r) => setTimeout(r, 1000 * attempt));
     }
+  }
+  if (!stored) {
+    await store.update(jobId, {
+      status: "failed",
+      stage: "فشل حفظ الناتج",
+      error: "تعذّر حفظ الملف الصوتي بعد توليده — استُرد رصيدك، حاول مجدداً",
+    });
+    await refundSong(job.userId);
+    return;
+  }
+
+  // ٣) عدالة الرصيد: ناتج تجريبي (رجوعاً أو وضعاً قسرياً) لا يُدفع مقابله
+  if (result.mock || result.provider === "mock") {
+    await refundSong(job.userId);
+    return;
+  }
+
+  await logUsage("songs", job.userId);
+  // النقد الذاتي بالعينات: حكم Gemini الصوتي على الالتزام المقامي
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (geminiKey && sampleOneIn(SONG_SAMPLE_ONE_IN)) {
+    await autoEvalSong({
+      geminiKey,
+      audio: result.audio,
+      mimeType: result.mimeType,
+      maqamId: job.request.maqamId,
+      variantId: job.request.variantId,
+    });
+  }
+}
+
+/** استرداد كلفة الأغنية للمسجل — الزائر لا يُخصم منه رصيد أصلاً */
+async function refundSong(userId: string | null): Promise<void> {
+  if (!userId) return;
+  try {
+    await refundCredits(userId, "songs");
+  } catch (e) {
+    console.error("song refund failed:", e);
   }
 }
