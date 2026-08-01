@@ -79,6 +79,8 @@ type SongResult = {
   prompt: string;
   ext: string;
   fellBack: boolean;
+  /** السبب الفعلي للرجوع التجريبي كما سجّله الخادم — يُعرض لا يُرمى */
+  fellBackReason?: string;
   provider?: string;
   /** لقطة وقت التوليد — تسمح بعرض النسخ السابقة بعناوينها الصحيحة */
   maqamName: string;
@@ -510,6 +512,7 @@ export default function SongsStudio() {
       prompt: status.stylePrompt ?? "",
       ext: blob.type === "audio/mpeg" ? "mp3" : "wav",
       fellBack: !!status.fellBack,
+      fellBackReason: status.fellBack || undefined,
       provider: status.provider,
       elevenSongId: status.elevenSongId,
       maqamName: snapshot.maqamName,
@@ -1728,7 +1731,9 @@ export default function SongsStudio() {
                             }
                             note={
                               slot.song.fellBack
-                                ? "تعذّر هذا المحرك فعُرض بديل تجريبي — لا يصلح للمقارنة."
+                                ? `تعذّر هذا المحرك فعُرض بديل تجريبي — لا يصلح للمقارنة. السبب: ${
+                                    slot.song.fellBackReason?.slice(0, 160) ?? "غير معروف"
+                                  }`
                                 : undefined
                             }
                           />
@@ -1766,7 +1771,9 @@ export default function SongsStudio() {
                   filename={`maqam-song-v${versions.length}.${result.ext}`}
                   note={
                     result.fellBack
-                      ? "تعذّر الوصول لمحرك التوليد من هذه البيئة (أو تتطلب الميزة باقة مدفوعة)، فعُرض سلّم المقام التجريبي بدلاً منه."
+                      ? `تعذّر محرك التوليد فعُرض سلّم المقام التجريبي بدلاً منه. السبب: ${
+                          result.fellBackReason?.slice(0, 160) ?? "غير معروف"
+                        }`
                       : undefined
                   }
                 >
