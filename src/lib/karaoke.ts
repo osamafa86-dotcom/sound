@@ -27,30 +27,61 @@ function normalizeWord(w: string): string {
 }
 
 /**
+ * أطول تسلسل مشترك بين قائمتي كلمات موحّدة — محاذاة عالمية مثلى:
+ * تستوعب الحذف والإضافة والتكرار وتستعيد التزامن بعد أي انحراف،
+ * بعكس المحاذاة الجشعة بنافذة قصيرة التي تنهار عند أول اختلاف.
+ * أزواج (فهرس أ، فهرس ب) بترتيب تصاعدي، وكسر التعادل يقدّم القائمة
+ * الأولى فيقترن التكرار المغنّى بأول ظهور مكتوب (يخدم بدايات المقاطع).
+ */
+function lcsPairs(a: string[], b: string[]): [number, number][] {
+  const n = a.length;
+  const m = b.length;
+  const dp: Uint32Array[] = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] =
+        a[i] && a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const pairs: [number, number][] = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] && a[i] === b[j]) {
+      pairs.push([i, j]);
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      i++;
+    } else {
+      j++;
+    }
+  }
+  return pairs;
+}
+
+/**
  * محاذاة كلمات التفريغ مع النص المكتوب المشكّل — التفريغ يعيد الكلمات عارية
  * من الحركات، فنستبدل بكل كلمة مطابقة صورتَها المكتوبة بتشكيلها الكامل
- * (مع إبقاء توقيتها)، فيعرض المحرر النص كما كُتب وغُنّي لا كما فُرّغ.
- * كلمات الترويسات («لازمة:») والكلمات غير المطابقة تُتخطى بنافذة قصيرة.
+ * (مع إبقاء توقيتها)، ونعلّم غير المطابقة (matched: false) كاشفاً للانحراف.
+ * المحاذاة بأطول تسلسل مشترك — تصمد أمام الحشو والتكرار وحذف الكلمات.
  */
 export function alignWordsToLyrics(words: KaraokeWord[], written: string): KaraokeWord[] {
   const tokens = written.split(/\s+/).filter(Boolean);
   if (!tokens.length) return words;
-  const norms = tokens.map(normalizeWord);
+  const tokenNorms = tokens.map(normalizeWord);
+  const wordNorms = words.map((w) => normalizeWord(w.text));
 
-  let cursor = 0;
-  const WINDOW = 4;
-  return words.map((w) => {
-    const wn = normalizeWord(w.text);
-    if (!wn) return w;
-    for (let j = cursor; j < Math.min(cursor + WINDOW, tokens.length); j++) {
-      if (norms[j] && norms[j] === wn) {
-        cursor = j + 1;
-        const display = tokens[j].replace(EDGE_PUNCT, "");
-        return { ...w, ...(display && { text: display }), matched: true };
-      }
+  const pairing = new Map<number, number>(lcsPairs(wordNorms, tokenNorms));
+  return words.map((w, i) => {
+    if (!wordNorms[i]) return w;
+    const j = pairing.get(i);
+    if (j === undefined) {
+      // لا مقابل في النص المكتوب: غُنّيت مختلفة (انحراف محرك أو خطأ تفريغ)
+      return { ...w, matched: false };
     }
-    // لا مقابل في النص المكتوب: غُنّيت مختلفة (انحراف محرك أو خطأ تفريغ)
-    return { ...w, matched: false };
+    const display = tokens[j].replace(EDGE_PUNCT, "");
+    return { ...w, ...(display && { text: display }), matched: true };
   });
 }
 
@@ -70,37 +101,34 @@ export function measureSectionStarts(
   if (!words.length || !sections.length) return null;
   const wordNorms = words.map((w) => normalizeWord(w.text));
 
-  const starts: (number | null)[] = sections.map(() => null);
-  let cursor = 0;
-  let anyMatched = false;
-
-  for (let i = 0; i < sections.length; i++) {
-    const sectionWords = sections[i].lyrics
-      .split(/\s+/)
-      .map(normalizeWord)
-      .filter(Boolean);
-    if (!sectionWords.length) continue; // آلي (مقدمة/خاتمة) — يُقدَّر لاحقاً
-
-    let firstMatch = -1;
-    let matched = 0;
-    let c = cursor;
-    for (const sw of sectionWords) {
-      for (let j = c; j < Math.min(c + 6, words.length); j++) {
-        if (wordNorms[j] && wordNorms[j] === sw) {
-          if (firstMatch < 0) firstMatch = j;
-          matched++;
-          c = j + 1;
-          break;
-        }
-      }
+  // كلمات كل المقاطع في قائمة واحدة مع نسب كل كلمة لمقطعها
+  const tokenNorms: string[] = [];
+  const tokenSection: number[] = [];
+  const sectionTokenCount = sections.map(() => 0);
+  sections.forEach((s, si) => {
+    for (const t of s.lyrics.split(/\s+/).map(normalizeWord).filter(Boolean)) {
+      tokenNorms.push(t);
+      tokenSection.push(si);
+      sectionTokenCount[si]++;
     }
-    if (firstMatch >= 0 && matched / sectionWords.length >= 0.5) {
-      starts[i] = words[firstMatch].start;
-      cursor = c;
-      anyMatched = true;
-    }
+  });
+  if (!tokenNorms.length) return null;
+
+  // محاذاة مثلى واحدة ثم إسناد أول اقتران لكل مقطع بدايةً له
+  const firstHit: (number | null)[] = sections.map(() => null);
+  const hitCount = sections.map(() => 0);
+  for (const [wi, tj] of lcsPairs(wordNorms, tokenNorms)) {
+    const si = tokenSection[tj];
+    hitCount[si]++;
+    if (firstHit[si] === null) firstHit[si] = wi;
   }
-  if (!anyMatched) return null;
+
+  const starts: (number | null)[] = sections.map((_, si) =>
+    firstHit[si] !== null && hitCount[si] / sectionTokenCount[si] >= 0.4
+      ? words[firstHit[si]!].start
+      : null
+  );
+  if (!starts.some((s) => s !== null)) return null;
 
   // تقدير غير المُطابَق: بداية الجار السابق + مدته المخططة، بلا تجاوز التالي المعلوم
   const resolved: number[] = [];

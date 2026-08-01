@@ -88,6 +88,21 @@ describe("محاذاة التفريغ مع النص المكتوب المشكّ�
   it("نص مكتوب فارغ ⟵ الكلمات كما وصلت", () => {
     expect(alignWordsToLyrics(transcript, "")).toEqual(transcript);
   });
+
+  it("سطر مكتوب كامل أسقطه الغناء لا يُفقد ما بعده — المحاذاة المثلى تستعيد التزامن", () => {
+    // النافذة الجشعة القديمة كانت تعلق هنا فتحكم زوراً على كل الباقي بعدم المطابقة
+    const sung: KaraokeWord[] = [
+      { text: "يا", start: 0, end: 0.3 },
+      { text: "ليل", start: 0.4, end: 0.8 },
+      { text: "غنوا", start: 5, end: 5.4 },
+      { text: "معي", start: 5.5, end: 5.9 },
+    ];
+    const written = "يَا لَيْل سَطْرٌ طَوِيلٌ مَحْذُوفٌ تَمَامًا مِنَ الغِنَاء هُنَا غَنُّوا مَعِي";
+    const aligned = alignWordsToLyrics(sung, written);
+    expect(aligned.map((w) => w.matched)).toEqual([true, true, true, true]);
+    expect(aligned[2].text).toBe("غَنُّوا");
+    expect(aligned[3].text).toBe("مَعِي");
+  });
 });
 
 describe("قياس بدايات المقاطع من التفريغ الموقوت", () => {
