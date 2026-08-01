@@ -4,6 +4,7 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SiteBanner from "@/components/SiteBanner";
+import PwaRegister from "@/components/PwaRegister";
 
 const alexandria = Alexandria({
   variable: "--font-alexandria",
@@ -30,6 +31,15 @@ export const metadata: Metadata = {
     type: "website",
     locale: "ar_AR",
   },
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "مقام",
+    statusBarStyle: "default",
+  },
+  icons: {
+    apple: "/icons/apple-touch-icon.png",
+  },
 };
 
 export const viewport = {
@@ -44,6 +54,7 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" className={`${alexandria.variable} ${tajawal.variable} h-full antialiased`}>
       <body className="min-h-full bg-surface text-body">
+        <PwaRegister />
         <Navbar />
         <div className="flex min-h-screen flex-col lg:ms-[264px]">
           <SiteBanner />
