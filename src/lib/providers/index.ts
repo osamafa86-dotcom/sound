@@ -4,7 +4,7 @@ import { lyriaMusic } from "./lyria";
 import { mockMusic, mockTTS } from "./mock";
 import { VOICES } from "@/lib/voices";
 import { settingsSnapshot } from "@/lib/platformSettings";
-import type { AudioResult, MusicProvider, MusicRequest, TTSProvider } from "./types";
+import type { MusicProvider, TTSProvider } from "./types";
 
 /**
  * اختيار مزوّد النطق حسب الصوت المطلوب والمفاتيح المتوفرة:
@@ -36,9 +36,11 @@ export function availableVoices() {
 }
 
 /**
- * مزوّد الموسيقى المفضّل: Lyria 3 Pro (أرخص وأعلى جودة) مع رجوع تلقائي إلى Eleven Music
- * عند تعذّره — مثل نفاد الحصة أو حجب مرشّح المحتوى أو غياب الفوترة في Google Cloud.
- * يمكن فرض مزوّد بعينه عبر MUSIC_PROVIDER=lyria|elevenlabs.
+ * مزوّد الأغاني — قرار المالك (آب 2026) بعد التحكيم بالسمع عبر توليدات كثيرة:
+ * **Lyria حصراً** (أعلى وأقوى من Eleven Music في الأغاني) بلا سلسلة رجوع بينهما —
+ * ما يرفضه مرشّح المحتوى يخرج سلّم مقام تجريبياً بسبب معروض لا أغنيةً من محرك أدنى.
+ * مهارب الرجوع: MUSIC_PROVIDER=elevenlabs يعيد Eleven، وEleven يبقى ملاذاً
+ * تلقائياً فقط عند غياب مفتاح Gemini كلياً (حماية استمرارية المنصة).
  * (مستوى المعاينة يتحكم بالمدة عبر durationSec في الطلب نفسه)
  */
 export function getMusicProvider(opts?: {
@@ -55,15 +57,12 @@ export function getMusicProvider(opts?: {
   const eleven = elevenKey ? elevenLabsMusic(elevenKey) : null;
   const lyria = geminiKey ? lyriaMusic(geminiKey) : null;
 
-  // فرض المهمة الواحدة (المقارنة) يتقدم على فرض البيئة — بلا سلسلة رجوع بين المحركين
-  // كي تعكس كل نسخة محركها الحقيقي (الرجوع للوضع التجريبي يتكفل به منفّذ المهمة)
+  // فرض المهمة الواحدة (المقارنة) يتقدم على كل شيء — كل نسخة بمحركها الحقيقي
   if (opts?.force === "eleven-music" && eleven) return eleven;
   if (opts?.force === "lyria" && lyria) return lyria;
 
   if (forced === "elevenlabs" && eleven) return eleven;
-  if (forced === "lyria" && lyria) return lyria;
 
-  if (lyria && eleven) return withFallback(lyria, eleven);
   return lyria ?? eleven ?? mockMusic;
 }
 
@@ -74,23 +73,6 @@ export function comparisonAvailable(): boolean {
     !!process.env.ELEVENLABS_API_KEY &&
     !!process.env.GEMINI_API_KEY
   );
-}
-
-/** يغلّف مزوّدين: يجرّب الأساسي ثم يعود للبديل مع تسجيل السبب */
-function withFallback(primary: MusicProvider, backup: MusicProvider): MusicProvider {
-  return {
-    id: `${primary.id}+${backup.id}`,
-    async generate(req: MusicRequest): Promise<AudioResult> {
-      try {
-        return await primary.generate(req);
-      } catch (e) {
-        const reason = e instanceof Error ? e.message : "unknown";
-        console.warn(`music provider ${primary.id} failed, falling back to ${backup.id}: ${reason}`);
-        const result = await backup.generate(req);
-        return { ...result, fallbackFrom: primary.id, fallbackReason: reason };
-      }
-    },
-  };
 }
 
 export { mockMusic, mockTTS };
