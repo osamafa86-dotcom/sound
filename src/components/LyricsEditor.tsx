@@ -64,7 +64,8 @@ export default function LyricsEditor({
 
   function pick(i: number) {
     setSelected(i);
-    setWrong(cleanWord(words[i].text));
+    // المنحرفة تُملأ بصورتها المكتوبة المرجحة — الاستبدال يصيب النص لا السماع
+    setWrong(words[i].suggestedWritten ?? cleanWord(words[i].text));
     setAlias("");
     setFixError("");
     onPlayWord(words[i]);
@@ -231,6 +232,14 @@ export default function LyricsEditor({
             </button>
           </div>
 
+          {words[selected].matched === false && (
+            <p className="mt-2 text-xs text-muted">
+              سُمعت في الغناء: «{cleanWord(words[selected].text)}»
+              {words[selected].suggestedWritten &&
+                ` — وكلمتك المكتوبة في موضعها: «${words[selected].suggestedWritten}» (مُلئ بها الحقل الأول)`}
+              . الحقل الأول يجب أن يطابق الكلمة كما هي في نصك حرفياً ليصيبها التصحيح.
+            </p>
+          )}
           <p className="mt-2 text-xs leading-relaxed text-muted">
             {inpaintHere
               ? "يتعلم العقل النطق الصحيح للأبد، ثم يُعاد إنشاد هذا المقطع وحده — باقي الأغنية يبقى كما هو حرفياً."
