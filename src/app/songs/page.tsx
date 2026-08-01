@@ -7,6 +7,7 @@ import SaveToLibrary from "@/components/SaveToLibrary";
 import SingAlongPanel from "@/components/SingAlongPanel";
 import StemsPanel from "@/components/StemsPanel";
 import { alignWordsToLyrics, findActiveWord, type KaraokeWord } from "@/lib/karaoke";
+import { replaceWholeWord } from "@/lib/textCompare";
 import { HERITAGE_STYLE_IDS, LYRIC_FORMS, heritageStyle } from "@/lib/heritage/palestinian";
 import { emitSignal } from "@/lib/signalClient";
 import { AMBIENCES, DIALECTS, INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
@@ -308,7 +309,8 @@ export default function SongsStudio() {
       }).catch(() => {});
     }
 
-    const replaceIn = (text: string) => text.split(word).join(alias);
+    // استبدال كلمة كاملة فقط — «من» لا تصيب «منها» ولا «زمن»
+    const replaceIn = (text: string) => replaceWholeWord(text, word, alias);
     const nextSections = sections?.map((s) => ({ ...s, lyrics: replaceIn(s.lyrics) })) ?? null;
     const byText = sections?.findIndex((s) => s.lyrics.includes(word)) ?? -1;
     const affected =
@@ -336,7 +338,12 @@ export default function SongsStudio() {
       });
     } else {
       setFixMsg(`✓ تعلّم العقل نطق «${word}» — نولّد نسخة مصححة كاملة`);
-      await generate(nextSections ? { sections: nextSections, compare: false } : { compare: false });
+      // النص المصحح يُمرر صراحة — حالة lyrics لم يُعد تصييرها بعد (إغلاق متقادم)
+      await generate(
+        nextSections
+          ? { sections: nextSections, compare: false }
+          : { lyrics: replaceIn(lyrics), compare: false }
+      );
     }
   }
 
@@ -578,6 +585,12 @@ export default function SongsStudio() {
     setLoading(true);
     setStage("جارٍ إنشاء المهمة...");
     setResult(null);
+    // روابط نسخ المقارنة السابقة غير المعتمدة تُبطل قبل الجولة الجديدة
+    compareSlots?.forEach((s) => {
+      if (s.song && !versions.some((v) => v.jobId === s.song!.jobId)) {
+        URL.revokeObjectURL(s.song.url);
+      }
+    });
     setCompareSlots(null);
     setCompareNote("");
     compareSignaledRef.current = false;
@@ -709,6 +722,12 @@ export default function SongsStudio() {
   const [karaokeNote, setKaraokeNote] = useState("");
   const [activeWord, setActiveWord] = useState(-1);
 
+  /** مرآة حية للناتج الحالي — حارس تقادم للعمليات غير المتزامنة بعد await */
+  const resultRef = useRef<SongResult | null>(null);
+  useEffect(() => {
+    resultRef.current = result;
+  }, [result]);
+
   // تشغيل كلمة بعينها من المحرر: انتقال إلى ما قبلها بقليل وإيقاف بُعيد نهايتها
   const playerCtlRef = useRef<PlayerControl | null>(null);
   const wordStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -729,6 +748,23 @@ export default function SongsStudio() {
   const [coverBusy, setCoverBusy] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
 
+  // كنس المغادرة: تنقل SPA لا يحرر روابط blob تلقائياً — جلسة توليد نشطة
+  // تراكم مئات الميغابايت (نسخ + مقارنات + غلاف) إن لم تُبطل عند التفكيك
+  const liveUrlsRef = useRef<string[]>([]);
+  useEffect(() => {
+    liveUrlsRef.current = [
+      ...versions.map((v) => v.url),
+      ...(compareSlots ?? []).flatMap((s) => (s.song ? [s.song.url] : [])),
+      ...(coverUrl ? [coverUrl] : []),
+      ...(imagePreview ? [imagePreview] : []),
+    ];
+  });
+  useEffect(() => {
+    return () => {
+      liveUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, []);
+
   /** موضع التشغيل يقود إضاءة كلمات الكاريوكي */
   function handlePlayerTime(sec: number) {
     if (!karaokeWords) return;
@@ -738,6 +774,9 @@ export default function SongsStudio() {
 
   async function startKaraoke(auto = false) {
     if (!result || karaokeBusy) return;
+    // حارس التقادم: لو تغيّر الناتج أثناء انتظار المزامنة، يُهمل الرد القديم
+    // كي لا تُكتب كلمات وتوقيتات أغنية سابقة على الأغنية الجديدة
+    const forJobId = result.jobId;
     setKaraokeBusy(true);
     setKaraokeNote("");
     if (!auto) setError("");
@@ -751,10 +790,12 @@ export default function SongsStudio() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error ?? "تعذّرت مزامنة الكلمات");
+      if (resultRef.current?.jobId !== forJobId) return;
       // عرض الكلمات بصورتها المكتوبة المشكّلة لا بصورة التفريغ العارية
       setKaraokeWords(alignWordsToLyrics(data.words, lyrics));
       setActiveWord(-1);
     } catch (e) {
+      if (resultRef.current?.jobId !== forJobId) return;
       // فشل المزامنة التلقائية لا يقاطع الاحتفال بالناتج — ملاحظة هادئة وزر يدوي
       const message = e instanceof Error ? e.message : "حدث خطأ غير متوقع";
       if (auto) setKaraokeNote(message);
@@ -819,9 +860,12 @@ export default function SongsStudio() {
   async function applyMaster() {
     if (!result || result.mastered || mastering) return;
     setMastering(true);
+    const forJobId = result.jobId;
+    const oldUrl = result.url;
     try {
       const { masterAudio } = await import("@/lib/audioMaster");
       const blob = await masterAudio(result.blob);
+      if (resultRef.current?.jobId !== forJobId) return;
       const song: SongResult = {
         ...result,
         blob,
@@ -831,6 +875,8 @@ export default function SongsStudio() {
       };
       setResult(song);
       setVersions((prev) => prev.map((v, i) => (i === 0 ? song : v)));
+      // الرابط القديم لم يعد مرجعاً في أي مكان — يُبطل فلا يتراكم WAV ضخم
+      URL.revokeObjectURL(oldUrl);
     } catch {
       setError("تعذّرت معالجة الماستر في هذا المتصفح — الملف الأصلي كما هو");
     } finally {
@@ -855,6 +901,7 @@ export default function SongsStudio() {
           <li key={s} className="flex-1">
             <button
               onClick={() => setStep(i)}
+              aria-current={i === step ? "step" : undefined}
               className={`w-full rounded-xl border px-3 py-2.5 text-sm font-semibold transition-colors ${
                 i === step
                   ? "border-primary bg-rose text-primary"
@@ -896,6 +943,7 @@ export default function SongsStudio() {
                     // لهجة الأداء الغنائي تتبع لهجة الكتابة حتى يغيّرها المستخدم بنفسه
                     setDeliveryDialectId(e.target.value);
                   }}
+                  aria-label="لهجة كتابة الكلمات"
                   className="rounded-xl border border-border-soft bg-surface p-3 text-sm outline-none transition-colors focus:border-primary"
                 >
                   {DIALECTS.map((d) => (
@@ -907,6 +955,7 @@ export default function SongsStudio() {
                 <select
                   value={lyricForm}
                   onChange={(e) => setLyricForm(e.target.value)}
+                  aria-label="قالب الكتابة الشعرية"
                   title="قالب الكتابة الشعرية — بنية النص بغض النظر عن اللحن"
                   className="rounded-xl border border-border-soft bg-surface p-3 text-sm outline-none transition-colors focus:border-primary"
                 >
@@ -1210,12 +1259,25 @@ export default function SongsStudio() {
                   {sampleError}
                 </p>
               )}
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div
+                role="radiogroup"
+                aria-label="اختيار المقام"
+                className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+              >
                 {MAQAMAT.map((m) => (
                   <div
                     key={m.id}
+                    role="radio"
+                    aria-checked={maqamId === m.id}
+                    tabIndex={0}
                     onClick={() => setMaqamId(m.id)}
-                    className={`cursor-pointer rounded-2xl border p-4 text-start transition-colors ${
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setMaqamId(m.id);
+                      }
+                    }}
+                    className={`cursor-pointer rounded-2xl border p-4 text-start transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
                       maqamId === m.id
                         ? "border-primary bg-rose"
                         : "border-border-soft bg-surface-card hover:border-primary/50"
@@ -1427,6 +1489,7 @@ export default function SongsStudio() {
                       <select
                         value={deliveryDialectId}
                         onChange={(e) => setDeliveryDialectId(e.target.value)}
+                        aria-label="لهجة الأداء الغنائي"
                         className="rounded-xl border border-border-soft bg-surface-raised px-3 py-2 text-sm outline-none focus:border-primary"
                       >
                         {DIALECTS.map((d) => (
@@ -1545,10 +1608,18 @@ export default function SongsStudio() {
             </div>
 
             {error && (
-              <p className="rounded-xl border border-primary/40 bg-rose px-4 py-3 text-sm text-primary-strong">
+              <p
+                role="alert"
+                className="rounded-xl border border-primary/40 bg-rose px-4 py-3 text-sm text-primary-strong"
+              >
                 {error}
               </p>
             )}
+
+            {/* إعلان حي لقارئ الشاشة عن مراحل التوليد — بصرياً تظهر في نص الزر */}
+            <p role="status" aria-live="polite" className="sr-only">
+              {loading ? stage : ""}
+            </p>
 
             <button
               onClick={() => generate()}

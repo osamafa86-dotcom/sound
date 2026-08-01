@@ -79,7 +79,7 @@ describe("برومبت Music v2 — البنية والكلمات داخل ال�
       ...base,
       singer: "female",
       bpm: 96,
-      dialectEn: "Palestinian",
+      dialectEn: "Palestinian Arabic dialect",
       sections: [
         { kind: "intro", lyrics: "", durationSec: 10 },
         { kind: "verse", lyrics: "سطر أول\nسطر ثانٍ", durationSec: 30 },
@@ -90,7 +90,9 @@ describe("برومبت Music v2 — البنية والكلمات داخل ال�
     expect(prompt).toContain("Arabic maqam Hijaz, oud and qanun");
     expect(prompt).toContain("96 BPM");
     expect(prompt).toContain("female Arabic lead vocals");
-    expect(prompt).toContain("Palestinian Arabic dialect");
+    // القيمة الحقيقية من DIALECTS تحمل «Arabic dialect» أصلاً — القالب لا يكررها
+    expect(prompt).toContain("authentic Palestinian Arabic dialect, native-speaker");
+    expect(prompt).not.toContain("Arabic dialect Arabic dialect");
     expect(prompt).toContain("[Intro 1 — ~10s] (instrumental)");
     expect(prompt).toContain("[Verse 1 — ~30s]\nسطر أول\nسطر ثانٍ");
     expect(prompt).toContain("[Verse 2 — ~25s]\nمقطع ثانٍ");

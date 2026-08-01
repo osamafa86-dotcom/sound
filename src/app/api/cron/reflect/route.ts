@@ -86,7 +86,11 @@ export async function GET(req: NextRequest) {
     // الإشارة تُنسب للسلالة التي يبدأ برومبت توليدتها ببرومبتها
     const head = v.prompt.slice(0, 80);
     for (const s of sigs ?? []) {
-      const sp = (s.settings as Record<string, unknown> | null)?.stylePrompt;
+      const settings = s.settings as Record<string, unknown> | null;
+      // إشارات وضع المقارنة (تحمل engine) حكم بين محركين لا بين سلالات
+      // برومبت — النسختان تتشاركان البرومبت نفسه فتسمم فوزاً وخسارة معاً
+      if (settings?.engine) continue;
+      const sp = settings?.stylePrompt;
       if (s.maqam_id === v.maqam_id && typeof sp === "string" && sp.startsWith(head)) {
         contributions.push(signalContribution(Number(s.weight)));
       }

@@ -1,4 +1,5 @@
 import { pcm16ToWav } from "@/lib/mockAudio";
+import { isInstrumentalRequest } from "./compositionPlan";
 import type { AudioResult, MusicProvider, MusicRequest } from "./types";
 
 /** نموذج توليد الموسيقى — Lyria 3 Pro يدعم أغانٍ حتى ~3 دقائق بجودة عالية */
@@ -36,7 +37,7 @@ export function lyriaMusic(apiKey: string): MusicProvider {
   return {
     id: "lyria",
     async generate(req: MusicRequest): Promise<AudioResult> {
-      const instrumentalOnly = req.styleId === "instrumental" || !req.lyrics?.trim();
+      const instrumentalOnly = isInstrumentalRequest(req);
       const seconds = Math.min(180, Math.max(15, req.durationSec ?? 60));
 
       // بنية المقاطع تصل Lyria وصفاً نصياً (لا يدعم خطط تأليف مهيكلة كـ Eleven Music)
@@ -45,6 +46,15 @@ export function lyriaMusic(apiKey: string): MusicProvider {
             .map((s) => `${s.kind} (~${s.durationSec}s)`)
             .join(" → ")}.`
         : "";
+
+      // كلمات الغناء من المقاطع مباشرة — نص المقاطع المدموج يحمل ترويسات
+      // عربية («لازمة:») قد تُغنّى حرفياً لو مُررت كما هي
+      const sungLyrics = req.sections?.length
+        ? req.sections
+            .map((s) => s.lyrics.trim())
+            .filter(Boolean)
+            .join("\n\n")
+        : (req.lyrics ?? "").trim();
 
       const prompt = [
         req.stylePrompt,
@@ -56,9 +66,9 @@ export function lyriaMusic(apiKey: string): MusicProvider {
           : [
               req.singer ? `${req.singer} Arabic lead vocals.` : "",
               req.dialectEn
-                ? `Authentic ${req.dialectEn} Arabic dialect, native-speaker pronunciation.`
+                ? `Authentic ${req.dialectEn}, native-speaker pronunciation.`
                 : "",
-              `Sung vocals performing these Arabic lyrics exactly as written:\n${req.lyrics!.trim()}`,
+              `Sung vocals performing these Arabic lyrics exactly as written:\n${sungLyrics}`,
             ]
               .filter(Boolean)
               .join("\n"),

@@ -86,7 +86,7 @@ export function buildElevenMusicPrompt(req: MusicRequest): string {
     ...(req.bpm ? [`${req.bpm} BPM`] : []),
     ...(req.singer && !instrumentalOnly ? [`${req.singer} Arabic lead vocals`] : []),
     ...(req.dialectEn && !instrumentalOnly
-      ? [`authentic ${req.dialectEn} Arabic dialect, native-speaker pronunciation`]
+      ? [`authentic ${req.dialectEn}, native-speaker pronunciation`]
       : []),
   ];
 
@@ -138,7 +138,7 @@ export function buildCompositionPlan(req: MusicRequest): ElevenCompositionPlan |
     // لهجة الأداء: نطق أصيل كالمتحدث الأصلي، والكلمات تُغنى كما كُتبت بتشكيلها
     ...(!instrumental && req.dialectEn
       ? [
-          `authentic ${req.dialectEn} Arabic dialect vocals, native-speaker pronunciation`,
+          `authentic ${req.dialectEn} vocals, native-speaker pronunciation`,
           "sing the lyrics exactly as written including diacritics",
         ]
       : []),

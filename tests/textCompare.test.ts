@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { levenshtein, normalizeArabic, pronunciationAccuracy } from "@/lib/textCompare";
+import {
+  levenshtein,
+  normalizeArabic,
+  pronunciationAccuracy,
+  replaceWholeWord,
+} from "@/lib/textCompare";
 
 describe("مقياس دقة النطق", () => {
   it("التطبيع يسقط التشكيل ورسم الهمزات والترقيم", () => {
@@ -28,5 +33,30 @@ describe("مقياس دقة النطق", () => {
 
   it("نص فارغ بعد التطبيع → لا حكم", () => {
     expect(pronunciationAccuracy("!!!", "أي شيء")).toBeNull();
+  });
+});
+
+describe("استبدال الكلمة الكاملة (تصحيح النطق)", () => {
+  it("يصيب الكلمة المستقلة فقط — لا أجزاء الكلمات ولا الملتصقة بسابقة عطف", () => {
+    // «منها» و«زمن» و«ومن» تبقى — القاعدة صارمة عمداً: من أراد «ومن» يعلّمها كلمة مستقلة
+    expect(replaceWholeWord("من زمن بعيد جئنا منها ومن هنا، من قال؟", "من", "مِنْ")).toBe(
+      "مِنْ زمن بعيد جئنا منها ومن هنا، مِنْ قال؟"
+    );
+  });
+
+  it("يعمل في أول النص وآخره وبجوار الترقيم وعبر الأسطر", () => {
+    expect(replaceWholeWord("حب، وكل الحب أحبك\nحب", "حب", "حُب")).toBe(
+      "حُب، وكل الحب أحبك\nحُب"
+    );
+  });
+
+  it("ظهورات متتالية تُستبدل كلها والبديل بعلامة $ لا يُفسَّر", () => {
+    expect(replaceWholeWord("يا يا يا", "يا", "يَا")).toBe("يَا يَا يَا");
+    expect(replaceWholeWord("سعر", "سعر", "$&x")).toBe("$&x");
+  });
+
+  it("كلمة فارغة أو غائبة تعيد النص كما هو", () => {
+    expect(replaceWholeWord("نص ثابت", "", "بديل")).toBe("نص ثابت");
+    expect(replaceWholeWord("نص ثابت", "غائبة", "بديل")).toBe("نص ثابت");
   });
 });
