@@ -26,6 +26,35 @@ export function needsTashkeel(text: string): boolean {
   return marks / letters < 0.15;
 }
 
+/** الهيكل الحرفي للنص: الحروف بلا حركات ولا تطويل — خط أحمر لا يعبره المدقق */
+export function letterSkeleton(text: string): string {
+  return text.replace(/[ً-ْٰـ]/g, "").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * حارس قدسية الحروف — النموذج قد «يكتب كما تُنطق» فيبدّل الحروف نفسها
+ * (طير⟵ظير، البلاد⟵البلاذ) ويشوّه الكلمات التي ستُغنى حرفياً.
+ * القبول كلمةً كلمة: تشكيل المدقق يُعتمد فقط حيث بقي هيكل الكلمة
+ * الحرفي مطابقاً للأصل، وأي كلمة بُدّلت حروفها تعود لصورتها الأصلية.
+ * اختلاف عدد الأسطر أو كلمات السطر ⟵ يبقى سطر الأصل كما هو.
+ */
+export function enforceLetterSkeleton(original: string, proofed: string): string {
+  if (letterSkeleton(original) === letterSkeleton(proofed)) return proofed;
+  const oLines = original.split("\n");
+  const pLines = proofed.split("\n");
+  if (oLines.length !== pLines.length) return original;
+  return oLines
+    .map((ol, li) => {
+      const ow = ol.split(/\s+/).filter(Boolean);
+      const pw = pLines[li].split(/\s+/).filter(Boolean);
+      if (ow.length !== pw.length) return ol;
+      return ow
+        .map((w, i) => (letterSkeleton(pw[i]) === letterSkeleton(w) ? pw[i] : w))
+        .join(" ");
+    })
+    .join("\n");
+}
+
 export type ProofreadIssue = {
   original: string;
   fixed: string;
@@ -79,9 +108,9 @@ function buildPrompt(sections: SongSection[], dialectId: string): string {
 
   return `أنت مدقق لغوي وخبير عروض غنائي متخصص في اللهجة ${dialect.name}. أمامك مقاطع أغنية ستُغنّى آلياً — المحرك ينطق النص كما كُتب حرفياً، فمهمتك أن يخرج النطق سليماً ١٠٠٪:
 
-١. **صحّح الإملاء** إن وُجدت أخطاء (بلا تغيير معنى أو مفردة إلا للضرورة الإملائية).
-٢. **شكّل كل كلمة تشكيلاً تاماً كما تُنطق باللهجة ${dialect.name} لا بالفصحى** — هذه أهم مهمة: القاف تصير همزة في العامية الشامية تُكتب حركتها كما تنطق، والسكون العامي في نهايات الكلمات يُثبت، وهكذا. اكتب الحركات التي تجعل قارئاً آلياً ينطق الكلمة كأهل اللهجة.
-٣. **حافظ حرفياً** على: عدد المقاطع وأنواعها ومددها وترتيبها، عدد الأسطر، الوزن والقافية، والمعنى. لا تضف ولا تحذف ولا تعِد صياغة.
+١. **قاعدة صارمة قبل كل شيء: الحروف مقدسة.** ممنوع منعاً باتاً تغيير أو تبديل أو حذف أي حرف من رسم الكلمة — لا ط↔ظ، لا د↔ذ، لا ت↔ة، لا دمج كلمتين ولا فصلهما. عبّر عن نطق اللهجة **بالحركات فقط فوق الحروف الأصلية كما هي**. التصحيح الإملائي مسموح فقط لخطأ إملاء صريح لا خلاف عليه (همزة أو تاء مربوطة) ويُذكر في issues.
+٢. **شكّل كل كلمة تشكيلاً تاماً كما تُنطق باللهجة ${dialect.name} لا بالفصحى** — بالحركات وحدها: السكون العامي في نهايات الكلمات يُثبت، والكسرة والفتحة كما ينطقها أهل اللهجة. لا تعبّر عن النطق بتغيير الحرف أبداً.
+٣. **حافظ حرفياً** على: عدد المقاطع وأنواعها ومددها وترتيبها، عدد الأسطر وعدد كلمات كل سطر، الوزن والقافية، والمعنى. لا تضف ولا تحذف ولا تعِد صياغة.
 ٤. أدرج في issues أبرز ما صححته (إملاء أو تشكيل يغيّر المعنى) مع السبب — حتى ١٠ فقط.
 ${dialect.id === "palestinian" ? `\n${PALESTINIAN_PRONUNCIATION_GUIDE}\n` : ""}
 المقاطع (JSON):
@@ -124,11 +153,13 @@ export async function proofreadLyrics(
   if (!clean || clean.length !== sections.length) {
     throw new Error("أعاد المدقق بنية مختلفة — حاول مجدداً");
   }
-  // حماية: المدد والأنواع تبقى كما كانت مهما قال النموذج
+  // حماية: المدد والأنواع تبقى كما كانت، والحروف مقدسة مهما قال النموذج —
+  // أي كلمة بدّل المدقق حروفها (لا حركاتها) تعود لصورتها الأصلية
   const merged = clean.map((s, i) => ({
     ...s,
     kind: sections[i].kind,
     durationSec: sections[i].durationSec,
+    lyrics: enforceLetterSkeleton(sections[i].lyrics, s.lyrics),
   }));
 
   const { joinSections } = await import("./songSections");
