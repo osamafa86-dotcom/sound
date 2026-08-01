@@ -89,6 +89,23 @@ describe("محاذاة التفريغ مع النص المكتوب المشكّ�
     expect(alignWordsToLyrics(transcript, "")).toEqual(transcript);
   });
 
+  it("الالتحام اللهجي: «عالبلاد» المغناة تقترن بـ«عَ الْبَلَادْ» المكتوبتين والعكس", () => {
+    const sung: KaraokeWord[] = [
+      { text: "سلم", start: 0, end: 0.4 },
+      { text: "عالبلاد", start: 0.5, end: 1.1 },
+      { text: "القديمة", start: 1.2, end: 1.8 },
+      { text: "قول", start: 2, end: 2.3 },
+      { text: "لها", start: 2.4, end: 2.7 },
+      { text: "ابنك", start: 2.8, end: 3.2 },
+    ];
+    const written = "سَلِّمْ عَ الْبَلَادْ الْقَدِيمَة قُولْلهَا ابْنِكْ";
+    const aligned = alignWordsToLyrics(sung, written);
+    expect(aligned.map((w) => w.matched)).toEqual([true, true, true, true, true, true]);
+    expect(aligned[1].text).toBe("عَ الْبَلَادْ"); // الملتحمة تعرض صورتيها المكتوبتين
+    expect(aligned[3].text).toBe("قول"); // المفصولتان تبقيان كما سُمعتا — مقترنتين
+    expect(aligned[5].text).toBe("ابْنِكْ");
+  });
+
   it("سطر مكتوب كامل أسقطه الغناء لا يُفقد ما بعده — المحاذاة المثلى تستعيد التزامن", () => {
     // النافذة الجشعة القديمة كانت تعلق هنا فتحكم زوراً على كل الباقي بعدم المطابقة
     const sung: KaraokeWord[] = [

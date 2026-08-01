@@ -72,16 +72,62 @@ export function alignWordsToLyrics(words: KaraokeWord[], written: string): Karao
   const tokenNorms = tokens.map(normalizeWord);
   const wordNorms = words.map((w) => normalizeWord(w.text));
 
-  const pairing = new Map<number, number>(lcsPairs(wordNorms, tokenNorms));
+  const pairs = lcsPairs(wordNorms, tokenNorms);
+  const pairing = new Map<number, number>(pairs);
+  const display = new Map<number, string>();
+  for (const [i, j] of pairs) display.set(i, tokens[j].replace(EDGE_PUNCT, ""));
+
+  // الالتحام الإملائي اللهجي: «عالبلاد» المغناة = «عَ» + «الْبَلَادْ» المكتوبتان
+  // والعكس «قُولْلهَا» المكتوبة = «قول» + «لها» المغناتين — مطابقة صوتياً
+  // حرفاً بحرف رغم اختلاف التقطيع، فتُقترن في فجوات ما لم يقترنه LCS
+  const pairedTokens = new Set(pairs.map(([, j]) => j));
+  let cursor = 0; // أول رمز مكتوب غير مقترن لم نتجاوزه بعد
+  for (let i = 0; i < words.length; i++) {
+    const bound = pairing.get(i);
+    if (bound !== undefined) {
+      cursor = Math.max(cursor, bound + 1);
+      continue;
+    }
+    if (!wordNorms[i]) continue;
+    while (cursor < tokens.length && pairedTokens.has(cursor)) cursor++;
+    if (cursor >= tokens.length) break;
+
+    // كلمة مغناة واحدة ⟵ رمزان مكتوبان متتاليان ملتحمان
+    if (
+      cursor + 1 < tokens.length &&
+      !pairedTokens.has(cursor + 1) &&
+      wordNorms[i] === tokenNorms[cursor] + tokenNorms[cursor + 1]
+    ) {
+      pairing.set(i, cursor);
+      display.set(
+        i,
+        `${tokens[cursor].replace(EDGE_PUNCT, "")} ${tokens[cursor + 1].replace(EDGE_PUNCT, "")}`.trim()
+      );
+      pairedTokens.add(cursor);
+      pairedTokens.add(cursor + 1);
+      continue;
+    }
+    // كلمتان مغناتان ⟵ رمز مكتوب واحد ملتحم
+    if (
+      i + 1 < words.length &&
+      !pairing.has(i + 1) &&
+      wordNorms[i] + wordNorms[i + 1] === tokenNorms[cursor]
+    ) {
+      pairing.set(i, cursor);
+      pairing.set(i + 1, cursor);
+      pairedTokens.add(cursor);
+      i++; // الثانية اقترنت أيضاً — نصّاهما يبقيان كما سُمعا
+    }
+  }
+
   return words.map((w, i) => {
     if (!wordNorms[i]) return w;
-    const j = pairing.get(i);
-    if (j === undefined) {
+    if (!pairing.has(i)) {
       // لا مقابل في النص المكتوب: غُنّيت مختلفة (انحراف محرك أو خطأ تفريغ)
       return { ...w, matched: false };
     }
-    const display = tokens[j].replace(EDGE_PUNCT, "");
-    return { ...w, ...(display && { text: display }), matched: true };
+    const d = display.get(i);
+    return { ...w, ...(d && { text: d }), matched: true };
   });
 }
 
