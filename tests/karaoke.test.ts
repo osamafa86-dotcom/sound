@@ -106,6 +106,18 @@ describe("محاذاة التفريغ مع النص المكتوب المشكّ�
     expect(aligned[5].text).toBe("ابْنِكْ");
   });
 
+  it("المنحرفة تحمل اقتراح صورتها المكتوبة — ليصيب التصحيح النص لا السماع", () => {
+    const sung: KaraokeWord[] = [
+      { text: "سلم", start: 0, end: 0.4 },
+      { text: "ناسيكم", start: 0.5, end: 1.1 }, // المحرك غنّى نَسِيكُمْ ممدودة
+      { text: "القديمة", start: 1.2, end: 1.8 },
+    ];
+    const aligned = alignWordsToLyrics(sung, "سَلِّمْ نَسِيكُمْ الْقَدِيمَة");
+    expect(aligned[1].matched).toBe(false);
+    expect(aligned[1].suggestedWritten).toBe("نَسِيكُمْ");
+    expect(aligned[1].text).toBe("ناسيكم"); // تُعرض كما سُمعت — الاقتراح للتصحيح فقط
+  });
+
   it("سطر مكتوب كامل أسقطه الغناء لا يُفقد ما بعده — المحاذاة المثلى تستعيد التزامن", () => {
     // النافذة الجشعة القديمة كانت تعلق هنا فتحكم زوراً على كل الباقي بعدم المطابقة
     const sung: KaraokeWord[] = [

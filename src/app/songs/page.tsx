@@ -297,6 +297,17 @@ export default function SongsStudio() {
   async function teachAndRegen(word: string, alias: string, sectionIndexHint?: number) {
     if (!word || !alias || !result) return;
     setError("");
+
+    // حارس اللاجدوى: كلمة لا وجود لها في النص المكتوب (صيغة سماع لا كتابة)
+    // تعني استبدالاً صفرياً وإعادة توليد عبثية بنفس النص — نوقف قبل أي كلفة
+    const probe = (text: string) => replaceWholeWord(text, word, alias) !== text;
+    const willChange = sections ? sections.some((s) => probe(s.lyrics)) : probe(lyrics);
+    if (!willChange) {
+      throw new Error(
+        `لم أجد «${word}» في نصك المكتوب — عدّل حقل «الكلمة كما كُتبت» لتطابق كلمتك في النص حرفياً (بتشكيلها إن كانت مشكّلة)`
+      );
+    }
+
     const learn = await fetch("/api/pronunciation", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -9,6 +9,11 @@ export type KaraokeWord = {
   end: number;
   /** بعد المحاذاة: هل طابقت كلمةَ النص المكتوب؟ false = غُنّيت مختلفة عنه */
   matched?: boolean;
+  /**
+   * للمنحرفة (matched: false): الكلمة المكتوبة المرجحة في موضعها —
+   * بها يُملأ حقل التصحيح كي يصيب الاستبدال نصَّ المستخدم لا صورةَ السماع
+   */
+  suggestedWritten?: string;
 };
 
 export type KaraokeLine = { start: number; end: number; text: string };
@@ -81,6 +86,7 @@ export function alignWordsToLyrics(words: KaraokeWord[], written: string): Karao
   // والعكس «قُولْلهَا» المكتوبة = «قول» + «لها» المغناتين — مطابقة صوتياً
   // حرفاً بحرف رغم اختلاف التقطيع، فتُقترن في فجوات ما لم يقترنه LCS
   const pairedTokens = new Set(pairs.map(([, j]) => j));
+  const suggestions = new Map<number, string>();
   let cursor = 0; // أول رمز مكتوب غير مقترن لم نتجاوزه بعد
   for (let i = 0; i < words.length; i++) {
     const bound = pairing.get(i);
@@ -117,14 +123,19 @@ export function alignWordsToLyrics(words: KaraokeWord[], written: string): Karao
       pairing.set(i + 1, cursor);
       pairedTokens.add(cursor);
       i++; // الثانية اقترنت أيضاً — نصّاهما يبقيان كما سُمعا
+      continue;
     }
+    // انحراف حقيقي: الرمز المكتوب غير المقترن في موضعها هو مقابلها المرجح —
+    // به يُملأ حقل التصحيح فيصيب الاستبدالُ نصَّ المستخدم لا صورةَ السماع
+    suggestions.set(i, tokens[cursor].replace(EDGE_PUNCT, ""));
   }
 
   return words.map((w, i) => {
     if (!wordNorms[i]) return w;
     if (!pairing.has(i)) {
       // لا مقابل في النص المكتوب: غُنّيت مختلفة (انحراف محرك أو خطأ تفريغ)
-      return { ...w, matched: false };
+      const s = suggestions.get(i);
+      return { ...w, matched: false, ...(s && { suggestedWritten: s }) };
     }
     const d = display.get(i);
     return { ...w, ...(d && { text: d }), matched: true };
