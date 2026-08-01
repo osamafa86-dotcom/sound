@@ -74,12 +74,15 @@ describe("محاذاة التفريغ مع النص المكتوب المشكّ�
     expect(aligned[4].end).toBe(1.9);
   });
 
-  it("كلمة تفريغ لا مقابل لها تبقى كما هي والمحاذاة تستأنف بعدها", () => {
+  it("كلمة تفريغ لا مقابل لها تبقى كما هي مع علم عدم المطابقة — كاشف الانحراف", () => {
     const written = "يَا لَيْل يَا عِين حَزِين";
     const aligned = alignWordsToLyrics(transcript, written);
     expect(aligned[3].text).toBe("عِين");
+    expect(aligned[3].matched).toBe(true);
     expect(aligned[4].text).toBe("وقلبي"); // بلا مقابل — تبقى بصورة التفريغ
+    expect(aligned[4].matched).toBe(false);
     expect(aligned[5].text).toBe("حَزِين");
+    expect(aligned[5].matched).toBe(true);
   });
 
   it("نص مكتوب فارغ ⟵ الكلمات كما وصلت", () => {

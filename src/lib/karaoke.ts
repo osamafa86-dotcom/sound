@@ -3,7 +3,13 @@
  * الطوابع الزمنية بالثواني كما يعيدها محرك التفريغ (Scribe).
  */
 
-export type KaraokeWord = { text: string; start: number; end: number };
+export type KaraokeWord = {
+  text: string;
+  start: number;
+  end: number;
+  /** بعد المحاذاة: هل طابقت كلمةَ النص المكتوب؟ false = غُنّيت مختلفة عنه */
+  matched?: boolean;
+};
 
 export type KaraokeLine = { start: number; end: number; text: string };
 
@@ -40,10 +46,11 @@ export function alignWordsToLyrics(words: KaraokeWord[], written: string): Karao
       if (norms[j] && norms[j] === wn) {
         cursor = j + 1;
         const display = tokens[j].replace(EDGE_PUNCT, "");
-        return display ? { ...w, text: display } : w;
+        return { ...w, ...(display && { text: display }), matched: true };
       }
     }
-    return w;
+    // لا مقابل في النص المكتوب: غُنّيت مختلفة (انحراف محرك أو خطأ تفريغ)
+    return { ...w, matched: false };
   });
 }
 
