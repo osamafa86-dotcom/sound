@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  adherencePercent,
   alignWordsToLyrics,
   buildLrc,
   buildSrt,
@@ -177,5 +178,22 @@ describe("قياس بدايات المقاطع من التفريغ الموقو�
         { kind: "verse", lyrics: "نص آخر كلياً بلا تقاطع", durationSec: 30 },
       ])
     ).toBeNull();
+  });
+});
+
+describe("نسبة مطابقة الغناء للنص — الإشارة المبثوثة للعقل", () => {
+  it("تُحسب من الكلمات المحكومة وحدها وتُقرَّب لعدد صحيح", () => {
+    const judged: KaraokeWord[] = [
+      { text: "يا", start: 0, end: 0.3, matched: true },
+      { text: "ليل", start: 0.3, end: 0.6, matched: true },
+      { text: "ناسيكم", start: 0.6, end: 1, matched: false },
+    ];
+    expect(adherencePercent(judged)).toBe(67);
+  });
+
+  it("قبل المحاذاة (بلا أعلام) ⟵ null لا صفر", () => {
+    const raw: KaraokeWord[] = [{ text: "يا", start: 0, end: 0.3 }];
+    expect(adherencePercent(raw)).toBeNull();
+    expect(adherencePercent([])).toBeNull();
   });
 });

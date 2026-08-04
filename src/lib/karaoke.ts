@@ -201,6 +201,13 @@ export function measureSectionStarts(
   return resolved;
 }
 
+/** نسبة مطابقة الغناء للنص المكتوب من أعلام المحاذاة — null قبل المحاذاة */
+export function adherencePercent(words: KaraokeWord[]): number | null {
+  const judged = words.filter((w) => w.matched !== undefined);
+  if (!judged.length) return null;
+  return Math.round((judged.filter((w) => w.matched).length / judged.length) * 100);
+}
+
 /** فهرس المقطع للحظة تشغيل حسب البدايات المقيسة — آخر بداية لا تتجاوزها */
 export function sectionIndexFromStarts(starts: number[], sec: number): number {
   let idx = 0;

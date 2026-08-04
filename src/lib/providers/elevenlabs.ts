@@ -23,7 +23,7 @@ export function snapStabilityV3(value: number): 0 | 0.5 | 1 {
   return 1;
 }
 
-class ElevenLabsError extends Error {
+export class ElevenLabsError extends Error {
   constructor(message: string, readonly status: number) {
     super(message);
   }
@@ -136,6 +136,73 @@ export function elevenLabsTTS(apiKey: string): TTSProvider {
       };
     },
   };
+}
+
+/**
+ * توليد نطق متدفق — نفس إعدادات synthesize لكن عبر نقطة /stream:
+ * القطع الأولى تصل خلال أجزاء ثانية فيبدأ التشغيل فوراً بدل انتظار
+ * الملف كاملاً. للنص الواحد القصير (قطعة واحدة) وصيغة mp3 حصراً —
+ * وما عداه يرمي خطأً ليتكفل به المسار العادي المخزّن.
+ */
+export async function elevenLabsTTSStream(apiKey: string, req: TTSRequest): Promise<Response> {
+  if (req.format === "wav") {
+    throw new ElevenLabsError("البث المتدفق لصيغة mp3 فقط", 400);
+  }
+  if (splitTextForTTS(req.text).length > 1) {
+    throw new ElevenLabsError("النص الطويل متعدد القطع لا يُبث تدفقياً", 400);
+  }
+
+  const customId = req.voiceId.startsWith("custom:") ? req.voiceId.slice(7) : undefined;
+  const voice = VOICES.find((v) => v.id === req.voiceId);
+  const elevenVoiceId = req.elevenVoiceId ?? customId ?? voice?.elevenVoiceId;
+  if (!elevenVoiceId) {
+    throw new ElevenLabsError(`لا يوجد صوت ElevenLabs مطابق للمعرّف ${req.voiceId}`, 400);
+  }
+
+  const expressive = !!req.expressive;
+  const dict = expressive ? null : await findDictionary(apiKey).catch(() => null);
+  const voiceSettings = expressive
+    ? {
+        stability: snapStabilityV3(req.stability ?? 0.5),
+        similarity_boost: 0.75,
+        use_speaker_boost: true,
+      }
+    : {
+        stability: req.stability ?? 0.5,
+        similarity_boost: 0.75,
+        speed: Math.min(1.2, Math.max(0.7, req.speed ?? 1)),
+        ...(req.liveliness !== undefined && {
+          style: Math.min(1, Math.max(0, req.liveliness)),
+        }),
+        use_speaker_boost: req.speakerBoost ?? true,
+      };
+
+  const mp3Quality = process.env.ELEVENLABS_MP3_QUALITY ?? "mp3_44100_192";
+  const res = await fetch(
+    `${API_BASE}/text-to-speech/${elevenVoiceId}/stream?output_format=${mp3Quality}`,
+    {
+      method: "POST",
+      headers: { "xi-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: req.stylePrefix ? `${req.stylePrefix} ${req.text}` : req.text,
+        model_id: expressive ? V3_MODEL_ID : MODEL_ID,
+        voice_settings: voiceSettings,
+        ...(dict?.id && {
+          pronunciation_dictionary_locators: [
+            {
+              pronunciation_dictionary_id: dict.id,
+              ...(dict.versionId && { version_id: dict.versionId }),
+            },
+          ],
+        }),
+      }),
+    }
+  );
+  if (!res.ok || !res.body) {
+    const detail = await res.text().catch(() => "");
+    throw new ElevenLabsError(`ElevenLabs ${res.status}: ${detail.slice(0, 300)}`, res.status);
+  }
+  return res;
 }
 
 /** تفريغ صوتي (Speech-to-Text) عبر نموذج Scribe */
