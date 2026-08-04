@@ -75,13 +75,19 @@ export function lyriaMusic(apiKey: string): MusicProvider {
         : "";
 
       // كلمات الغناء من المقاطع مباشرة — نص المقاطع المدموج يحمل ترويسات
-      // عربية («لازمة:») قد تُغنّى حرفياً لو مُررت كما هي
-      const sungLyrics = req.sections?.length
-        ? req.sections
-            .map((s) => s.lyrics.trim())
-            .filter(Boolean)
-            .join("\n\n")
-        : (req.lyrics ?? "").trim();
+      // عربية («لازمة:») قد تُغنّى حرفياً لو مُررت كما هي،
+      // وعلامات [المقاطع] تُنزع من الخام كي لا تبدو تنسيقاً منسوخاً
+      const sungLyrics = (
+        req.sections?.length
+          ? req.sections
+              .map((s) => s.lyrics.trim())
+              .filter(Boolean)
+              .join("\n\n")
+          : (req.lyrics ?? "").trim()
+      )
+        .replace(/\[[^\]]{1,40}\]/g, " ")
+        .replace(/ {2,}/g, " ")
+        .trim();
 
       const prompt = [
         req.stylePrompt,
@@ -95,7 +101,11 @@ export function lyriaMusic(apiKey: string): MusicProvider {
               req.dialectEn
                 ? `Authentic ${req.dialectEn}, native-speaker pronunciation.`
                 : "",
-              `Sung vocals performing these Arabic lyrics exactly as written:\n${sungLyrics}`,
+              // تصريح الأصالة يهدّئ مرشّح «إعادة الإنتاج» (رفض OTHER):
+              // كلمات المستخدم الأصلية لتأليف جديد — لا اقتباس من عمل قائم
+              "The following are ORIGINAL Arabic lyrics written by the user themselves",
+              "specifically for this brand-new composition (not from any existing song).",
+              `Sing them as the vocals of this new original song:\n${sungLyrics}`,
             ]
               .filter(Boolean)
               .join("\n"),
