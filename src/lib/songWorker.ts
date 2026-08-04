@@ -1,6 +1,7 @@
 import { getJobsStore } from "./jobs";
 import { refundCredits } from "./credits";
 import { getMusicProvider, mockMusic } from "./providers";
+import { LyriaError } from "./providers/lyria";
 import { isInstrumentalRequest } from "./providers/compositionPlan";
 import { needsTashkeel, proofreadLyrics } from "./lyricsProofread";
 import { joinSections, parseSections } from "./songSections";
@@ -82,7 +83,25 @@ export async function runSongJob(jobId: string): Promise<void> {
     result = await provider.generate(job.request);
   } catch (e) {
     const reason = e instanceof Error ? e.message : "unknown";
-    if (provider.id !== "mock") {
+
+    // جسر الغناء: ما يرفضه مرشّح محتوى Lyria (كلمات وطنية بريئة غالباً)
+    // يغنيه Eleven Music فعلاً — أغنية حقيقية لا سلّم تجريبي
+    if (provider.id === "lyria" && e instanceof LyriaError && e.contentRejected) {
+      const eleven = getMusicProvider({ force: "eleven-music" });
+      if (eleven.id === "eleven-music") {
+        await store.update(jobId, {
+          stage: "رفض مرشّح Lyria الكلمات — يتولى Eleven Music الغناء...",
+        });
+        try {
+          result = await eleven.generate(job.request);
+          fellBack = `${reason.slice(0, 120)} — غُنّيت عبر Eleven Music`;
+        } catch (e2) {
+          console.error("Eleven Music bridge failed:", e2);
+        }
+      }
+    }
+
+    if (!result && provider.id !== "mock") {
       // المحرك الحقيقي غير متاح (شبكة/باقة/إعداد) — معاينة سلّم المقام بديلاً
       console.error("Music provider failed, falling back to mock:", reason);
       try {
@@ -106,7 +125,14 @@ export async function runSongJob(jobId: string): Promise<void> {
       await store.complete(
         jobId,
         result,
-        fellBack ? { stage: "اكتمل التوليد (وضع تجريبي)", fellBack } : undefined
+        fellBack
+          ? {
+              stage: result.mock
+                ? "اكتمل التوليد (وضع تجريبي)"
+                : "اكتمل التوليد (المحرك البديل غنّى الكلمات)",
+              fellBack,
+            }
+          : undefined
       );
       stored = true;
     } catch (e) {

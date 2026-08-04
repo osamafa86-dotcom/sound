@@ -6,10 +6,28 @@ import type { AudioResult, MusicProvider, MusicRequest } from "./types";
 const MODEL = process.env.LYRIA_MODEL ?? "lyria-3-pro-preview";
 
 export class LyriaError extends Error {
-  constructor(message: string, readonly status: number, readonly needsBilling = false) {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly needsBilling = false,
+    /** رفضه مرشّح المحتوى لا عطل تقني — يفتح جسر الغناء عبر المحرك البديل */
+    readonly contentRejected = false
+  ) {
     super(message);
   }
 }
+
+/**
+ * عتبات الأمان: الافتراضي الصارم يحجب كلمات وطنية بريئة (فلسطين وأشباهها)
+ * بينما منتجات جوجل نفسها (Flow Music) تغنيها — نطابق سلوكها بعتبة
+ * «الحجب للعالي فقط»، مع مهرب LYRIA_SAFETY=default للرجوع فوراً.
+ */
+const SAFETY_SETTINGS = [
+  "HARM_CATEGORY_HARASSMENT",
+  "HARM_CATEGORY_HATE_SPEECH",
+  "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+  "HARM_CATEGORY_DANGEROUS_CONTENT",
+].map((category) => ({ category, threshold: "BLOCK_ONLY_HIGH" }));
 
 type Part = { inlineData?: { mimeType?: string; data?: string }; text?: string };
 
@@ -85,6 +103,9 @@ export function lyriaMusic(apiKey: string): MusicProvider {
             body: JSON.stringify({
               contents: [{ role: "user", parts: [{ text: prompt }] }],
               generationConfig: { responseModalities: ["AUDIO"] },
+              ...(process.env.LYRIA_SAFETY !== "default" && {
+                safetySettings: SAFETY_SETTINGS,
+              }),
             }),
           }
         );
@@ -114,14 +135,16 @@ export function lyriaMusic(apiKey: string): MusicProvider {
       const blockReason = json?.promptFeedback?.blockReason;
       if (blockReason) {
         throw new LyriaError(
-          `رفض مرشّح المحتوى في Lyria هذه الكلمات (${blockReason}) — سيتولى المحرك البديل التوليد`,
-          400
+          `رفض مرشّح المحتوى في Lyria هذه الكلمات (${blockReason})`,
+          400,
+          false,
+          true
         );
       }
 
       const candidate = json?.candidates?.[0];
       if (candidate?.finishReason === "SAFETY" || candidate?.finishReason === "PROHIBITED_CONTENT") {
-        throw new LyriaError("رفض المحرك توليد هذا المقطع — جرّب وصفاً مختلفاً", 400);
+        throw new LyriaError("رفض مرشّح Lyria توليد هذا المقطع", 400, false, true);
       }
 
       const found = extractAudio(candidate?.content?.parts ?? []);
