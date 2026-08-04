@@ -18,16 +18,25 @@ export class LyriaError extends Error {
 }
 
 /**
- * عتبات الأمان: الافتراضي الصارم يحجب كلمات وطنية بريئة (فلسطين وأشباهها)
- * بينما منتجات جوجل نفسها (Flow Music) تغنيها — نطابق سلوكها بعتبة
- * «الحجب للعالي فقط»، مع مهرب LYRIA_SAFETY=default للرجوع فوراً.
+ * عتبات الأمان معطلة افتراضياً (BLOCK_NONE) — قرار المالك: المرشّح الإحصائي
+ * أساء فهم كلمات وطنية بريئة، وجوجل تُبقي مرشّحاتها الصلبة غير القابلة
+ * للتعطيل في جانبها مهما أرسلنا، وشروط استخدام المنصة تحكم إساءة الاستخدام.
+ * درجات الرجوع عبر LYRIA_SAFETY: "high" حجب للخطير الصريح فقط،
+ * "default" افتراضي المحرك الصارم (بلا إرسال عتبات).
  */
-const SAFETY_SETTINGS = [
+const SAFETY_CATEGORIES = [
   "HARM_CATEGORY_HARASSMENT",
   "HARM_CATEGORY_HATE_SPEECH",
   "HARM_CATEGORY_SEXUALLY_EXPLICIT",
   "HARM_CATEGORY_DANGEROUS_CONTENT",
-].map((category) => ({ category, threshold: "BLOCK_ONLY_HIGH" }));
+];
+
+function safetySettings(): { category: string; threshold: string }[] | null {
+  const mode = process.env.LYRIA_SAFETY ?? "none";
+  if (mode === "default") return null;
+  const threshold = mode === "high" ? "BLOCK_ONLY_HIGH" : "BLOCK_NONE";
+  return SAFETY_CATEGORIES.map((category) => ({ category, threshold }));
+}
 
 type Part = { inlineData?: { mimeType?: string; data?: string }; text?: string };
 
@@ -103,9 +112,7 @@ export function lyriaMusic(apiKey: string): MusicProvider {
             body: JSON.stringify({
               contents: [{ role: "user", parts: [{ text: prompt }] }],
               generationConfig: { responseModalities: ["AUDIO"] },
-              ...(process.env.LYRIA_SAFETY !== "default" && {
-                safetySettings: SAFETY_SETTINGS,
-              }),
+              ...(safetySettings() && { safetySettings: safetySettings() }),
             }),
           }
         );
