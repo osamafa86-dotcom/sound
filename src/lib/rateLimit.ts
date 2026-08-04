@@ -57,6 +57,8 @@ export const LIMITS = {
   aiText: { perVisitor: envInt("RATE_LIMIT_AI_TEXT", 30), global: 400, windowSec: 3600 },
   aiImage: { perVisitor: envInt("RATE_LIMIT_AI_IMAGE", 10), global: 100, windowSec: 3600 },
   aiVideo: { perVisitor: envInt("RATE_LIMIT_AI_VIDEO", 4), global: 30, windowSec: 3600 },
+  // المعاينة الحية للمقام (Lyria RealTime) — جلسات قصيرة بسقف زمني في الواجهة
+  liveJam: { perVisitor: envInt("RATE_LIMIT_LIVE_JAM", 4), global: 60, windowSec: 3600 },
   // موجز اللحن المرجعي — تحليل نصي خفيف يسبق التلحين
   melodyBrief: { perVisitor: envInt("RATE_LIMIT_MELODY_BRIEF", 10), global: 120, windowSec: 3600 },
 } satisfies Record<string, LimitRule>;

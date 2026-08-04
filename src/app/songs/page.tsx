@@ -6,7 +6,9 @@ import LyricsEditor from "@/components/LyricsEditor";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import SingAlongPanel from "@/components/SingAlongPanel";
 import StemsPanel from "@/components/StemsPanel";
+import LiveMaqamPanel from "@/components/LiveMaqamPanel";
 import {
+  adherencePercent,
   alignWordsToLyrics,
   findActiveWord,
   measureSectionStarts,
@@ -819,6 +821,17 @@ export default function SongsStudio() {
       // حدود المقاطع الحقيقية تُقاس من التوقيتات لا من المدد المخططة
       setKaraokeStarts(sections?.length ? measureSectionStarts(aligned, sections) : null);
       setActiveWord(-1);
+      // نسبة الالتزام مقياس موضوعي يغذي العقل — لكل توليدة، بمحركها
+      const pct = adherencePercent(aligned);
+      const song = resultRef.current;
+      if (pct !== null && song && !song.mock) {
+        emitSignal({
+          kind: "adherence",
+          maqamId,
+          settings: { stylePrompt: song.prompt, engine: song.provider ?? "unknown" },
+          meta: { percent: pct, jobId: song.jobId },
+        });
+      }
     } catch (e) {
       if (resultRef.current?.jobId !== forJobId) return;
       // فشل المزامنة التلقائية لا يقاطع الاحتفال بالناتج — ملاحظة هادئة وزر يدوي
@@ -1296,6 +1309,7 @@ export default function SongsStudio() {
           <div className="flex flex-col gap-8">
             <div>
               <h2 className="mb-4 text-xl font-bold">اختر المقام</h2>
+              <LiveMaqamPanel maqam={maqam} signedIn={signedIn} />
               {personalMaqam && (
                 <p className="mb-3 rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary">
                   ✨ بدأنا لك بمقام {personalMaqam} — الأقرب لذوقك المتعلم

@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { buildLrc, buildSrt, sectionIndexFromStarts, type KaraokeWord } from "@/lib/karaoke";
+import {
+  adherencePercent,
+  buildLrc,
+  buildSrt,
+  sectionIndexFromStarts,
+  type KaraokeWord,
+} from "@/lib/karaoke";
 import { SECTION_LABELS, sectionIndexAtTime, type SongSection } from "@/lib/songSections";
 
 /** يقصّ علامات الترقيم من طرفي الكلمة المفرّغة ويبقي الحروف والتشكيل */
@@ -81,11 +87,8 @@ export default function LyricsEditor({
     sectionIdx >= 0 && sections ? `${SECTION_LABELS[sections[sectionIdx].kind]} ${sectionIdx + 1}` : "";
   const inpaintHere = canInpaint && sectionIdx >= 0;
 
-  // مطابقة الغناء للنص المكتوب — من أعلام المحاذاة (كاشف انحراف المحرك)
-  const judged = words.filter((w) => w.matched !== undefined);
-  const adherence = judged.length
-    ? Math.round((judged.filter((w) => w.matched).length / judged.length) * 100)
-    : null;
+  // مطابقة الغناء للنص المكتوب — نفس المقياس الذي يُبث إشارةً للعقل
+  const adherence = adherencePercent(words);
 
   async function submit() {
     if (!wrong.trim() || !alias.trim() || fixBusy || busy) return;

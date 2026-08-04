@@ -24,6 +24,12 @@ export const SIGNAL_WEIGHTS = {
   version_chosen: 2,
   /** نسخة خسرت المقارنة أمام المختارة */
   version_rejected: -1,
+  /**
+   * نسبة مطابقة الغناء للنص مقيسة آلياً (meta.percent) — وزن صفري:
+   * مقياس موضوعي يُقرأ في التحليلات لا حكم رضا يدخل درجات السلالات
+   * (تحمل settings.engine دوماً فتُستبعد من إسناد الإشارات للسلالات)
+   */
+  adherence: 0,
 } as const;
 
 export type SignalKind = keyof typeof SIGNAL_WEIGHTS;
