@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { UNREACHABLE, isNetworkError, withTimeout } from "@/lib/timeout";
 
 function LoginForm() {
   const router = useRouter();
@@ -53,11 +54,13 @@ function LoginForm() {
     try {
       const supabase = createClient();
       if (!supabase) throw new Error("نظام الحسابات غير مفعّل بعد على هذا الموقع");
-      const { error } = await supabase.auth.resend({
-        type: "signup",
-        email,
-        options: { emailRedirectTo: `${location.origin}/login?confirmed=1` },
-      });
+      const { error } = await withTimeout(
+        supabase.auth.resend({
+          type: "signup",
+          email,
+          options: { emailRedirectTo: `${location.origin}/login?confirmed=1` },
+        })
+      );
       if (error) throw error;
       setLinkError("");
       setInfo("أرسلنا رابط تأكيد جديداً إلى بريدك — افتحه من نفس هذا الجهاز.");
@@ -128,15 +131,17 @@ function LoginForm() {
       if (!supabase) throw new Error("نظام الحسابات غير مفعّل بعد على هذا الموقع");
 
       if (mode === "signup") {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { display_name: name || email.split("@")[0] },
-            // رابط العودة بعد تأكيد البريد — لموقعنا الفعلي لا لإعدادات المشروع الافتراضية
-            emailRedirectTo: `${location.origin}/login?confirmed=1`,
-          },
-        });
+        const { data, error } = await withTimeout(
+          supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: { display_name: name || email.split("@")[0] },
+              // رابط العودة بعد تأكيد البريد — لموقعنا الفعلي لا لإعدادات المشروع الافتراضية
+              emailRedirectTo: `${location.origin}/login?confirmed=1`,
+            },
+          })
+        );
         if (error) throw error;
 
         // عند تفعيل تأكيد البريد لا تُنشأ جلسة مباشرة
@@ -145,7 +150,7 @@ function LoginForm() {
           return;
         }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await withTimeout(supabase.auth.signInWithPassword({ email, password }));
         if (error) throw error;
       }
 
@@ -154,7 +159,9 @@ function LoginForm() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : "حدث خطأ";
       setError(
-        /invalid login/i.test(msg)
+        isNetworkError(msg)
+          ? UNREACHABLE
+          : /invalid login/i.test(msg)
           ? "البريد أو كلمة السر غير صحيحة"
           : /already registered|already exists/i.test(msg)
             ? "هذا البريد مسجّل مسبقاً — سجّل الدخول بدلاً من ذلك"
