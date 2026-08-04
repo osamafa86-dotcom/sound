@@ -9,7 +9,7 @@ import WaveLine from "@/components/WaveLine";
 
 type GalleryItem = {
   id: string;
-  kind: "tts" | "song" | "recording";
+  kind: "tts" | "song" | "recording" | "image" | "video";
   title: string | null;
   content: string | null;
   voice_id: string | null;
@@ -24,6 +24,8 @@ const KINDS = [
   { id: "song", label: "🎼 أغانٍ" },
   { id: "tts", label: "🎙️ أصوات" },
   { id: "recording", label: "🎧 تسجيلات" },
+  { id: "image", label: "🖼️ صور" },
+  { id: "video", label: "🎬 فيديو" },
 ] as const;
 
 export default function PublicGallery() {
@@ -52,6 +54,14 @@ export default function PublicGallery() {
         label: maqam ? `أغنية بمقام ${maqam.name}` : "أغنية مولّدة",
         cta: "أنشئ أغنيتك ←",
         href: "/songs",
+      };
+    }
+    if (g.kind === "image" || g.kind === "video") {
+      return {
+        icon: g.kind === "image" ? "🖼️" : "🎬",
+        label: g.kind === "image" ? "صورة من ذكاء مقام" : "فيديو من ذكاء مقام",
+        cta: "جرّب مساحة مقام ←",
+        href: "/studio",
       };
     }
     const voice = VOICES.find((v) => v.id === g.voice_id);
@@ -132,7 +142,17 @@ export default function PublicGallery() {
                 {g.content && (
                   <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-muted">{g.content}</p>
                 )}
-                <audio controls src={g.url} className="mt-4 w-full" preload="none" />
+                {g.kind === "image" ? (
+                  <a href={g.url} target="_blank" rel="noreferrer" title="افتح الصورة بحجمها الكامل">
+                    {/* رابط موقّع مؤقت من التخزين — مكوّن الصور المحسّنة لا يخدمه */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={g.url} alt={g.title ?? "صورة"} className="mt-4 max-h-72 rounded-xl" />
+                  </a>
+                ) : g.kind === "video" ? (
+                  <video controls src={g.url} className="mt-4 w-full rounded-xl" preload="metadata" />
+                ) : (
+                  <audio controls src={g.url} className="mt-4 w-full" preload="none" />
+                )}
                 <Link
                   href={d.href}
                   className="mt-3 inline-block rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/10"

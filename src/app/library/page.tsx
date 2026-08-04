@@ -8,7 +8,7 @@ import { VOICES } from "@/lib/voices";
 
 type Generation = {
   id: string;
-  kind: "tts" | "song" | "recording";
+  kind: "tts" | "song" | "recording" | "image" | "video";
   title: string | null;
   content: string | null;
   voice_id: string | null;
@@ -23,12 +23,15 @@ const KIND_META: Record<Generation["kind"], { icon: string; label: string }> = {
   tts: { icon: "🎙️", label: "أصوات" },
   song: { icon: "🎼", label: "أغانٍ" },
   recording: { icon: "🎧", label: "تسجيلات" },
+  image: { icon: "🖼️", label: "صور" },
+  video: { icon: "🎬", label: "فيديو" },
 };
 
 const PROVIDER_NAMES: Record<string, string> = {
   elevenlabs: "ElevenLabs",
   lyria: "Lyria 3 Pro",
   "eleven-music": "Eleven Music",
+  gemini: "ذكاء مقام",
   mock: "تجريبي",
 };
 
@@ -137,6 +140,8 @@ export default function Library() {
       const maqam = MAQAMAT.find((m) => m.id === g.maqam_id);
       return maqam ? `أغنية بمقام ${maqam.name}` : "أغنية";
     }
+    if (g.kind === "image") return "صورة من ذكاء مقام";
+    if (g.kind === "video") return "فيديو من ذكاء مقام";
     const voice = VOICES.find((v) => v.id === g.voice_id);
     return voice ? `صوت ${voice.name} (${voice.dialect})` : "تسجيل صوتي";
   }
@@ -230,7 +235,7 @@ export default function Library() {
         <>
           {/* الأرشيف الموحد: فلاتر النوع + بحث + ترتيب */}
           <div className="mt-8 flex flex-wrap items-center gap-2">
-            {(["الكل", "tts", "song", "recording"] as const).map((k) => {
+            {(["الكل", "tts", "song", "recording", "image", "video"] as const).map((k) => {
               const count = k === "الكل" ? items.length : items.filter((i) => i.kind === k).length;
               if (k !== "الكل" && count === 0) return null;
               return (
@@ -305,7 +310,18 @@ export default function Library() {
                 </button>
               </div>
 
-              {g.url && <audio controls src={g.url} className="mt-4 w-full" preload="none" />}
+              {g.url &&
+                (g.kind === "image" ? (
+                  <a href={g.url} target="_blank" rel="noreferrer" title="افتح الصورة بحجمها الكامل">
+                    {/* رابط موقّع مؤقت من التخزين — مكوّن الصور المحسّنة لا يخدمه */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={g.url} alt={g.title ?? "صورة"} className="mt-4 max-h-80 rounded-xl" />
+                  </a>
+                ) : g.kind === "video" ? (
+                  <video controls src={g.url} className="mt-4 max-h-80 w-full rounded-xl" preload="metadata" />
+                ) : (
+                  <audio controls src={g.url} className="mt-4 w-full" preload="none" />
+                ))}
 
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-1">

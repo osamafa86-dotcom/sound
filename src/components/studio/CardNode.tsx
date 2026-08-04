@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Handle, Position, useReactFlow, type NodeProps, type Node } from "@xyflow/react";
 import Recorder from "@/components/Recorder";
+import { authHeaders } from "@/lib/supabase";
 import {
   AI_MODES,
   NODE_DEFS,
@@ -52,6 +55,158 @@ function inputBackground(accepts: string[]): string {
 
 const inputClass =
   "nodrag w-full rounded-lg border border-border-soft bg-surface px-2 py-1.5 text-xs outline-none focus:border-primary";
+
+const EXT_BY_MIME: Record<string, string> = {
+  "audio/wav": "wav",
+  "audio/mpeg": "mp3",
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+};
+
+/** معاينة بالحجم الكامل فوق كل شيء — بوابة خارج اللوحة كي لا يحدّها تكبيرها */
+function Lightbox({ media, onClose }: { media: MediaResult; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      dir="rtl"
+      className="fixed inset-0 z-[999] flex items-center justify-center bg-black/85 p-4"
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        className="absolute end-4 top-4 rounded-full bg-white/10 px-3 py-1.5 text-sm text-white transition-colors hover:bg-white/25"
+        title="إغلاق (Esc)"
+      >
+        ✕ إغلاق
+      </button>
+      {media.mime.startsWith("image/") ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={media.url}
+          alt={media.label}
+          className="max-h-[90vh] max-w-[94vw] rounded-xl object-contain"
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <video
+          controls
+          autoPlay
+          src={media.url}
+          className="max-h-[90vh] max-w-[94vw] rounded-xl"
+          onClick={(e) => e.stopPropagation()}
+        />
+      )}
+    </div>,
+    document.body
+  );
+}
+
+/** ناتج وسائطي واحد: معاينة + تكبير + تنزيل + حفظ في المكتبة */
+function MediaItem({
+  media,
+  showLabel,
+  title,
+  content,
+  saveKind,
+}: {
+  media: MediaResult;
+  showLabel: boolean;
+  title: string;
+  content?: string;
+  saveKind: "tts" | "song" | "image" | "video";
+}) {
+  const [zoom, setZoom] = useState(false);
+  const [save, setSave] = useState<"idle" | "saving" | "done">("idle");
+  const [saveErr, setSaveErr] = useState("");
+  const isImage = media.mime.startsWith("image/");
+  const isVideo = media.mime.startsWith("video/");
+  const ext = EXT_BY_MIME[media.mime] ?? (isImage ? "png" : isVideo ? "mp4" : "mp3");
+
+  async function saveToLibrary() {
+    setSave("saving");
+    setSaveErr("");
+    try {
+      const blob = await fetch(media.url).then((r) => r.blob());
+      const fd = new FormData();
+      fd.append("file", new File([blob], `maqam.${ext}`, { type: media.mime }));
+      fd.append("kind", saveKind);
+      fd.append("title", title);
+      if (content) fd.append("content", content);
+      fd.append("provider", isImage || isVideo ? "gemini" : "elevenlabs");
+      fd.append("settings", JSON.stringify({ studioSpace: true }));
+      const res = await fetch("/api/generations", {
+        method: "POST",
+        headers: await authHeaders(),
+        body: fd,
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? "تعذّر الحفظ — سجّل الدخول أولاً");
+      }
+      setSave("done");
+    } catch (e) {
+      setSave("idle");
+      setSaveErr(e instanceof Error ? e.message : "تعذّر الحفظ");
+    }
+  }
+
+  const btn =
+    "rounded-lg border border-border-soft px-2 py-1 text-[10px] font-semibold text-muted transition-colors hover:border-primary hover:text-primary";
+
+  return (
+    <div className="flex flex-col gap-1">
+      {showLabel && <span className="text-[10px] font-semibold text-muted">{media.label}</span>}
+      {isImage ? (
+        // ناتج توليد لحظي برابط Blob محلي — مكوّن الصور المحسّنة لا يخدمه
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={media.url}
+          alt={media.label}
+          onClick={() => setZoom(true)}
+          className="nodrag w-full cursor-zoom-in rounded-lg"
+          title="اضغط للتكبير"
+        />
+      ) : isVideo ? (
+        <video controls src={media.url} className="nodrag w-full rounded-lg" preload="metadata" />
+      ) : (
+        <audio controls src={media.url} className="nodrag w-full" preload="none" />
+      )}
+      <div className="nodrag flex flex-wrap items-center gap-1">
+        {(isImage || isVideo) && (
+          <button onClick={() => setZoom(true)} className={btn} title="معاينة بالحجم الكامل">
+            🔍 تكبير
+          </button>
+        )}
+        <a
+          href={media.url}
+          download={`maqam-${saveKind}.${ext}`}
+          className={btn}
+          title="تنزيل الملف إلى جهازك"
+        >
+          ⬇ تنزيل
+        </a>
+        <button
+          onClick={saveToLibrary}
+          disabled={save !== "idle"}
+          className={`${btn} disabled:opacity-60`}
+          title="حفظ في مكتبتك على المنصة"
+        >
+          {save === "done" ? "✓ في مكتبتك" : save === "saving" ? "جارٍ الحفظ..." : "💾 حفظ"}
+        </button>
+      </div>
+      {saveErr && <p className="text-[10px] leading-relaxed text-primary-strong">{saveErr}</p>}
+      {zoom && <Lightbox media={media} onClose={() => setZoom(false)} />}
+    </div>
+  );
+}
 
 export default function CardNode({ id, data }: NodeProps<CardNodeType>) {
   const def = NODE_DEFS[data.kind];
@@ -417,20 +572,28 @@ export default function CardNode({ id, data }: NodeProps<CardNodeType>) {
         )}
         {data.status === "done" &&
           data.media?.map((m) => (
-            <div key={m.url} className="flex flex-col gap-0.5">
-              {data.media!.length > 1 && (
-                <span className="text-[10px] font-semibold text-muted">{m.label}</span>
-              )}
-              {m.mime.startsWith("image/") ? (
-                // ناتج توليد لحظي برابط Blob محلي — مكوّن الصور المحسّنة لا يخدمه
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={m.url} alt={m.label} className="nodrag w-full rounded-lg" />
-              ) : m.mime.startsWith("video/") ? (
-                <video controls src={m.url} className="nodrag w-full rounded-lg" preload="metadata" />
-              ) : (
-                <audio controls src={m.url} className="nodrag w-full" preload="none" />
-              )}
-            </div>
+            <MediaItem
+              key={m.url}
+              media={m}
+              showLabel={data.media!.length > 1}
+              title={
+                m.mime.startsWith("image/")
+                  ? "صورة من ذكاء مقام"
+                  : m.mime.startsWith("video/")
+                    ? "فيديو من ذكاء مقام"
+                    : `${def.name}${data.media!.length > 1 ? ` — ${m.label}` : ""} (مساحة مقام)`
+              }
+              content={data.kind === "ai" ? data.config.prompt : undefined}
+              saveKind={
+                m.mime.startsWith("image/")
+                  ? "image"
+                  : m.mime.startsWith("video/")
+                    ? "video"
+                    : data.kind === "song" || data.kind === "music"
+                      ? "song"
+                      : "tts"
+              }
+            />
           ))}
         {data.kind === "save" && data.status === "done" && (
           <p className="text-[11px] font-semibold text-success">✓ حُفظ في مكتبتك</p>

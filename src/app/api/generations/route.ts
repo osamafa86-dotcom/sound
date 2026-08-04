@@ -68,21 +68,33 @@ export async function POST(req: NextRequest) {
   const kind = String(form?.get("kind") ?? "");
 
   if (!(file instanceof File) || file.size === 0) {
-    return NextResponse.json({ error: "الملف الصوتي مطلوب" }, { status: 400 });
+    return NextResponse.json({ error: "الملف مطلوب" }, { status: 400 });
   }
-  if (!["tts", "song", "recording"].includes(kind)) {
+  if (!["tts", "song", "recording", "image", "video"].includes(kind)) {
     return NextResponse.json({ error: "نوع العمل غير صحيح" }, { status: 400 });
   }
   if (file.size > 25 * 1024 * 1024) {
     return NextResponse.json({ error: "حجم الملف كبير جداً" }, { status: 400 });
   }
 
-  const ext = file.type === "audio/wav" ? "wav" : "mp3";
+  // الامتداد من نوع الملف الفعلي — المكتبة تحفظ صوتاً وصوراً وفيديو (بطاقة الذكاء)
+  const EXT_BY_MIME: Record<string, string> = {
+    "audio/wav": "wav",
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "video/mp4": "mp4",
+    "video/webm": "webm",
+  };
+  const fallbackExt = kind === "image" ? "png" : kind === "video" ? "mp4" : "mp3";
+  const ext = EXT_BY_MIME[file.type] ?? fallbackExt;
+  const fallbackMime =
+    kind === "image" ? "image/png" : kind === "video" ? "video/mp4" : "audio/mpeg";
   const path = `${user.id}/${kind}-${Date.now()}.${ext}`;
 
   const { error: upErr } = await supabase.storage
     .from("audio")
-    .upload(path, file, { contentType: file.type || "audio/mpeg", upsert: false });
+    .upload(path, file, { contentType: file.type || fallbackMime, upsert: false });
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
   const str = (k: string) => {
