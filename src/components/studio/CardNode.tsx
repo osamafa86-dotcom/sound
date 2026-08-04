@@ -145,6 +145,45 @@ export default function CardNode({ id, data }: NodeProps<CardNodeType>) {
           </div>
         )}
 
+        {data.kind === "music" && (
+          <div className="flex flex-col gap-1.5">
+            <select
+              value={data.config.maqamId ?? MAQAMAT[0].id}
+              onChange={(e) => setConfig("maqamId", e.target.value)}
+              className="nodrag w-full rounded-lg border border-border-soft bg-surface px-2 py-1.5 text-xs outline-none focus:border-primary"
+            >
+              {MAQAMAT.map((m) => (
+                <option key={m.id} value={m.id}>
+                  مقام {m.name} — {m.mood}
+                </option>
+              ))}
+            </select>
+            <select
+              value={data.config.styleId ?? "instrumental"}
+              onChange={(e) => setConfig("styleId", e.target.value)}
+              className="nodrag w-full rounded-lg border border-border-soft bg-surface px-2 py-1.5 text-xs outline-none focus:border-primary"
+            >
+              {SONG_STYLES.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={data.config.durationSec ?? "30"}
+              onChange={(e) => setConfig("durationSec", e.target.value)}
+              className="nodrag w-full rounded-lg border border-border-soft bg-surface px-2 py-1.5 text-xs outline-none focus:border-primary"
+            >
+              <option value="30">٣٠ ثانية — تجربة سريعة</option>
+              <option value="60">دقيقة كاملة</option>
+              <option value="90">دقيقة ونصف</option>
+            </select>
+            <p className="text-[10px] leading-relaxed text-muted">
+              اللحن يصدر آلياً بلا غناء أياً كان الأسلوب — للتجربة قبل إنفاق التلحين الكامل.
+            </p>
+          </div>
+        )}
+
         {data.kind === "isolate" && (
           <p className="text-[11px] leading-relaxed text-muted">
             يستلم الصوت الموصول ويعيده نقياً بلا ضجيج ولا خلفية.

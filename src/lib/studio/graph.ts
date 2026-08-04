@@ -12,6 +12,7 @@ export type NodeKind =
   | "enhance"
   | "tts"
   | "song"
+  | "music"
   | "isolate"
   | "stt"
   | "save";
@@ -80,6 +81,15 @@ export const NODE_DEFS: Record<NodeKind, NodeDef> = {
     input: "audio",
     output: "audio",
     cost: 5,
+  },
+  music: {
+    kind: "music",
+    name: "موسيقى آلية",
+    icon: "🎵",
+    desc: "لحن بلا كلمات — جرّب المقام والأسلوب قبل الغناء",
+    input: null,
+    output: "audio",
+    cost: 25,
   },
   stt: {
     kind: "stt",

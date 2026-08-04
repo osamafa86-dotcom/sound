@@ -24,6 +24,13 @@ describe("توافق ربط البطاقات", () => {
     expect(canConnect("tts", "text")).toBe(false); // النص بلا دخل
   });
 
+  it("الموسيقى الآلية مصدر بلا مدخل يوصل لكل مستقبلات الصوت", () => {
+    expect(NODE_DEFS.music.input).toBeNull();
+    expect(canConnect("music", "save")).toBe(true);
+    expect(canConnect("music", "isolate")).toBe(true);
+    expect(canConnect("text", "music")).toBe(false); // لا مدخل لها
+  });
+
   it("التفريغ النصي جسر الصوت إلى النص: صوت ← تفريغ ← تلحين", () => {
     expect(canConnect("tts", "stt")).toBe(true);
     expect(canConnect("isolate", "stt")).toBe(true);

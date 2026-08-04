@@ -142,6 +142,34 @@ export default function StudioSpace() {
     [setNodes]
   );
 
+  /** إنشاء مهمة تلحين/موسيقى واستعلامها حتى الاكتمال — مشترك بين البطاقتين */
+  async function runSongJob(nodeId: string, body: Record<string, unknown>): Promise<RunOutput> {
+    const createRes = await fetch("/api/songs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+      body: JSON.stringify(body),
+    });
+    const created = await createRes.json().catch(() => null);
+    if (!createRes.ok) throw new Error(created?.error ?? "تعذّر بدء التوليد");
+    const jobId = created?.jobId;
+    if (!jobId) throw new Error("لم تُنشأ مهمة التوليد");
+
+    // استعلام دوري حتى الاكتمال — التلحين يستغرق دقيقة إلى ثلاث
+    for (let attempt = 0; attempt < 90; attempt++) {
+      await new Promise((r) => setTimeout(r, 4000));
+      const st = await fetch(`/api/songs/${jobId}`).then((r) => r.json()).catch(() => null);
+      if (!st) continue;
+      if (st.stage) patchNode(nodeId, { stage: st.stage });
+      if (st.status === "failed") throw new Error(st.error ?? "فشل التوليد");
+      if (st.status === "done") {
+        const audio = await fetch(`/api/songs/${jobId}/audio`);
+        if (!audio.ok) throw new Error("تعذّر جلب الناتج");
+        return { blob: await audio.blob() };
+      }
+    }
+    throw new Error("انتهت مهلة الانتظار — جرّب من استوديو الأغاني");
+  }
+
   /** تشغيل بطاقة واحدة حسب نوعها — يستدعي واجهات المنصة القائمة */
   async function runNode(node: CardNodeType, input: RunOutput | undefined): Promise<RunOutput> {
     const cfg = node.data.config;
@@ -203,35 +231,22 @@ export default function StudioSpace() {
     if (kind === "song") {
       const lyrics = input?.text?.trim();
       if (!lyrics) throw new Error("أوصل بطاقة كلمات أولاً");
-      const createRes = await fetch("/api/songs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
-        body: JSON.stringify({
-          maqamId: cfg.maqamId ?? MAQAMAT[0].id,
-          styleId: cfg.styleId ?? SONG_STYLES[0].id,
-          lyrics,
-          instrumentIds: [],
-        }),
+      return runSongJob(node.id, {
+        maqamId: cfg.maqamId ?? MAQAMAT[0].id,
+        styleId: cfg.styleId ?? SONG_STYLES[0].id,
+        lyrics,
+        instrumentIds: [],
       });
-      const created = await createRes.json().catch(() => null);
-      if (!createRes.ok) throw new Error(created?.error ?? "تعذّر بدء التلحين");
-      const jobId = created?.jobId;
-      if (!jobId) throw new Error("لم تُنشأ مهمة التلحين");
+    }
 
-      // استعلام دوري حتى الاكتمال — التلحين يستغرق دقيقة إلى ثلاث
-      for (let attempt = 0; attempt < 90; attempt++) {
-        await new Promise((r) => setTimeout(r, 4000));
-        const st = await fetch(`/api/songs/${jobId}`).then((r) => r.json()).catch(() => null);
-        if (!st) continue;
-        if (st.stage) patchNode(node.id, { stage: st.stage });
-        if (st.status === "failed") throw new Error(st.error ?? "فشل التلحين");
-        if (st.status === "done") {
-          const audio = await fetch(`/api/songs/${jobId}/audio`);
-          if (!audio.ok) throw new Error("تعذّر جلب الأغنية");
-          return { blob: await audio.blob() };
-        }
-      }
-      throw new Error("انتهت مهلة انتظار التلحين — جرّب من استوديو الأغاني");
+    if (kind === "music") {
+      // بلا كلمات = لحن آلي خالص، والأسلوب يلوّن طابع اللحن
+      return runSongJob(node.id, {
+        maqamId: cfg.maqamId ?? MAQAMAT[0].id,
+        styleId: cfg.styleId ?? "instrumental",
+        durationSec: Number(cfg.durationSec ?? 30) || 30,
+        instrumentIds: [],
+      });
     }
 
     if (kind === "stt") {
