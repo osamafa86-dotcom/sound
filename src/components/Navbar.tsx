@@ -20,6 +20,7 @@ import {
   Podcast,
   ShieldCheck,
   Sparkles,
+  Workflow,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -39,6 +40,7 @@ const groups: { label: string | null; items: { href: string; label: string; icon
       { href: "/drama", label: "الاستوديو الدرامي", icon: Drama },
       { href: "/podcast", label: "البودكاست", icon: Podcast },
       { href: "/voice", label: "معمل الصوت", icon: FlaskConical },
+      { href: "/studio", label: "مساحة مقام", icon: Workflow },
     ],
   },
   {
