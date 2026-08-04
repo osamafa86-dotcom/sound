@@ -59,7 +59,8 @@ export function getMusicProvider(opts?: {
 
   const eleven = elevenKey ? elevenLabsMusic(elevenKey) : null;
   const lyria = geminiKey ? lyriaMusic(geminiKey) : null;
-  // MiniMax تجريبي: لا يدخل سلسلة الافتراضي — بالاختيار الصريح أو MUSIC_PROVIDER فقط
+  // MiniMax Music: حُكم المالك بالسمع (آب 2026) — الغناء العربي ضعيف جداً،
+  // فأُزيل من واجهة الاختيار كلياً ويبقى هنا للتجارب عبر force/MUSIC_PROVIDER فقط
   const minimax = minimaxKey && minimaxGroup ? minimaxMusic(minimaxKey, minimaxGroup) : null;
 
   // فرض المهمة الواحدة (المقارنة) يتقدم على كل شيء — كل نسخة بمحركها الحقيقي

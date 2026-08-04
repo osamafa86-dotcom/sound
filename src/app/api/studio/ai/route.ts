@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { aiImage, aiText, aiVideo, type AiContext, type AiMedia } from "@/lib/studio/aiEngine";
+import {
+  aiImage,
+  aiText,
+  aiVideo,
+  hailuoVideo,
+  type AiContext,
+  type AiMedia,
+} from "@/lib/studio/aiEngine";
 import { refundCredits } from "@/lib/credits";
 import { checkLimit, limitResponse, type LimitScope } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
@@ -48,7 +55,13 @@ export async function POST(req: NextRequest) {
   if (!verdict.allowed) return limitResponse(verdict);
 
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  // الفيديو: Hailuo أولاً (يعمل برصيد MiniMax المشحون) — Veo يتطلب فوترة Google.
+  // VIDEO_PROVIDER=veo يعيد Veo قسراً عند تفعيل فوترته لاحقاً.
+  const mmKey = process.env.MINIMAX_API_KEY;
+  const mmGroup = process.env.MINIMAX_GROUP_ID;
+  const useHailuo = mode === "video" && !!mmKey && !!mmGroup && process.env.VIDEO_PROVIDER !== "veo";
+
+  if (!apiKey && !(mode === "video" && useHailuo)) {
     return NextResponse.json(
       { error: "بطاقة الذكاء تتطلب مفتاح Gemini — غير مضبوط في هذه البيئة" },
       { status: 503 }
@@ -89,13 +102,13 @@ export async function POST(req: NextRequest) {
 
   try {
     if (mode === "text") {
-      const text = await aiText(apiKey, prompt, ctx);
+      const text = await aiText(apiKey!, prompt, ctx);
       await logUsage(scope, user?.id ?? null);
       return NextResponse.json({ text });
     }
 
     if (mode === "image") {
-      const image = await aiImage(apiKey, prompt, ctx);
+      const image = await aiImage(apiKey!, prompt, ctx);
       await logUsage(scope, user?.id ?? null);
       return new NextResponse(new Uint8Array(image.data), {
         headers: { "Content-Type": image.mimeType },
@@ -104,10 +117,13 @@ export async function POST(req: NextRequest) {
 
     const durationSec = Number(form.get("durationSec"));
     const aspect = String(form.get("aspectRatio") ?? "16:9");
-    const video = await aiVideo(apiKey, prompt, ctx, {
+    const videoOpts = {
       durationSec: Number.isFinite(durationSec) ? durationSec : undefined,
-      aspectRatio: aspect === "9:16" ? "9:16" : "16:9",
-    });
+      aspectRatio: (aspect === "9:16" ? "9:16" : "16:9") as "16:9" | "9:16",
+    };
+    const video = useHailuo
+      ? await hailuoVideo(mmKey!, mmGroup!, prompt, ctx, videoOpts)
+      : await aiVideo(apiKey!, prompt, ctx, videoOpts);
     await logUsage(scope, user?.id ?? null);
     return new NextResponse(new Uint8Array(video.data), {
       headers: { "Content-Type": video.mimeType },

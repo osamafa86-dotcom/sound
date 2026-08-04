@@ -61,7 +61,7 @@ export type NodeDef = {
 export const AI_MODES = [
   { id: "text", name: "نص", icon: "📝", cost: 1 },
   { id: "image", name: "صورة", icon: "🖼️", cost: 6 },
-  { id: "video", name: "فيديو", icon: "🎬", cost: 40 },
+  { id: "video", name: "فيديو", icon: "🎬", cost: 20 },
 ] as const;
 
 export type AiMode = (typeof AI_MODES)[number]["id"];

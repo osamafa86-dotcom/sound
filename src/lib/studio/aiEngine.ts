@@ -132,6 +132,87 @@ export type VideoOptions = {
   aspectRatio?: "16:9" | "9:16";
 };
 
+const HAILUO_MODEL = process.env.MINIMAX_VIDEO_MODEL ?? "MiniMax-Hailuo-02";
+const HAILUO_RESOLUTION = process.env.MINIMAX_VIDEO_RES ?? "768P";
+
+/**
+ * فيديو Hailuo (MiniMax) — محرك الفيديو الأول للمنصة: يعمل برصيد
+ * الدفع-حسب-الاستخدام المشحون فعلاً، بينما Veo يتطلب فوترة Google.
+ * مسار مهمة: إنشاء ← استعلام دوري ← جلب رابط الملف ← تنزيل.
+ * أول صورة واصلة تصبح الإطار الافتتاحي (صورة ← فيديو).
+ */
+export async function hailuoVideo(
+  apiKey: string,
+  groupId: string,
+  prompt: string,
+  ctx: AiContext,
+  opts: VideoOptions = {}
+): Promise<AiMedia> {
+  const fullPrompt = [prompt, textsBlock(ctx.texts)].filter(Boolean).join("\n").slice(0, 2000);
+  const firstImage = ctx.images[0];
+  const headers = { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` };
+  const gid = encodeURIComponent(groupId);
+
+  const createRes = await fetch(`https://api.minimax.io/v1/video_generation?GroupId=${gid}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model: HAILUO_MODEL,
+      prompt: fullPrompt,
+      // المحرك يدعم 6 أو 10 ثوانٍ — نقرّب اختيار المستخدم لأقرب مدة
+      duration: (opts.durationSec ?? 6) >= 8 ? 10 : 6,
+      resolution: HAILUO_RESOLUTION,
+      ...(firstImage && {
+        first_frame_image: `data:${firstImage.mimeType};base64,${firstImage.data.toString("base64")}`,
+      }),
+    }),
+  });
+  const created = await createRes.json().catch(() => null);
+  const createCode: number = created?.base_resp?.status_code ?? -1;
+  if (!createRes.ok || createCode !== 0 || !created?.task_id) {
+    const msg: string = created?.base_resp?.status_msg ?? `HTTP ${createRes.status}`;
+    throw new Error(
+      /insufficient balance/i.test(msg)
+        ? "توليد الفيديو يتطلب رصيداً في محفظة MiniMax (قسم Balance) — اشحنها ثم أعد المحاولة"
+        : `Hailuo: ${msg}`
+    );
+  }
+
+  // الاستعلام الدوري — 768P لست ثوانٍ يكتمل خلال دقيقة إلى دقيقتين عادة
+  let fileId = "";
+  for (let attempt = 0; attempt < 24 && !fileId; attempt++) {
+    await new Promise((r) => setTimeout(r, 10_000));
+    const st = await fetch(
+      `https://api.minimax.io/v1/query/video_generation?task_id=${encodeURIComponent(created.task_id)}`,
+      { headers }
+    )
+      .then((r) => r.json())
+      .catch(() => null);
+    const status: string = st?.status ?? "";
+    if (status === "Success" && st?.file_id) fileId = String(st.file_id);
+    else if (status === "Fail") {
+      throw new Error(`Hailuo: فشل التوليد${st?.base_resp?.status_msg ? ` (${st.base_resp.status_msg})` : ""}`);
+    }
+  }
+  if (!fileId) throw new Error("انتهت مهلة توليد الفيديو — حاول مجدداً");
+
+  const file = await fetch(
+    `https://api.minimax.io/v1/files/retrieve?GroupId=${gid}&file_id=${encodeURIComponent(fileId)}`,
+    { headers }
+  )
+    .then((r) => r.json())
+    .catch(() => null);
+  const url: string | undefined = file?.file?.download_url;
+  if (!url) throw new Error("لم يُعد Hailuo رابط الفيديو");
+
+  const download = await fetch(url);
+  if (!download.ok) throw new Error(`تعذّر تنزيل الفيديو (${download.status})`);
+  return {
+    data: Buffer.from(await download.arrayBuffer()),
+    mimeType: download.headers.get("Content-Type")?.split(";")[0] || "video/mp4",
+  };
+}
+
 type VeoOperation = {
   name?: string;
   done?: boolean;

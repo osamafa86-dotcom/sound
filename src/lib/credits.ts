@@ -35,7 +35,8 @@ export const CREDIT_COSTS: Partial<Record<LimitScope, number>> = {
   promptTest: 5,
   aiText: 1,
   aiImage: 6,
-  aiVideo: 40,
+  // انخفضت مع اعتماد Hailuo محركاً للفيديو (أرخص بكثير من Veo)
+  aiVideo: 20,
 };
 
 export type CreditVerdict = {

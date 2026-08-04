@@ -68,7 +68,7 @@ describe("توافق ربط البطاقات (منافذ مسماة)", () => {
     expect(resolveOutput(ref("ai", undefined, { mode: "image" }))?.type).toBe("image");
     expect(resolveOutput(ref("ai", undefined, { mode: "video" }))?.type).toBe("video");
     expect(aiModeCost({})).toBe(1);
-    expect(aiModeCost({ mode: "video" })).toBe(40);
+    expect(aiModeCost({ mode: "video" })).toBe(20);
     // وضع نصي يوصل للتلحين، ووضع صورة لا
     expect(canConnect(ref("ai"), ref("song"))).toBe(true);
     expect(canConnect(ref("ai", undefined, { mode: "image" }), ref("song"))).toBe(false);
