@@ -398,6 +398,12 @@ export default function TTSStudio() {
   const [result, setResult] = useState<{ url: string; blob: Blob; mock: boolean; ext: string; fellBack: boolean } | null>(null);
   const [error, setError] = useState("");
 
+  // مقارنة المحركين: نفس النص من ElevenLabs وMiniMax 💠 جنباً إلى جنب
+  const [compare, setCompare] = useState<
+    { label: string; url: string; mock: boolean; voiceId: string; provider: string }[] | null
+  >(null);
+  const [comparing, setComparing] = useState(false);
+
   // الشخصنة: الافتراضات من ذوق المستخدم المتعلم لا من ترتيب القائمة
   const [personalized, setPersonalized] = useState("");
 
@@ -571,6 +577,64 @@ export default function TTSStudio() {
       setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
     } finally {
       setLoading(false);
+    }
+  }
+
+  /**
+   * مقارنة المحركين: توليدان متوازيان لنفس النص — الصوت المختار من ElevenLabs
+   * ونظيره بنفس الجنس من MiniMax 💠 — فيحكم المستخدم بأذنه لا بالانطباع.
+   */
+  async function compareEngines() {
+    if (!text.trim()) {
+      setError("اكتب النص أولاً");
+      return;
+    }
+    const current = voices.find((v) => v.id === voiceId);
+    const elevenVoice =
+      current && current.provider !== "minimax"
+        ? current
+        : voices.find((v) => v.provider === "elevenlabs" && v.gender === (current?.gender ?? "male"));
+    const mmVoice =
+      voices.find((v) => v.provider === "minimax" && v.gender === (elevenVoice?.gender ?? "male")) ??
+      voices.find((v) => v.provider === "minimax");
+    if (!elevenVoice || !mmVoice) {
+      setError("المقارنة تتطلب تفعيل المحرك الاقتصادي 💠 (مفاتيح MiniMax) في هذه البيئة");
+      return;
+    }
+
+    setError("");
+    setComparing(true);
+    setCompare(null);
+    try {
+      const gen = async (vid: string, label: string, provider: string) => {
+        const res = await fetch("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+          body: JSON.stringify({ text, voiceId: vid, speed, format: "mp3" }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data?.error ?? "تعذّر التوليد");
+        }
+        const blob = await res.blob();
+        return {
+          label,
+          url: URL.createObjectURL(blob),
+          mock: res.headers.get("X-Mock") === "1",
+          voiceId: vid,
+          provider,
+        };
+      };
+      setCompare(
+        await Promise.all([
+          gen(elevenVoice.id, `ElevenLabs — ${elevenVoice.name}`, "elevenlabs"),
+          gen(mmVoice.id, `MiniMax 💠 — ${mmVoice.name}`, "minimax"),
+        ])
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally {
+      setComparing(false);
     }
   }
 
@@ -927,13 +991,25 @@ export default function TTSStudio() {
             </p>
           )}
 
-          <button
-            onClick={generate}
-            disabled={loading}
-            className="rounded-xl bg-primary px-6 py-3.5 font-semibold text-white transition-colors hover:bg-primary-strong disabled:opacity-50"
-          >
-            {loading ? "جارٍ التوليد..." : "🎙️ توليد الصوت"}
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={generate}
+              disabled={loading || comparing}
+              className="rounded-xl bg-primary px-6 py-3.5 font-semibold text-white transition-colors hover:bg-primary-strong disabled:opacity-50"
+            >
+              {loading ? "جارٍ التوليد..." : "🎙️ توليد الصوت"}
+            </button>
+            {voices.some((v) => v.provider === "minimax") && (
+              <button
+                onClick={compareEngines}
+                disabled={loading || comparing}
+                title="نفس النص من المحركين معاً — يستهلك توليدين"
+                className="rounded-xl border border-gold/60 px-5 py-3.5 text-sm font-semibold text-gold transition-colors hover:bg-gold/10 disabled:opacity-50"
+              >
+                {comparing ? "جارٍ توليد النسختين..." : "⚖️ قارن المحركين"}
+              </button>
+            )}
+          </div>
 
           {result && (
             <AudioPlayer
@@ -958,6 +1034,38 @@ export default function TTSStudio() {
                 settings={{ speed, stability, format }}
               />
             </AudioPlayer>
+          )}
+
+          {compare && (
+            <div className="flex flex-col gap-3 rounded-2xl border border-gold/40 bg-gold/5 p-4">
+              <p className="text-sm font-semibold">
+                ⚖️ نفس النص من المحركين — استمع للنسختين واحكم بأذنك
+              </p>
+              {compare.map((c) => (
+                <AudioPlayer
+                  key={c.url}
+                  src={c.url}
+                  title={c.label}
+                  mock={c.mock}
+                  signal={c.mock ? undefined : { voiceId: c.voiceId, settings: { speed } }}
+                  filename={`maqam-compare-${c.provider}.mp3`}
+                >
+                  <SaveToLibrary
+                    url={c.url}
+                    kind="tts"
+                    title={`مقارنة محركات — ${c.label}`}
+                    content={text}
+                    voiceId={c.voiceId}
+                    provider={c.mock ? "mock" : c.provider}
+                    settings={{ speed, compare: true }}
+                  />
+                </AudioPlayer>
+              ))}
+              <p className="text-[11px] leading-relaxed text-muted">
+                💠 المحرك الاقتصادي يُخصم من اشتراك منفصل شبه مجاني — مثالي للنصوص الطويلة.
+                وسوم المخرج التعبيري ([همس] وأخواتها) خاصة بمحرك ElevenLabs ولا تؤثر عليه.
+              </p>
+            </div>
           )}
 
           {takesResults && takesResults.length > 0 && (

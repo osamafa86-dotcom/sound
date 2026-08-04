@@ -3,7 +3,7 @@ export type Voice = {
   name: string;
   gender: "male" | "female";
   dialect: string;
-  provider: "elevenlabs" | "azure";
+  provider: "elevenlabs" | "azure" | "minimax";
   tone: string;
   /** معرّف الصوت الفعلي لدى ElevenLabs */
   elevenVoiceId?: string;
@@ -11,6 +11,8 @@ export type Voice = {
   azureVoiceName?: string;
   /** لغة SSML لصوت Azure (مثل ar-SA) */
   azureLocale?: string;
+  /** معرّف الصوت لدى MiniMax (المحرك الاقتصادي 💠) */
+  minimaxVoiceId?: string;
 };
 
 /**
@@ -60,6 +62,14 @@ export const VOICES: Voice[] = [
   { id: "v-sau-m1", name: "أحمد", gender: "male", dialect: "سعودية", provider: "elevenlabs", tone: "واثق ومحاوِر — بودكاست", elevenVoiceId: "jUwEniiVp6drT0jac8vD" },
   { id: "v-gulf-m1", name: "يوسف", gender: "male", dialect: "خليجية", provider: "elevenlabs", tone: "سينمائي مهيب — وثائقيات", elevenVoiceId: "WcswLmU3iGeMrhxfWXKN" },
   { id: "v-omn-m1", name: "علي", gender: "male", dialect: "عُمانية", provider: "elevenlabs", tone: "هادئ وواضح — محادثات", elevenVoiceId: "ru5xIfU6L5uUJi5V0843" },
+
+  // أصوات MiniMax 💠 «المحرك الاقتصادي» — Speech-02 HD متعدد اللغات بتعزيز عربي،
+  // توليدها يُخصم من نقاط اشتراك MiniMax لا من رصيد ElevenLabs. تظهر عند ضبط
+  // MINIMAX_API_KEY وMINIMAX_GROUP_ID. (وسوم المخرج التعبيري لا تعمل عليها)
+  { id: "mm-f1", name: "حكمت", gender: "female", dialect: "اقتصادي 💠", provider: "minimax", tone: "رصين ودافئ — سرد وتعليق بكلفة زهيدة", minimaxVoiceId: "Wise_Woman" },
+  { id: "mm-m1", name: "جسور", gender: "male", dialect: "اقتصادي 💠", provider: "minimax", tone: "عميق وجهوري — وثائقيات ونصوص طويلة", minimaxVoiceId: "Deep_Voice_Man" },
+  { id: "mm-f2", name: "روان الهادئة", gender: "female", dialect: "اقتصادي 💠", provider: "minimax", tone: "هادئ ومريح — بودكاست وكتب صوتية", minimaxVoiceId: "Calm_Woman" },
+  { id: "mm-m2", name: "أنيس", gender: "male", dialect: "اقتصادي 💠", provider: "minimax", tone: "ودود وقريب — شروحات ومحتوى يومي", minimaxVoiceId: "Friendly_Person" },
 
   // أصوات Azure Neural — لهجات عربية أصيلة، تظهر عند ضبط AZURE_SPEECH_KEY
   { id: "az-sa-m1", name: "حامد", gender: "male", dialect: "سعودية", provider: "azure", tone: "لهجة سعودية أصيلة — أخبار وتقديم", azureVoiceName: "ar-SA-HamedNeural", azureLocale: "ar-SA" },

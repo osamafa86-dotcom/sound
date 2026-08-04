@@ -1,7 +1,7 @@
 import { elevenLabsMusic, elevenLabsTTS } from "./elevenlabs";
 import { azureTTS } from "./azure";
 import { lyriaMusic } from "./lyria";
-import { minimaxMusic } from "./minimax";
+import { minimaxMusic, minimaxTTS } from "./minimax";
 import { mockMusic, mockTTS } from "./mock";
 import { VOICES } from "@/lib/voices";
 import { settingsSnapshot } from "@/lib/platformSettings";
@@ -18,10 +18,16 @@ export function getTTSProvider(voiceId?: string): TTSProvider {
   const eleven = process.env.ELEVENLABS_API_KEY;
   const azureKey = process.env.AZURE_SPEECH_KEY;
   const azureRegion = process.env.AZURE_SPEECH_REGION;
+  const mmKey = process.env.MINIMAX_API_KEY;
+  const mmGroup = process.env.MINIMAX_GROUP_ID;
 
   const voice = VOICES.find((v) => v.id === voiceId);
   if (voice?.provider === "azure" && azureKey && azureRegion) {
     return azureTTS(azureKey, azureRegion);
+  }
+  // المحرك الاقتصادي 💠: يُخصم من نقاط اشتراك MiniMax بدل رصيد ElevenLabs
+  if (voice?.provider === "minimax" && mmKey && mmGroup) {
+    return minimaxTTS(mmKey, mmGroup);
   }
   return eleven ? elevenLabsTTS(eleven) : mockTTS;
 }
@@ -30,9 +36,13 @@ export function getTTSProvider(voiceId?: string): TTSProvider {
 export function availableVoices() {
   const eleven = !!process.env.ELEVENLABS_API_KEY;
   const azure = !!(process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION);
-  if (!eleven && !azure) return VOICES;
+  const minimax = !!(process.env.MINIMAX_API_KEY && process.env.MINIMAX_GROUP_ID);
+  if (!eleven && !azure && !minimax) return VOICES;
   return VOICES.filter(
-    (v) => (v.provider === "elevenlabs" && eleven) || (v.provider === "azure" && azure)
+    (v) =>
+      (v.provider === "elevenlabs" && eleven) ||
+      (v.provider === "azure" && azure) ||
+      (v.provider === "minimax" && minimax)
   );
 }
 

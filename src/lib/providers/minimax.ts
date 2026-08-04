@@ -1,5 +1,7 @@
 import { isInstrumentalRequest } from "./compositionPlan";
-import type { AudioResult, MusicProvider, MusicRequest } from "./types";
+import { stripAudioTags } from "@/lib/performance/tags";
+import { VOICES } from "@/lib/voices";
+import type { AudioResult, MusicProvider, MusicRequest, TTSProvider, TTSRequest } from "./types";
 import type { SectionKind } from "@/lib/songSections";
 
 /**
@@ -42,6 +44,74 @@ function buildLyrics(req: MusicRequest): string {
   }
   const raw = (req.lyrics ?? "").replace(/\[[^\]]{1,40}\]/g, " ").replace(/ {2,}/g, " ").trim();
   return raw ? `[Verse]\n${raw}` : "";
+}
+
+const TTS_MODEL = process.env.MINIMAX_TTS_MODEL ?? "speech-02-hd";
+
+/**
+ * نطق MiniMax 💠 «المحرك الاقتصادي» — Speech-02 HD بتعزيز عربي:
+ * يُخصم من نقاط اشتراك MiniMax الشهرية (شبه مجانية) بدل رصيد ElevenLabs،
+ * فيناسب النصوص الطويلة والمعاينات. وسوم المخرج التعبيري لغة ElevenLabs
+ * حصراً فتُنزع قبل الإرسال كي لا تُقرأ حرفياً.
+ */
+export function minimaxTTS(apiKey: string, groupId: string): TTSProvider {
+  return {
+    id: "minimax",
+    async synthesize(req: TTSRequest): Promise<AudioResult> {
+      const voice = VOICES.find((v) => v.id === req.voiceId);
+      const text = stripAudioTags(req.text).replace(/ {2,}/g, " ").trim();
+      if (!text) throw new MinimaxError("النص فارغ بعد تنقية الوسوم", 400);
+
+      const res = await fetch(
+        `https://api.minimax.io/v1/t2a_v2?GroupId=${encodeURIComponent(groupId)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: TTS_MODEL,
+            text,
+            stream: false,
+            language_boost: "Arabic",
+            voice_setting: {
+              voice_id: voice?.minimaxVoiceId ?? "Wise_Woman",
+              speed: Math.min(2, Math.max(0.5, req.speed ?? 1)),
+            },
+            audio_setting: {
+              format: req.format === "wav" ? "wav" : "mp3",
+              sample_rate: 32000,
+              bitrate: 128000,
+            },
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const detail = (await res.text().catch(() => "")).slice(0, 300);
+        throw new MinimaxError(`MiniMax TTS ${res.status}: ${detail}`, res.status);
+      }
+
+      const json = await res.json();
+      const code: number = json?.base_resp?.status_code ?? -1;
+      if (code !== 0) {
+        const msg: string = json?.base_resp?.status_msg ?? "unknown";
+        throw new MinimaxError(
+          /insufficient|limit reached/i.test(msg)
+            ? "نفدت نقاط اشتراك MiniMax الصوتية لهذا الشهر — جرّب صوتاً من محرك آخر"
+            : `MiniMax TTS (${code}): ${msg}`,
+          code
+        );
+      }
+
+      const hex: string | undefined = json?.data?.audio;
+      if (!hex) throw new MinimaxError("لم تتضمن استجابة MiniMax صوتاً", 502);
+
+      return {
+        audio: Buffer.from(hex, "hex"),
+        mimeType: req.format === "wav" ? "audio/wav" : "audio/mpeg",
+        provider: "minimax",
+      };
+    },
+  };
 }
 
 export function minimaxMusic(apiKey: string, groupId: string): MusicProvider {
