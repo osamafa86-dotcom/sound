@@ -33,6 +33,9 @@ export const CREDIT_COSTS: Partial<Record<LimitScope, number>> = {
   voiceDesign: 15,
   cover: 5,
   promptTest: 5,
+  aiText: 1,
+  aiImage: 6,
+  aiVideo: 40,
 };
 
 export type CreditVerdict = {

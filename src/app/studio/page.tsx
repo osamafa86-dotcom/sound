@@ -14,14 +14,24 @@ import {
 import "@xyflow/react/dist/style.css";
 import WaveLine from "@/components/WaveLine";
 import MemberNotice from "@/components/MemberNotice";
-import CardNode, { type CardData, type CardNodeType } from "@/components/studio/CardNode";
+import CardNode, {
+  type CardData,
+  type CardNodeType,
+  type MediaResult,
+} from "@/components/studio/CardNode";
 import {
   NODE_DEFS,
+  PORT_META,
+  aiMode,
   canConnect,
-  executionOrder,
-  inputSourceOf,
+  executionLayers,
+  nodePorts,
+  resolveInput,
+  resolveOutput,
   type NodeKind,
 } from "@/lib/studio/graph";
+import { uploadStore } from "@/lib/studio/uploads";
+import { extractInstrumental } from "@/lib/stems";
 import { SPACE_TEMPLATES, type SpaceTemplate } from "@/lib/studio/templates";
 import { MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
 import { VOICES } from "@/lib/voices";
@@ -29,8 +39,14 @@ import { authHeaders } from "@/lib/supabase";
 
 const nodeTypes = { card: CardNode };
 
-/** ناتج تشغيل بطاقة — نص أو صوت، مع تنبيه شفافية عند الرجوع التجريبي */
-type RunOutput = { text?: string; blob?: Blob; note?: string };
+/** ناتج منفذ واحد — نص أو صوت/صورة/فيديو أو بصمة صوت */
+type RunOutput = { text?: string; blob?: Blob; voiceId?: string; note?: string };
+
+/** ناتج تشغيل بطاقة: قيمة لكل منفذ خرج + ملاحظة شفافية للعرض */
+type NodeResult = { ports: Record<string, RunOutput>; note?: string };
+
+/** مدخلات بطاقة مجمعة حسب منفذ الدخل — المنفذ الجمعي يحمل عدة قيم مرتبة */
+type NodeInputs = Map<string, RunOutput[]>;
 
 let nextId = 1;
 const newId = () => `n${Date.now().toString(36)}${nextId++}`;
@@ -70,33 +86,48 @@ export default function StudioSpace() {
   const showHint = useCallback((msg: string) => {
     setConnectHint((prev) => (prev === msg ? prev : msg));
     if (hintTimer.current) clearTimeout(hintTimer.current);
-    hintTimer.current = setTimeout(() => setConnectHint(""), 7000);
+    hintTimer.current = setTimeout(() => setConnectHint(""), 8000);
   }, []);
 
-  /** الربط: توافق الأنواع + منفذ دخل واحد لكل بطاقة — مع شرح فوري عند الرفض */
+  /** الربط على مستوى المنفذ: توافق النوع + سعة المنفذ — مع شرح فوري عند الرفض */
   const isValidConnection = useCallback(
     (conn: Connection | Edge) => {
       const src = nodes.find((n) => n.id === conn.source);
       const tgt = nodes.find((n) => n.id === conn.target);
       if (!src || !tgt || conn.source === conn.target) return false;
 
-      if (!canConnect(src.data.kind, tgt.data.kind)) {
-        const srcDef = NODE_DEFS[src.data.kind];
-        const tgtDef = NODE_DEFS[tgt.data.kind];
-        const typeName = (t: "text" | "audio" | null) =>
-          t === "text" ? "نصاً 🔵" : t === "audio" ? "صوتاً 🟡" : "لا شيء";
+      const srcRef = { kind: src.data.kind, config: src.data.config, handle: conn.sourceHandle };
+      const tgtRef = { kind: tgt.data.kind, config: tgt.data.config, handle: conn.targetHandle };
+
+      if (!canConnect(srcRef, tgtRef)) {
+        const out = resolveOutput(srcRef);
+        const inp = resolveInput(tgtRef);
+        const outName = out ? `${PORT_META[out.type].label} ${PORT_META[out.type].chip}` : "لا شيء";
+        const inName = inp
+          ? inp.accepts.map((a) => `${PORT_META[a].label} ${PORT_META[a].chip}`).join(" أو ")
+          : "لا شيء";
         showHint(
-          `«${srcDef.name}» يُخرج ${typeName(srcDef.output)} بينما «${tgtDef.name}» يستقبل ${typeName(tgtDef.input)} — ` +
-            (srcDef.output === "audio" && tgtDef.input === "text"
-              ? `ضع بطاقة «📜 تفريغ نصي» بينهما كجسر، أو أوصل «${tgtDef.name}» بمصدر النص نفسه مباشرة (التفريع مسموح).`
-              : "أوصل منفذين من نفس اللون.")
+          `«${NODE_DEFS[src.data.kind].name}» يُخرج ${outName} بينما هذا المنفذ في «${NODE_DEFS[tgt.data.kind].name}» يستقبل ${inName} — ` +
+            (out?.type === "audio" && inp?.accepts.includes("text")
+              ? "ضع بطاقة «📜 تفريغ نصي» بينهما كجسر، أو أوصل الهدف بمصدر النص نفسه مباشرة."
+              : "أوصل منفذين متوافقي اللون.")
         );
         return false;
       }
 
-      if (edges.some((e) => e.target === conn.target)) {
-        showHint("لكل بطاقة مدخل واحد — احذف الوصلة القديمة أولاً (حددها واضغط Delete).");
-        return false;
+      // سعة المنفذ: الجمعي يقبل عدة وصلات، وسواه وصلة واحدة
+      const inp = resolveInput(tgtRef)!;
+      if (!inp.multi) {
+        const firstIn = nodePorts(tgt.data.kind, tgt.data.config).inputs[0]?.id;
+        const occupied = edges.some(
+          (e) => e.target === conn.target && (e.targetHandle ?? firstIn) === inp.id
+        );
+        if (occupied) {
+          showHint(
+            `منفذ «${inp.label}» يقبل وصلة واحدة — احذف القديمة أولاً (حددها واضغط Delete). المنفذ المتدرّج في بطاقة الذكاء هو الجمعي.`
+          );
+          return false;
+        }
       }
       return true;
     },
@@ -125,6 +156,8 @@ export default function StudioSpace() {
       id: newId(),
       source: idMap.get(e.source)!,
       target: idMap.get(e.target)!,
+      ...(e.sourceHandle && { sourceHandle: e.sourceHandle }),
+      ...(e.targetHandle && { targetHandle: e.targetHandle }),
       animated: true,
       style: { strokeWidth: 2 },
     }));
@@ -176,19 +209,69 @@ export default function StudioSpace() {
     throw new Error("انتهت مهلة الانتظار — جرّب من استوديو الأغاني");
   }
 
-  /** تشغيل بطاقة واحدة حسب نوعها — يستدعي واجهات المنصة القائمة */
-  async function runNode(node: CardNodeType, input: RunOutput | undefined): Promise<RunOutput> {
+  /** لحن مرجعي موصول ← موجز أسلوبي من أذن المنصة يقود التلحين */
+  async function melodyBrief(
+    melody: Blob
+  ): Promise<{ aiStylePrompt: string; bpm?: number; note: string }> {
+    const fd = new FormData();
+    fd.append("audio", melody, "melody.mp3");
+    const res = await fetch("/api/studio/brief", {
+      method: "POST",
+      headers: await authHeaders(),
+      body: fd,
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error ?? "تعذّر تحليل اللحن المرجعي");
+    return {
+      aiStylePrompt: data.stylePromptEn,
+      ...(data.bpm && { bpm: data.bpm }),
+      note: `🎧 استُلهم اللحن المرجعي: ${data.descriptionAr ?? ""}`,
+    };
+  }
+
+  /** تشغيل بطاقة واحدة حسب نوعها — مدخلاتها مجمعة حسب منافذها المسماة */
+  async function runNode(node: CardNodeType, inputs: NodeInputs): Promise<NodeResult> {
     const cfg = node.data.config;
     const kind = node.data.kind;
+    const first = (portId: string) => inputs.get(portId)?.[0];
+    const out = (o: RunOutput, note?: string): NodeResult => ({ ports: { [nodePorts(kind, cfg).outputs[0]?.id ?? "out"]: o }, note: note ?? o.note });
 
     if (kind === "text") {
       const text = (cfg.text ?? "").trim();
       if (!text) throw new Error("اكتب النص في البطاقة أولاً");
-      return { text };
+      return out({ text });
+    }
+
+    if (kind === "upload") {
+      const blob = uploadStore.get(node.id);
+      if (!blob) throw new Error("ارفع ملفاً أو سجّل صوتاً في البطاقة أولاً");
+      return out({ blob });
+    }
+
+    if (kind === "voiceprint") {
+      const sample = first("in")?.blob;
+      if (!sample) throw new Error("أوصل عينة صوت أولاً (بطاقة «صوت من عندك» مثلاً)");
+      if (cfg.consent !== "true") {
+        throw new Error("علّم خانة الإقرار أولاً: أن الصوت صوتك أو مأذون لك باستنساخه");
+      }
+      const name = (cfg.name ?? "").trim() || "بصمة من المساحة";
+      const fd = new FormData();
+      fd.append("name", name);
+      fd.append("consent", "true");
+      fd.append("samples", sample, "sample.mp3");
+      const res = await fetch("/api/voices/clone", {
+        method: "POST",
+        headers: await authHeaders(),
+        body: fd,
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "تعذّر إنشاء البصمة");
+      if (!data?.voiceId) throw new Error("لم تُنشأ البصمة");
+      return out({ voiceId: data.voiceId }, `🧬 بصمة «${name}» جاهزة — أوصلها بمنفذ 🟣 في «توليد صوت»`);
     }
 
     if (kind === "lyrics") {
-      const idea = input?.text?.trim();
+      const idea = first("in")?.text?.trim();
       if (!idea) throw new Error("أوصل بطاقة نص بالفكرة أولاً");
       const res = await fetch("/api/lyrics", {
         method: "POST",
@@ -198,11 +281,11 @@ export default function StudioSpace() {
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error ?? "تعذّرت كتابة الكلمات");
       if (!data?.lyrics) throw new Error("لم يُعد المساعد كلمات");
-      return { text: data.lyrics };
+      return out({ text: data.lyrics });
     }
 
     if (kind === "enhance") {
-      const text = input?.text?.trim();
+      const text = first("in")?.text?.trim();
       if (!text) throw new Error("أوصل بطاقة نص أولاً");
       const res = await fetch("/api/enhance", {
         method: "POST",
@@ -211,21 +294,18 @@ export default function StudioSpace() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error ?? "تعذّر التشكيل");
-      return { text: data.enhanced ?? text };
+      return out({ text: data.enhanced ?? text });
     }
 
     if (kind === "tts") {
-      const text = input?.text?.trim();
+      const text = first("in")?.text?.trim();
       if (!text) throw new Error("أوصل بطاقة نص أولاً");
+      // بصمة موصولة تتقدم على الصوت المختار من القائمة
+      const voiceId = first("voice")?.voiceId ?? cfg.voiceId ?? VOICES[0].id;
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
-        body: JSON.stringify({
-          text,
-          voiceId: cfg.voiceId ?? VOICES[0].id,
-          expressive: true,
-          styleId: "auto",
-        }),
+        body: JSON.stringify({ text, voiceId, expressive: true, styleId: "auto" }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
@@ -234,52 +314,130 @@ export default function StudioSpace() {
       const note =
         res.headers.get("X-Mock") === "1"
           ? "⚠️ نغمة تجريبية لا صوت حقيقي — محرك النطق غير متاح حالياً"
-          : undefined;
-      return { blob: await res.blob(), note };
+          : first("voice")?.voiceId
+            ? "🧬 نُطق ببصمة الصوت الموصولة"
+            : undefined;
+      return out({ blob: await res.blob() }, note);
     }
 
     if (kind === "song") {
-      const lyrics = input?.text?.trim();
+      const lyrics = first("in")?.text?.trim();
       if (!lyrics) throw new Error("أوصل بطاقة كلمات أولاً");
-      return runSongJob(node.id, {
+      const melody = first("melody")?.blob;
+      const brief = melody ? await melodyBrief(melody) : null;
+      const result = await runSongJob(node.id, {
         maqamId: cfg.maqamId ?? MAQAMAT[0].id,
         styleId: cfg.styleId ?? SONG_STYLES[0].id,
         lyrics,
         instrumentIds: [],
         // اختيار المحرك من البطاقة — Eleven Music يغني الكلمات بوضوح أعلى
         ...(cfg.provider && { provider: cfg.provider }),
+        ...(brief && { aiStylePrompt: brief.aiStylePrompt }),
+        ...(brief?.bpm && { bpm: brief.bpm }),
       });
+      return out(result, [brief?.note, result.note].filter(Boolean).join("\n") || undefined);
     }
 
     if (kind === "music") {
+      const melody = first("melody")?.blob;
+      const brief = melody ? await melodyBrief(melody) : null;
       // بلا كلمات = لحن آلي خالص، والأسلوب يلوّن طابع اللحن
-      return runSongJob(node.id, {
+      const result = await runSongJob(node.id, {
         maqamId: cfg.maqamId ?? MAQAMAT[0].id,
         styleId: cfg.styleId ?? "instrumental",
         durationSec: Number(cfg.durationSec ?? 30) || 30,
         instrumentIds: [],
+        ...(brief && { aiStylePrompt: brief.aiStylePrompt }),
+        ...(brief?.bpm && { bpm: brief.bpm }),
       });
+      return out(result, [brief?.note, result.note].filter(Boolean).join("\n") || undefined);
     }
 
-    if (kind === "stt") {
-      if (!input?.blob) throw new Error("أوصل بطاقة صوت أولاً");
+    if (kind === "split") {
+      const song = first("in")?.blob;
+      if (!song) throw new Error("أوصل الأغنية أولاً (بطاقة «صوت من عندك» مثلاً)");
+      // مساران متوازيان: الغناء عبر العازل، والموسيقى محلياً بإلغاء الوسط
+      const [vocals, inst] = await Promise.allSettled([
+        (async () => {
+          const fd = new FormData();
+          fd.append("audio", song, "song.mp3");
+          const res = await fetch("/api/isolate", {
+            method: "POST",
+            headers: await authHeaders(),
+            body: fd,
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => null);
+            throw new Error(data?.error ?? "تعذّر عزل الغناء");
+          }
+          return res.blob();
+        })(),
+        extractInstrumental(song),
+      ]);
+
+      const ports: Record<string, RunOutput> = {};
+      const problems: string[] = [];
+      if (vocals.status === "fulfilled") ports.vocals = { blob: vocals.value };
+      else problems.push(`الغناء: ${vocals.reason instanceof Error ? vocals.reason.message : "تعذّر"}`);
+      if (inst.status === "fulfilled") ports.inst = { blob: inst.value };
+      else problems.push(`الموسيقى: ${inst.reason instanceof Error ? inst.reason.message : "تعذّر"}`);
+
+      if (!Object.keys(ports).length) throw new Error(problems.join(" • "));
+      return { ports, note: problems.length ? `⚠️ اكتمل جزئياً — ${problems.join(" • ")}` : undefined };
+    }
+
+    if (kind === "ai") {
+      const mode = aiMode(cfg);
+      const prompt = (cfg.prompt ?? "").trim();
+      if (!prompt) throw new Error("اكتب توجيهك في بطاقة الذكاء أولاً");
+
+      // التغذية الجمعية: كل ما وصل للمنفذ — نصوص ووسائط بترتيب الوصل
+      const ctx = inputs.get("ctx") ?? [];
       const fd = new FormData();
-      fd.append("audio", input.blob, "audio.mp3");
-      const res = await fetch("/api/stt", {
+      fd.append("mode", mode);
+      fd.append("prompt", prompt);
+      fd.append(
+        "texts",
+        JSON.stringify(ctx.filter((o) => o.text !== undefined).map((o) => o.text))
+      );
+      for (const o of ctx) {
+        if (!o.blob) continue;
+        const field = o.blob.type.startsWith("image/")
+          ? "image"
+          : o.blob.type.startsWith("video/")
+            ? "video"
+            : "audio";
+        fd.append(field, o.blob, `ctx.${field}`);
+      }
+      if (mode === "video") {
+        fd.append("durationSec", cfg.durationSec ?? "8");
+        fd.append("aspectRatio", cfg.aspectRatio ?? "16:9");
+      }
+
+      patchNode(node.id, {
+        stage: mode === "video" ? "يولّد الفيديو (قد يستغرق دقائق)..." : "يفكر...",
+      });
+      const res = await fetch("/api/studio/ai", {
         method: "POST",
         headers: await authHeaders(),
         body: fd,
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error ?? "تعذّر التفريغ");
-      if (!data?.text) throw new Error("لم يُعد التفريغ نصاً");
-      return { text: data.text };
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? "تعذّر التوليد");
+      }
+      if (mode === "text") {
+        const data = await res.json();
+        return out({ text: data.text });
+      }
+      return out({ blob: await res.blob() });
     }
 
     if (kind === "isolate") {
-      if (!input?.blob) throw new Error("أوصل بطاقة صوت أولاً");
+      const audio = first("in")?.blob;
+      if (!audio) throw new Error("أوصل بطاقة صوت أولاً");
       const fd = new FormData();
-      fd.append("audio", input.blob, "audio.mp3");
+      fd.append("audio", audio, "audio.mp3");
       const res = await fetch("/api/isolate", {
         method: "POST",
         headers: await authHeaders(),
@@ -289,14 +447,31 @@ export default function StudioSpace() {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error ?? "تعذّر العزل");
       }
-      return { blob: await res.blob() };
+      return out({ blob: await res.blob() });
+    }
+
+    if (kind === "stt") {
+      const audio = first("in")?.blob;
+      if (!audio) throw new Error("أوصل بطاقة صوت أولاً");
+      const fd = new FormData();
+      fd.append("audio", audio, "audio.mp3");
+      const res = await fetch("/api/stt", {
+        method: "POST",
+        headers: await authHeaders(),
+        body: fd,
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "تعذّر التفريغ");
+      if (!data?.text) throw new Error("لم يُعد التفريغ نصاً");
+      return out({ text: data.text });
     }
 
     // save
-    if (!input?.blob) throw new Error("أوصل بطاقة صوت أولاً");
+    const audio = first("in")?.blob;
+    if (!audio) throw new Error("أوصل بطاقة صوت أولاً");
     const fd = new FormData();
-    const ext = input.blob.type === "audio/wav" ? "wav" : "mp3";
-    fd.append("file", new File([input.blob], `maqam-space.${ext}`, { type: input.blob.type }));
+    const ext = audio.type === "audio/wav" ? "wav" : "mp3";
+    fd.append("file", new File([audio], `maqam-space.${ext}`, { type: audio.type }));
     fd.append("kind", "tts");
     fd.append("title", cfg.title?.trim() || "عمل من مساحة مقام");
     fd.append("provider", "elevenlabs");
@@ -308,79 +483,120 @@ export default function StudioSpace() {
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error ?? "تعذّر الحفظ — سجّل الدخول أولاً");
-    return {};
+    return { ports: {} };
   }
 
-  /** تشغيل المساحة كاملة بالترتيب الطوبولوجي — التفرع يعمل والفشل لا يوقف الفروع الأخرى */
+  /**
+   * تشغيل المساحة بموجات متوازية: كل موجة بطاقات مدخلاتها جاهزة تعمل معاً —
+   * الفروع المستقلة لا تنتظر بعضها، وفشل فرع لا يوقف البقية.
+   */
   async function runFlow() {
     setFlowError("");
     if (!nodes.length) {
       setFlowError("أضف بطاقات أولاً — أو ابدأ من قالب جاهز");
       return;
     }
-    const order = executionOrder(
+    const graphEdges = edges.map((e) => ({
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle,
+      targetHandle: e.targetHandle,
+    }));
+    const layers = executionLayers(
       nodes.map((n) => ({ id: n.id, kind: n.data.kind })),
-      edges.map((e) => ({ source: e.source, target: e.target }))
+      graphEdges
     );
-    if (!order) {
+    if (!layers) {
       setFlowError("الربط فيه دورة مغلقة — فك الحلقة أولاً");
       return;
     }
 
     setRunning(true);
     // تصفير الحالات
-    setNodes((ns) => ns.map((n) => ({ ...n, data: { ...n.data, status: "idle" as const, error: undefined, stage: undefined } })));
+    setNodes((ns) =>
+      ns.map((n) => ({
+        ...n,
+        data: { ...n.data, status: "idle" as const, error: undefined, stage: undefined },
+      }))
+    );
 
+    // النواتج بمفتاح «بطاقة:منفذ» — بطاقة الفصل مثلاً تملأ منفذين
     const outputs = new Map<string, RunOutput>();
     const failed = new Set<string>();
 
-    for (const id of order) {
-      const node = nodes.find((n) => n.id === id);
-      if (!node) continue;
-      const def = NODE_DEFS[node.data.kind];
+    for (const layer of layers) {
+      await Promise.all(
+        layer.map(async (id) => {
+          const node = nodes.find((n) => n.id === id);
+          if (!node) return;
+          const ports = nodePorts(node.data.kind, node.data.config);
+          const firstIn = ports.inputs[0]?.id;
 
-      let input: RunOutput | undefined;
-      if (def.input) {
-        const src = inputSourceOf(id, edges);
-        if (!src) {
-          patchNode(id, { status: "error", error: "البطاقة غير موصولة بمصدر" });
-          failed.add(id);
-          continue;
-        }
-        if (failed.has(src)) {
-          patchNode(id, { status: "error", error: "تعطل المصدر قبلها" });
-          failed.add(id);
-          continue;
-        }
-        input = outputs.get(src);
-      }
+          // تجميع المدخلات حسب المنفذ — وصلة قديمة بلا مقبض تُنسب للمنفذ الأول
+          const inputMap: NodeInputs = new Map();
+          let blocked = false;
+          for (const port of ports.inputs) {
+            const values: RunOutput[] = [];
+            for (const e of graphEdges) {
+              if (e.target !== id || (e.targetHandle ?? firstIn) !== port.id) continue;
+              if (failed.has(e.source)) {
+                patchNode(id, { status: "error", error: "تعطل المصدر قبلها" });
+                failed.add(id);
+                blocked = true;
+                break;
+              }
+              const srcNode = nodes.find((n) => n.id === e.source);
+              if (!srcNode) continue;
+              const srcFirst = nodePorts(srcNode.data.kind, srcNode.data.config).outputs[0]?.id;
+              const val = outputs.get(`${e.source}:${e.sourceHandle ?? srcFirst}`);
+              if (val) values.push(val);
+            }
+            if (blocked) break;
+            if (!values.length && !port.optional) {
+              patchNode(id, {
+                status: "error",
+                error: ports.inputs.length > 1 ? `منفذ «${port.label}» غير موصول بمصدر` : "البطاقة غير موصولة بمصدر",
+              });
+              failed.add(id);
+              blocked = true;
+              break;
+            }
+            inputMap.set(port.id, values);
+          }
+          if (blocked) return;
 
-      patchNode(id, { status: "running" });
-      try {
-        const out = await runNode(node, input);
-        outputs.set(id, out);
-        let resultUrl: string | undefined;
-        if (out.blob) {
-          resultUrl = URL.createObjectURL(out.blob);
-          urlsRef.current.push(resultUrl);
-        }
-        patchNode(id, {
-          status: "done",
-          stage: undefined,
-          ...(out.text !== undefined && { resultText: out.text }),
-          ...(resultUrl && { resultUrl }),
-          note: out.note,
-        });
-        // الناتج النصي المعدل يدوياً بعد تشغيل سابق يُحترم في التمرير التالي
-        if (out.text !== undefined) outputs.set(id, { text: out.text });
-      } catch (e) {
-        patchNode(id, {
-          status: "error",
-          stage: undefined,
-          error: e instanceof Error ? e.message : "خطأ غير متوقع",
-        });
-        failed.add(id);
-      }
+          patchNode(id, { status: "running" });
+          try {
+            const result = await runNode(node, inputMap);
+            const media: MediaResult[] = [];
+            let resultText: string | undefined;
+            for (const [portId, value] of Object.entries(result.ports)) {
+              outputs.set(`${id}:${portId}`, value);
+              if (value.text !== undefined && resultText === undefined) resultText = value.text;
+              if (value.blob) {
+                const url = URL.createObjectURL(value.blob);
+                urlsRef.current.push(url);
+                const label = ports.outputs.find((o) => o.id === portId)?.label ?? portId;
+                media.push({ label, url, mime: value.blob.type || "audio/mpeg" });
+              }
+            }
+            patchNode(id, {
+              status: "done",
+              stage: undefined,
+              ...(resultText !== undefined && { resultText }),
+              media: media.length ? media : undefined,
+              note: result.note,
+            });
+          } catch (e) {
+            patchNode(id, {
+              status: "error",
+              stage: undefined,
+              error: e instanceof Error ? e.message : "خطأ غير متوقع",
+            });
+            failed.add(id);
+          }
+        })
+      );
     }
     setRunning(false);
   }
@@ -399,7 +615,12 @@ export default function StudioSpace() {
           y: n.position.y,
           config: n.data.config,
         })),
-        edges: edges.map((e) => ({ source: e.source, target: e.target })),
+        edges: edges.map((e) => ({
+          source: e.source,
+          target: e.target,
+          ...(e.sourceHandle && { sourceHandle: e.sourceHandle }),
+          ...(e.targetHandle && { targetHandle: e.targetHandle }),
+        })),
       };
       localStorage.setItem("maqam-spaces", JSON.stringify(all));
       setSavedSpaces(Object.keys(all));
@@ -439,8 +660,10 @@ export default function StudioSpace() {
       <WaveLine className="mt-3" />
       <MemberNotice />
       <p className="mt-2 max-w-3xl leading-relaxed text-muted">
-        ركّب خط إنتاجك بنفسك: بطاقات تتوصل ببعضها بالسحب — المنفذ الأزرق نص والذهبي صوت،
-        والأنواع غير المتوافقة ترفض الاتصال. اضغط ▶ وشاهد السلسلة تعمل بطاقة بطاقة.
+        ركّب خط إنتاجك بنفسك: بطاقات تتوصل ببعضها بالسحب، وكل منفذ ملون بنوعه —
+        🔵 نص، 🟡 صوت، 🟣 بصمة صوت، 🟢 صورة، 🌸 فيديو — والأنواع غير المتوافقة ترفض الاتصال.
+        المنفذ المتدرّج في بطاقة الذكاء جمعي: عدة بطاقات تغذيه معاً. اضغط ▶ وتعمل الفروع
+        المستقلة بالتوازي.
       </p>
 
       {/* شريط الأدوات */}
@@ -538,9 +761,11 @@ export default function StudioSpace() {
       </div>
 
       <p className="mt-3 text-xs leading-relaxed text-muted">
-        💡 جرّب: نص واحد يتفرع لثلاث بطاقات صوت بأصوات مختلفة — تعمل كلها في تمريرة واحدة
-        للمقارنة. والناتج النصي لأي بطاقة قابل للتعديل قبل إعادة التشغيل، فتتحكم بكل حلقة في
-        السلسلة. تكاليف النقاط تظهر على البطاقات المدفوعة (⚡).
+        💡 جرّب: سجّل صوتك ← بصمة صوت ← «توليد صوت» ينطق أي نص ببصمتك. أو ارفع أغنية ←
+        «فصل الأغنية» يعيدها غناءً وحده وموسيقى وحدها. وبطاقة «🧞 ذكاء مقام» تستقبل عدة
+        بطاقات معاً على منفذها الجمعي — نصوصاً وأصواتاً وصوراً — وتولّد نصاً أو صورة أو
+        فيديو. الناتج النصي لأي بطاقة قابل للتعديل قبل إعادة التشغيل، وتكاليف النقاط على
+        البطاقات المدفوعة (⚡).
       </p>
     </div>
   );

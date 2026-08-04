@@ -53,6 +53,12 @@ export const LIMITS = {
   save: { perVisitor: envInt("RATE_LIMIT_SAVE", 60), global: 1000, windowSec: 3600 },
   // عينات المعرض تُولَّد مرة لكل صوت ثم تُخزَّن — الحد للتوليد الأول فقط
   sample: { perVisitor: envInt("RATE_LIMIT_SAMPLE", 40), global: 300, windowSec: 3600 },
+  // بطاقة «ذكاء مقام» في المساحة — الفيديو أغلى المسارات فحدوده الأضيق
+  aiText: { perVisitor: envInt("RATE_LIMIT_AI_TEXT", 30), global: 400, windowSec: 3600 },
+  aiImage: { perVisitor: envInt("RATE_LIMIT_AI_IMAGE", 10), global: 100, windowSec: 3600 },
+  aiVideo: { perVisitor: envInt("RATE_LIMIT_AI_VIDEO", 4), global: 30, windowSec: 3600 },
+  // موجز اللحن المرجعي — تحليل نصي خفيف يسبق التلحين
+  melodyBrief: { perVisitor: envInt("RATE_LIMIT_MELODY_BRIEF", 10), global: 120, windowSec: 3600 },
 } satisfies Record<string, LimitRule>;
 
 export type LimitScope = keyof typeof LIMITS;
@@ -133,6 +139,10 @@ export const MEMBER_ONLY_SCOPES: ReadonlySet<LimitScope> = new Set<LimitScope>([
   "voiceClone",
   "voiceDesign",
   "drama",
+  // بطاقة الذكاء الشامل تستهلك توليداً حقيقياً (نص/صورة/فيديو) — للأعضاء كذلك
+  "aiText",
+  "aiImage",
+  "aiVideo",
 ]);
 
 export const MEMBER_ONLY_MESSAGE =

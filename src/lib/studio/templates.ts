@@ -3,6 +3,7 @@ import type { NodeKind } from "./graph";
 /**
  * قوالب مساحة مقام — خطوط إنتاج جاهزة بضغطة:
  * مواضع مرتبة يميناً-يساراً بصرياً (المصدر في اليمين على لوحة LTR معكوسة العرض).
+ * الوصلات قد تسمي منفذها (sourceHandle/targetHandle) — الغائب يعني المنفذ الأول.
  */
 
 export type TemplateNode = {
@@ -13,13 +14,20 @@ export type TemplateNode = {
   config?: Record<string, string>;
 };
 
+export type TemplateEdge = {
+  source: string;
+  target: string;
+  sourceHandle?: string;
+  targetHandle?: string;
+};
+
 export type SpaceTemplate = {
   id: string;
   name: string;
   icon: string;
   desc: string;
   nodes: TemplateNode[];
-  edges: { source: string; target: string }[];
+  edges: TemplateEdge[];
 };
 
 export const SPACE_TEMPLATES: SpaceTemplate[] = [
@@ -72,6 +80,61 @@ export const SPACE_TEMPLATES: SpaceTemplate[] = [
       { source: "c1", target: "c2" },
       { source: "c1", target: "c3" },
       { source: "c1", target: "c4" },
+    ],
+  },
+  {
+    id: "voiceprint-speaks",
+    name: "بصمتك تتكلم",
+    icon: "🧬",
+    desc: "سجّل صوتك ← بصمة ← أي نص يُقرأ بصوتك",
+    nodes: [
+      { id: "p1", kind: "upload", x: 0, y: 60 },
+      { id: "p2", kind: "voiceprint", x: 340, y: 60 },
+      { id: "p3", kind: "text", x: 340, y: 340, config: { text: "أهلاً بكم في منصة مقام — هذا النص يُقرأ ببصمة صوتي أنا." } },
+      { id: "p4", kind: "tts", x: 680, y: 180 },
+    ],
+    edges: [
+      { source: "p1", target: "p2" },
+      { source: "p2", target: "p4", targetHandle: "voice" },
+      { source: "p3", target: "p4", targetHandle: "in" },
+    ],
+  },
+  {
+    id: "song-split",
+    name: "فصل أغنية",
+    icon: "✂️",
+    desc: "ارفع أغنية ← الغناء وحده والموسيقى وحدها",
+    nodes: [
+      { id: "s1", kind: "upload", x: 0, y: 60 },
+      { id: "s2", kind: "split", x: 340, y: 60 },
+    ],
+    edges: [{ source: "s1", target: "s2" }],
+  },
+  {
+    id: "collective-cover",
+    name: "عقل جمعي: غلاف من الكلمات",
+    icon: "🧞",
+    desc: "الفكرة والكلمات معاً تغذيان ذكاءً يصمم الغلاف — والتلحين بالتوازي",
+    nodes: [
+      { id: "g1", kind: "text", x: 0, y: 120, config: { text: "أغنية عن بيّارات يافا ورائحة البرتقال" } },
+      { id: "g2", kind: "lyrics", x: 340, y: 0 },
+      { id: "g3", kind: "song", x: 680, y: 0 },
+      {
+        id: "g4",
+        kind: "ai",
+        x: 680,
+        y: 320,
+        config: {
+          mode: "image",
+          prompt: "صمّم غلاف ألبوم يعكس روح هذه الفكرة والكلمات — بلا أي حروف أو نصوص داخل الصورة",
+        },
+      },
+    ],
+    edges: [
+      { source: "g1", target: "g2" },
+      { source: "g2", target: "g3" },
+      { source: "g1", target: "g4", targetHandle: "ctx" },
+      { source: "g2", target: "g4", targetHandle: "ctx" },
     ],
   },
 ];
