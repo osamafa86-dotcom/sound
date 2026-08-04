@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { GoogleGenAI, type CreateAuthTokenConfig } from "@google/genai";
 import { LIVE_CAP_GUEST_SEC, LIVE_CAP_MEMBER_SEC, LIVE_MODEL } from "@/lib/liveMaqam";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
@@ -9,8 +10,9 @@ export const maxDuration = 30;
 /**
  * رمز مؤقت لجلسة معاينة المقام الحية (Lyria RealTime):
  * المتصفح يتصل بمقبس Google مباشرة — لا يجوز كشف مفتاح Gemini له،
- * فنسكّ له رمزاً مؤقتاً وحيد الاستخدام قصير العمر (v1alpha authTokens)
- * مقيداً بنموذج الجلسة الحية، خلف حدود الاستهلاك ورصيد الأعضاء.
+ * فنسكّ له رمزاً مؤقتاً وحيد الاستخدام قصير العمر مقيداً بنموذج الجلسة،
+ * خلف حدود الاستهلاك ورصيد الأعضاء. السكّ عبر SDK ‏@google/genai نفسه
+ * ليتكفل بمسار v1alpha/auth_tokens وصيغته السلكية الموثقتين لديه.
  */
 export async function POST(req: NextRequest) {
   const user = await getUserFromRequest(req);
@@ -26,30 +28,27 @@ export async function POST(req: NextRequest) {
   }
 
   const expireTime = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-  const endpoint = "https://generativelanguage.googleapis.com/v1alpha/authTokens";
-  const headers = { "Content-Type": "application/json", "x-goog-api-key": apiKey };
+  const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "v1alpha" } });
 
   // محاولة أولى بقيد النموذج (الأضيق أماناً)، ثم بلا قيود إن رفض الشكل
-  const attempts: Record<string, unknown>[] = [
+  const attempts: CreateAuthTokenConfig[] = [
     { uses: 1, expireTime, liveConnectConstraints: { model: LIVE_MODEL } },
     { uses: 1, expireTime },
   ];
 
-  for (const body of attempts) {
+  for (const config of attempts) {
     try {
-      const res = await fetch(endpoint, { method: "POST", headers, body: JSON.stringify(body) });
-      if (!res.ok) continue;
-      const data = (await res.json()) as { name?: string };
-      if (!data.name) continue;
+      const token = await ai.authTokens.create({ config });
+      if (!token.name) continue;
       await logUsage("liveJam", user?.id ?? null);
       return NextResponse.json({
-        token: data.name,
+        token: token.name,
         model: LIVE_MODEL,
         expiresAt: expireTime,
         capSec: user ? LIVE_CAP_MEMBER_SEC : LIVE_CAP_GUEST_SEC,
       });
     } catch (e) {
-      console.error("live token mint attempt failed:", e);
+      console.error("live token mint attempt failed:", e instanceof Error ? e.message : e);
     }
   }
 
