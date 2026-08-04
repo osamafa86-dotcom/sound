@@ -151,6 +151,13 @@ export default function CardNode({ id, data }: NodeProps<CardNodeType>) {
           </p>
         )}
 
+        {data.kind === "stt" && (
+          <p className="text-[11px] leading-relaxed text-muted">
+            يستلم صوتاً ويعيده نصاً مكتوباً — الجسر بين المنافذ الذهبية والزرقاء:
+            صوت ← تفريغ ← تلحين مثلاً.
+          </p>
+        )}
+
         {data.kind === "save" && (
           <input
             value={data.config.title ?? ""}

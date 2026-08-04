@@ -6,7 +6,15 @@
 
 export type PortType = "text" | "audio";
 
-export type NodeKind = "text" | "lyrics" | "enhance" | "tts" | "song" | "isolate" | "save";
+export type NodeKind =
+  | "text"
+  | "lyrics"
+  | "enhance"
+  | "tts"
+  | "song"
+  | "isolate"
+  | "stt"
+  | "save";
 
 export type NodeDef = {
   kind: NodeKind;
@@ -72,6 +80,15 @@ export const NODE_DEFS: Record<NodeKind, NodeDef> = {
     input: "audio",
     output: "audio",
     cost: 5,
+  },
+  stt: {
+    kind: "stt",
+    name: "تفريغ نصي",
+    icon: "📜",
+    desc: "الجسر من الصوت إلى النص — تسجيل يتحول كلمات",
+    input: "audio",
+    output: "text",
+    cost: 3,
   },
   save: {
     kind: "save",

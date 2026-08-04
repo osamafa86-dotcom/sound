@@ -19,8 +19,16 @@ describe("توافق ربط البطاقات", () => {
   it("الأنواع غير المتوافقة تُرفض", () => {
     expect(canConnect("text", "isolate")).toBe(false); // نص إلى مستقبل صوت
     expect(canConnect("tts", "enhance")).toBe(false); // صوت إلى مستقبل نص
+    expect(canConnect("tts", "song")).toBe(false); // صوت إلى مستقبل كلمات — سبب شكوى الربط
     expect(canConnect("save", "tts")).toBe(false); // الحفظ بلا خرج
     expect(canConnect("tts", "text")).toBe(false); // النص بلا دخل
+  });
+
+  it("التفريغ النصي جسر الصوت إلى النص: صوت ← تفريغ ← تلحين", () => {
+    expect(canConnect("tts", "stt")).toBe(true);
+    expect(canConnect("isolate", "stt")).toBe(true);
+    expect(canConnect("stt", "song")).toBe(true);
+    expect(canConnect("stt", "enhance")).toBe(true);
   });
 
   it("كل بطاقة معرّفة كاملة الحقول", () => {

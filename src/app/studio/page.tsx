@@ -44,6 +44,9 @@ export default function StudioSpace() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [running, setRunning] = useState(false);
   const [flowError, setFlowError] = useState("");
+  // شرح فوري لسبب رفض الربط — بدل حيرة «الوصلة ما بتشبك»
+  const [connectHint, setConnectHint] = useState("");
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [spaceName, setSpaceName] = useState("");
   const [savedSpaces, setSavedSpaces] = useState<string[]>([]);
   const urlsRef = useRef<string[]>([]);
@@ -64,16 +67,40 @@ export default function StudioSpace() {
     };
   }, []);
 
-  /** الربط: توافق الأنواع + منفذ دخل واحد لكل بطاقة */
+  const showHint = useCallback((msg: string) => {
+    setConnectHint((prev) => (prev === msg ? prev : msg));
+    if (hintTimer.current) clearTimeout(hintTimer.current);
+    hintTimer.current = setTimeout(() => setConnectHint(""), 7000);
+  }, []);
+
+  /** الربط: توافق الأنواع + منفذ دخل واحد لكل بطاقة — مع شرح فوري عند الرفض */
   const isValidConnection = useCallback(
     (conn: Connection | Edge) => {
       const src = nodes.find((n) => n.id === conn.source);
       const tgt = nodes.find((n) => n.id === conn.target);
       if (!src || !tgt || conn.source === conn.target) return false;
-      if (!canConnect(src.data.kind, tgt.data.kind)) return false;
-      return !edges.some((e) => e.target === conn.target);
+
+      if (!canConnect(src.data.kind, tgt.data.kind)) {
+        const srcDef = NODE_DEFS[src.data.kind];
+        const tgtDef = NODE_DEFS[tgt.data.kind];
+        const typeName = (t: "text" | "audio" | null) =>
+          t === "text" ? "نصاً 🔵" : t === "audio" ? "صوتاً 🟡" : "لا شيء";
+        showHint(
+          `«${srcDef.name}» يُخرج ${typeName(srcDef.output)} بينما «${tgtDef.name}» يستقبل ${typeName(tgtDef.input)} — ` +
+            (srcDef.output === "audio" && tgtDef.input === "text"
+              ? `ضع بطاقة «📜 تفريغ نصي» بينهما كجسر، أو أوصل «${tgtDef.name}» بمصدر النص نفسه مباشرة (التفريع مسموح).`
+              : "أوصل منفذين من نفس اللون.")
+        );
+        return false;
+      }
+
+      if (edges.some((e) => e.target === conn.target)) {
+        showHint("لكل بطاقة مدخل واحد — احذف الوصلة القديمة أولاً (حددها واضغط Delete).");
+        return false;
+      }
+      return true;
     },
-    [nodes, edges]
+    [nodes, edges, showHint]
   );
 
   const onConnect = useCallback(
@@ -205,6 +232,21 @@ export default function StudioSpace() {
         }
       }
       throw new Error("انتهت مهلة انتظار التلحين — جرّب من استوديو الأغاني");
+    }
+
+    if (kind === "stt") {
+      if (!input?.blob) throw new Error("أوصل بطاقة صوت أولاً");
+      const fd = new FormData();
+      fd.append("audio", input.blob, "audio.mp3");
+      const res = await fetch("/api/stt", {
+        method: "POST",
+        headers: await authHeaders(),
+        body: fd,
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "تعذّر التفريغ");
+      if (!data?.text) throw new Error("لم يُعد التفريغ نصاً");
+      return { text: data.text };
     }
 
     if (kind === "isolate") {
@@ -438,6 +480,11 @@ export default function StudioSpace() {
       {flowError && (
         <p className="mt-3 rounded-xl border border-primary/40 bg-rose px-4 py-2.5 text-sm text-primary-strong">
           {flowError}
+        </p>
+      )}
+      {connectHint && (
+        <p className="mt-3 rounded-xl border border-gold/50 bg-gold/10 px-4 py-2.5 text-sm leading-relaxed">
+          💡 {connectHint}
         </p>
       )}
 
