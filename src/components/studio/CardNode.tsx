@@ -470,6 +470,7 @@ export default function CardNode({ id, data }: NodeProps<CardNodeType>) {
               <option value="">🎛️ محرك المنصة الافتراضي (Lyria)</option>
               <option value="eleven-music">🎤 Eleven Music — غناء الكلمات بوضوح</option>
               <option value="lyria">🎼 Lyria — الأقوى موسيقياً</option>
+              <option value="minimax">🌊 MiniMax Music — محرك تجريبي جديد</option>
             </select>
             <p className="text-[10px] leading-relaxed text-muted">
               لحن مرجعي موصول بمنفذ «لحن مرجعي» يوجّه روح التوزيع والإيقاع.

@@ -52,7 +52,7 @@ export type MusicRequest = {
   /** سلالة برومبت المقام المستخدمة — ليُنسب لها التقييم الآلي (التطور الذاتي) */
   variantId?: number;
   /** فرض محرك بعينه — وضع المقارنة يولّد النسخة نفسها من المحركين معاً */
-  forceProvider?: "lyria" | "eleven-music";
+  forceProvider?: "lyria" | "eleven-music" | "minimax";
 };
 
 export type AudioResult = {

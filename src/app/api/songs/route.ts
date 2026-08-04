@@ -162,8 +162,8 @@ export async function POST(req: NextRequest) {
     ...(picked?.variantId && { variantId: picked.variantId }),
     ...(sourceSongId && { regenerateIndex, sourceSongId }),
     // اختيار المحرك من الواجهة (مساحة مقام مثلاً) — يتقدم على افتراضي المنصة
-    ...((body.provider === "eleven-music" || body.provider === "lyria") && {
-      forceProvider: body.provider as "eleven-music" | "lyria",
+    ...(["eleven-music", "lyria", "minimax"].includes(body.provider) && {
+      forceProvider: body.provider as "eleven-music" | "lyria" | "minimax",
     }),
   };
 

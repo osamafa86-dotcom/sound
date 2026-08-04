@@ -13,6 +13,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   "eleven-music": "Eleven Music",
   "lyria-clip": "Lyria 3 (معاينة)",
   "lyria-pro": "Lyria 3 Pro",
+  minimax: "MiniMax Music",
   mock: "الوضع التجريبي",
 };
 

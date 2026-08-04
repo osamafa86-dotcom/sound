@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { comparisonAvailable, getMusicProvider } from "@/lib/providers";
 
-const ENV_KEYS = ["ELEVENLABS_API_KEY", "GEMINI_API_KEY", "MUSIC_PROVIDER"] as const;
+const ENV_KEYS = [
+  "ELEVENLABS_API_KEY",
+  "GEMINI_API_KEY",
+  "MUSIC_PROVIDER",
+  "MINIMAX_API_KEY",
+  "MINIMAX_GROUP_ID",
+] as const;
 const saved: Partial<Record<(typeof ENV_KEYS)[number], string | undefined>> = {};
 
 beforeEach(() => {
@@ -56,5 +62,22 @@ describe("اختيار محرك الموسيقى ووضع المقارنة", () 
     process.env.ELEVENLABS_API_KEY = "k1";
     expect(getMusicProvider({ force: "lyria" }).id).toBe("eleven-music");
     expect(comparisonAvailable()).toBe(false);
+  });
+
+  it("MiniMax تجريبي: بالاختيار الصريح فقط ولا يدخل سلسلة الافتراضي", () => {
+    process.env.ELEVENLABS_API_KEY = "k1";
+    process.env.GEMINI_API_KEY = "k2";
+    process.env.MINIMAX_API_KEY = "k3";
+    process.env.MINIMAX_GROUP_ID = "g1";
+    expect(getMusicProvider().id).toBe("lyria"); // الافتراضي لا يتغير
+    expect(getMusicProvider({ force: "minimax" }).id).toBe("minimax");
+    process.env.MUSIC_PROVIDER = "minimax";
+    expect(getMusicProvider().id).toBe("minimax");
+  });
+
+  it("MiniMax بلا GroupId لا يُفعَّل — الفرض يعود للمتاح", () => {
+    process.env.GEMINI_API_KEY = "k2";
+    process.env.MINIMAX_API_KEY = "k3";
+    expect(getMusicProvider({ force: "minimax" }).id).toBe("lyria");
   });
 });
