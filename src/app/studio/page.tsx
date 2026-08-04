@@ -29,8 +29,8 @@ import { authHeaders } from "@/lib/supabase";
 
 const nodeTypes = { card: CardNode };
 
-/** ناتج تشغيل بطاقة — نص أو صوت */
-type RunOutput = { text?: string; blob?: Blob };
+/** ناتج تشغيل بطاقة — نص أو صوت، مع تنبيه شفافية عند الرجوع التجريبي */
+type RunOutput = { text?: string; blob?: Blob; note?: string };
 
 let nextId = 1;
 const newId = () => `n${Date.now().toString(36)}${nextId++}`;
@@ -164,7 +164,13 @@ export default function StudioSpace() {
       if (st.status === "done") {
         const audio = await fetch(`/api/songs/${jobId}/audio`);
         if (!audio.ok) throw new Error("تعذّر جلب الناتج");
-        return { blob: await audio.blob() };
+        // شفافية كاملة: الرجوع التجريبي لا يمر صامتاً — يظهر سببه على البطاقة
+        const note = st.mock
+          ? `⚠️ هذا سلّم تجريبي لا أغنية — رفض محرك التوليد الطلب أو تعذّر${st.fellBack ? ` (${st.fellBack})` : ""}. جرّب تعديل الكلمات أو محركاً آخر من قائمة البطاقة.`
+          : st.fellBack
+            ? `ملاحظة: تحوّل التوليد لمحرك بديل (${st.fellBack})`
+            : undefined;
+        return { blob: await audio.blob(), note };
       }
     }
     throw new Error("انتهت مهلة الانتظار — جرّب من استوديو الأغاني");
@@ -225,7 +231,11 @@ export default function StudioSpace() {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error ?? "تعذّر توليد الصوت");
       }
-      return { blob: await res.blob() };
+      const note =
+        res.headers.get("X-Mock") === "1"
+          ? "⚠️ نغمة تجريبية لا صوت حقيقي — محرك النطق غير متاح حالياً"
+          : undefined;
+      return { blob: await res.blob(), note };
     }
 
     if (kind === "song") {
@@ -236,6 +246,8 @@ export default function StudioSpace() {
         styleId: cfg.styleId ?? SONG_STYLES[0].id,
         lyrics,
         instrumentIds: [],
+        // اختيار المحرك من البطاقة — Eleven Music يغني الكلمات بوضوح أعلى
+        ...(cfg.provider && { provider: cfg.provider }),
       });
     }
 
@@ -357,6 +369,7 @@ export default function StudioSpace() {
           stage: undefined,
           ...(out.text !== undefined && { resultText: out.text }),
           ...(resultUrl && { resultUrl }),
+          note: out.note,
         });
         // الناتج النصي المعدل يدوياً بعد تشغيل سابق يُحترم في التمرير التالي
         if (out.text !== undefined) outputs.set(id, { text: out.text });

@@ -161,6 +161,10 @@ export async function POST(req: NextRequest) {
     dialectId: deliveryDialect?.id,
     ...(picked?.variantId && { variantId: picked.variantId }),
     ...(sourceSongId && { regenerateIndex, sourceSongId }),
+    // اختيار المحرك من الواجهة (مساحة مقام مثلاً) — يتقدم على افتراضي المنصة
+    ...((body.provider === "eleven-music" || body.provider === "lyria") && {
+      forceProvider: body.provider as "eleven-music" | "lyria",
+    }),
   };
 
   // وضع المقارنة التجريبي (للمسجلين): النسخة نفسها من المحركين معاً — Lyria 3 Pro

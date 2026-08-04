@@ -14,6 +14,8 @@ export type CardData = {
   error?: string;
   resultText?: string;
   resultUrl?: string;
+  /** تنبيه شفافية: رجوع تجريبي أو ملاحظة محرك — يظهر مع الناتج */
+  note?: string;
 };
 
 export type CardNodeType = Node<CardData, "card">;
@@ -142,6 +144,16 @@ export default function CardNode({ id, data }: NodeProps<CardNodeType>) {
                 </option>
               ))}
             </select>
+            <select
+              value={data.config.provider ?? ""}
+              onChange={(e) => setConfig("provider", e.target.value)}
+              className="nodrag w-full rounded-lg border border-border-soft bg-surface px-2 py-1.5 text-xs outline-none focus:border-primary"
+              title="أي محرك يلحّن؟ جرّب الاثنين وقارن"
+            >
+              <option value="">🎛️ محرك المنصة الافتراضي (Lyria)</option>
+              <option value="eleven-music">🎤 Eleven Music — غناء الكلمات بوضوح</option>
+              <option value="lyria">🎼 Lyria — الأقوى موسيقياً</option>
+            </select>
           </div>
         )}
 
@@ -211,6 +223,13 @@ export default function CardNode({ id, data }: NodeProps<CardNodeType>) {
         {data.status === "error" && data.error && (
           <p className="rounded-lg border border-primary/40 bg-rose px-2 py-1.5 text-[11px] leading-relaxed text-primary-strong">
             {data.error}
+          </p>
+        )}
+
+        {/* تنبيه الشفافية — رجوع تجريبي أو ملاحظة من المحرك */}
+        {data.note && data.status === "done" && (
+          <p className="rounded-lg border border-gold/50 bg-gold/10 px-2 py-1.5 text-[11px] leading-relaxed">
+            {data.note}
           </p>
         )}
 
