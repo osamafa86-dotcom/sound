@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import ShareActions from "@/components/ShareActions";
 import { createClient } from "@/lib/supabase/client";
 import { MAQAMAT } from "@/lib/maqamat";
 import { VOICES } from "@/lib/voices";
@@ -357,14 +358,25 @@ export default function Library() {
                   </button>
                   {g.url && (
                     <a
-                      href={g.url}
-                      download
+                      href={`${g.url}&download`}
                       className="rounded-lg border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:text-body"
+                      title="تنزيل الملف مباشرة لجهازك"
                     >
                       ⬇ تنزيل
                     </a>
                   )}
                 </div>
+              </div>
+
+              {/* المشاركة الاجتماعية — للأعمال المنشورة فقط (الخاص يبقى خاصاً) */}
+              <div className="mt-3">
+                {g.is_public ? (
+                  <ShareActions path={`/share/item/${g.id}`} title={g.title || label(g)} />
+                ) : (
+                  <p className="text-[11px] text-muted">
+                    💡 انشر العمل في المعرض لتظهر أزرار مشاركته على مواقع التواصل برابط دائم.
+                  </p>
+                )}
               </div>
             </div>
           ))}

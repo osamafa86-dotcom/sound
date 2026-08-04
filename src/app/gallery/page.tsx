@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import ShareActions from "@/components/ShareActions";
 import VoiceAvatar from "@/components/VoiceAvatar";
 import { MAQAMAT } from "@/lib/maqamat";
 import { VOICES } from "@/lib/voices";
@@ -153,12 +154,24 @@ export default function PublicGallery() {
                 ) : (
                   <audio controls src={g.url} className="mt-4 w-full" preload="none" />
                 )}
-                <Link
-                  href={d.href}
-                  className="mt-3 inline-block rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/10"
-                >
-                  {d.cta}
-                </Link>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                  <Link
+                    href={d.href}
+                    className="inline-block rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/10"
+                  >
+                    {d.cta}
+                  </Link>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <ShareActions path={`/share/item/${g.id}`} title={g.title || d.label} />
+                    <a
+                      href={`${g.url}&download`}
+                      className="rounded-lg border border-border-soft px-2.5 py-1.5 text-xs text-muted transition-colors hover:border-primary hover:text-primary"
+                      title="تنزيل الملف مباشرة لجهازك"
+                    >
+                      ⬇ تنزيل
+                    </a>
+                  </div>
+                </div>
               </div>
             );
           })}
