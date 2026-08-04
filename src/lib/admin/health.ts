@@ -147,6 +147,7 @@ export function catalogs() {
       available: available.length,
       elevenlabs: VOICES.filter((v) => v.provider === "elevenlabs").length,
       azure: VOICES.filter((v) => v.provider === "azure").length,
+      minimax: VOICES.filter((v) => v.provider === "minimax").length,
       male: VOICES.filter((v) => v.gender === "male").length,
       female: VOICES.filter((v) => v.gender === "female").length,
       dialects: Object.keys(byDialect).length,

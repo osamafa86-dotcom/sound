@@ -181,7 +181,7 @@ describe("صحة النظام", () => {
   it("تعدّ الكتالوجات والحدود", () => {
     const c = catalogs();
     expect(c.voices.total).toBeGreaterThan(0);
-    expect(c.voices.elevenlabs + c.voices.azure).toBe(c.voices.total);
+    expect(c.voices.elevenlabs + c.voices.azure + c.voices.minimax).toBe(c.voices.total);
     expect(c.maqamat.length).toBeGreaterThan(0);
 
     const limits = limitsTable();
