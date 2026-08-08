@@ -907,6 +907,22 @@ export default function SongsStudio() {
 
   // تصعيد القياس للغناء المعزول — مرة واحدة لكل ناتج مهما تكررت المزامنة
   const isolateSyncRef = useRef("");
+  // الماستر التلقائي (الوضع الذكي) — مرة لكل ناتج؛ يُصفَّر عند استعادة نسخة أدق
+  const autoMasterRef = useRef("");
+
+  // 🎯 فرض الالتزام بالانتقاء (الوضع الذكي): دون هذه النسبة تُعاد التوليدة
+  // تلقائياً مرة واحدة ويُبقى على الأدق — أقرب الممكن لقفلٍ مطلق في محركات
+  // توليدية لا تضمن الحرفية في المحاولة الواحدة
+  const SMART_RETAKE_BELOW = 90;
+  const retakeRef = useRef<{
+    prevJobId: string;
+    pct: number;
+    result: SongResult;
+    words: KaraokeWord[];
+    starts: number[] | null;
+  } | null>(null);
+  const retakeTriedRef = useRef("");
+  const [retakeNote, setRetakeNote] = useState("");
 
   async function startKaraoke(auto = false) {
     if (!result || karaokeBusy) return;
@@ -959,7 +975,8 @@ export default function SongsStudio() {
       // عرض الكلمات بصورتها المكتوبة المشكّلة لا بصورة التفريغ العارية
       setKaraokeWords(aligned);
       // حدود المقاطع الحقيقية تُقاس من التوقيتات لا من المدد المخططة
-      setKaraokeStarts(sections?.length ? measureSectionStarts(aligned, sections) : null);
+      const starts = sections?.length ? measureSectionStarts(aligned, sections) : null;
+      setKaraokeStarts(starts);
       setActiveWord(-1);
       // نسبة الالتزام مقياس موضوعي يغذي العقل — لكل توليدة، بمحركها
       const song = resultRef.current;
@@ -970,6 +987,40 @@ export default function SongsStudio() {
           settings: { stylePrompt: song.prompt, engine: song.provider ?? "unknown" },
           meta: { percent: pct, jobId: song.jobId, ...(refined && { isolated: true }) },
         });
+      }
+
+      // 🎯 فرض الالتزام بالانتقاء — في الوضع الذكي فقط (عقده: الذكاء يتكفل)
+      if (studioMode === "smart" && pct !== null && song && !song.mock) {
+        const pending = retakeRef.current;
+        if (pending && pending.prevJobId !== song.jobId) {
+          // هذه نسخة الإعادة: يُبقى على الأدق التزاماً
+          if (pct <= pending.pct) {
+            setResult(pending.result);
+            setKaraokeWords(pending.words);
+            setKaraokeStarts(pending.starts);
+            // النسخة المستعادة تستحق ماستر تلقائياً من جديد
+            autoMasterRef.current = "";
+            setRetakeNote(
+              `🎯 أعاد الذكاء التوليد فجاءت الإعادة ${pct}٪ — أُبقي على النسخة الأدق (${pending.pct}٪). النسختان في قائمة النسخ.`
+            );
+          } else {
+            setRetakeNote(`🎯 إعادة التوليد التلقائية رفعت الالتزام من ${pending.pct}٪ إلى ${pct}٪.`);
+          }
+          retakeRef.current = null;
+        } else if (
+          pct < SMART_RETAKE_BELOW &&
+          retakeTriedRef.current !== song.jobId &&
+          !loading
+        ) {
+          retakeTriedRef.current = song.jobId;
+          retakeRef.current = { prevJobId: song.jobId, pct, result: song, words: aligned, starts };
+          setRetakeNote(
+            `🎯 الالتزام ${pct}٪ دون عتبة ${SMART_RETAKE_BELOW}٪ — يعيد الذكاء التوليد تلقائياً ويُبقي الأدق...`
+          );
+          generate({ compare: false });
+        } else if (!pending) {
+          setRetakeNote("");
+        }
       }
     } catch (e) {
       if (resultRef.current?.jobId !== forJobId) return;
@@ -1121,7 +1172,6 @@ export default function SongsStudio() {
 
   // 🪄 الوضع الذكي يطبّق «لمسة الماستر» تلقائياً — بعد حسم المزامنة أولاً،
   // لأن قصّ مقدمة الملف يُصحح توقيتات الكلمات المتزامنة بعدها لا قبلها
-  const autoMasterRef = useRef("");
   useEffect(() => {
     if (studioMode !== "smart" || !result || result.mock || result.mastered || mastering) return;
     const syncSettled = instrumental || !!karaokeWords || !!karaokeNote;
@@ -2334,6 +2384,12 @@ export default function SongsStudio() {
                 </div>
 
                 {fixMsg && <p className="text-xs text-accent">{fixMsg}</p>}
+
+                {studioMode === "smart" && retakeNote && (
+                  <p className="rounded-xl border border-gold/50 bg-gold/10 px-4 py-2.5 text-xs leading-relaxed">
+                    {retakeNote}
+                  </p>
+                )}
 
                 {karaokeBusy && !karaokeWords && (
                   <p className="animate-pulse rounded-xl border border-border-soft bg-surface-card px-4 py-3 text-sm text-muted">
