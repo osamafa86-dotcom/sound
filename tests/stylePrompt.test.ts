@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MAQAMAT } from "@/lib/maqamat";
-import { buildStylePrompt } from "@/lib/stylePrompt";
+import { buildStylePrompt , defuseStylePrompt } from "@/lib/stylePrompt";
 
 const maqam = MAQAMAT[0];
 
@@ -50,5 +50,22 @@ describe("بناء البرومبت الموسيقي", () => {
     expect(base).not.toContain("alternate take");
     expect(alt).toContain("alternate take 2");
     expect(alt).toContain("same maqam and mood");
+  });
+});
+
+describe("تحييد برومبت الأسلوب لمرشّح ليرا المتقلب", () => {
+  it("يستبدل الموصوفات الحماسية بمرادفات مهرجانية ويمحو العسكرية", () => {
+    const defused = defuseStylePrompt(
+      "Palestinian patriotic anthem, defiant martial drums, war themes, festive full arrangement"
+    );
+    expect(defused).toContain("celebratory folk chorus");
+    expect(defused).toContain("resolute");
+    expect(defused).toContain("festive full arrangement");
+    expect(defused).not.toMatch(/patriotic|anthem|martial|war\b|defiant/i);
+  });
+
+  it("برومبت هادئ يمر كما هو تقريباً", () => {
+    const calm = "Arabic maqam Bayati, warm intimate folk tarab, oud and nay";
+    expect(defuseStylePrompt(calm)).toBe(calm);
   });
 });
