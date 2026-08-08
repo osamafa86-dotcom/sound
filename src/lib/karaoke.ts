@@ -32,6 +32,23 @@ function normalizeWord(w: string): string {
 }
 
 /**
+ * الطيّ الصوتي فوق التوحيد: أزواج حروف يتطابق سماعها في الغناء العربي
+ * فيكتبها التفريغ بأيٍّ من صورتيها (وصمودك ⟵ وسمودك، طُهر ⟵ تهر) —
+ * إملاء مختلف لصوت واحد لا انحراف نطق، فلا يجوز أن يُخصم من نسبة المطابقة.
+ * المعنى لا يتأثر: المقارنة بالمفتاح المطويّ والعرضُ بالنص المكتوب الأصلي.
+ */
+function phoneticKey(w: string): string {
+  return normalizeWord(w)
+    .replace(/[صث]/g, "س")
+    .replace(/ض/g, "د")
+    .replace(/ط/g, "ت")
+    .replace(/[ظذ]/g, "ز")
+    .replace(/ؤ/g, "و")
+    .replace(/ئ/g, "ي")
+    .replace(/ء$/, "");
+}
+
+/**
  * أطول تسلسل مشترك بين قائمتي كلمات موحّدة — محاذاة عالمية مثلى:
  * تستوعب الحذف والإضافة والتكرار وتستعيد التزامن بعد أي انحراف،
  * بعكس المحاذاة الجشعة بنافذة قصيرة التي تنهار عند أول اختلاف.
@@ -74,8 +91,8 @@ function lcsPairs(a: string[], b: string[]): [number, number][] {
 export function alignWordsToLyrics(words: KaraokeWord[], written: string): KaraokeWord[] {
   const tokens = written.split(/\s+/).filter(Boolean);
   if (!tokens.length) return words;
-  const tokenNorms = tokens.map(normalizeWord);
-  const wordNorms = words.map((w) => normalizeWord(w.text));
+  const tokenNorms = tokens.map(phoneticKey);
+  const wordNorms = words.map((w) => phoneticKey(w.text));
 
   const pairs = lcsPairs(wordNorms, tokenNorms);
   const pairing = new Map<number, number>(pairs);
@@ -156,14 +173,14 @@ export function measureSectionStarts(
   sections: SongSection[]
 ): number[] | null {
   if (!words.length || !sections.length) return null;
-  const wordNorms = words.map((w) => normalizeWord(w.text));
+  const wordNorms = words.map((w) => phoneticKey(w.text));
 
   // كلمات كل المقاطع في قائمة واحدة مع نسب كل كلمة لمقطعها
   const tokenNorms: string[] = [];
   const tokenSection: number[] = [];
   const sectionTokenCount = sections.map(() => 0);
   sections.forEach((s, si) => {
-    for (const t of s.lyrics.split(/\s+/).map(normalizeWord).filter(Boolean)) {
+    for (const t of s.lyrics.split(/\s+/).map(phoneticKey).filter(Boolean)) {
       tokenNorms.push(t);
       tokenSection.push(si);
       sectionTokenCount[si]++;

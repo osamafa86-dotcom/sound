@@ -883,6 +883,23 @@ export default function SongsStudio() {
     setActiveWord((prev) => (prev === idx ? prev : idx));
   }
 
+  /** تفريغ موقوت لملف صوتي ثم محاذاته مع النص المكتوب — يرمي عند الفشل */
+  async function syncOnce(blob: Blob, ext: string): Promise<KaraokeWord[]> {
+    const fd = new FormData();
+    fd.append("audio", blob, `song.${ext}`);
+    const res = await fetch("/api/karaoke", {
+      method: "POST",
+      headers: await authHeaders(),
+      body: fd,
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error ?? "تعذّرت مزامنة الكلمات");
+    return alignWordsToLyrics(data.words, lyrics);
+  }
+
+  // تصعيد القياس للغناء المعزول — مرة واحدة لكل ناتج مهما تكررت المزامنة
+  const isolateSyncRef = useRef("");
+
   async function startKaraoke(auto = false) {
     if (!result || karaokeBusy) return;
     // حارس التقادم: لو تغيّر الناتج أثناء انتظار المزامنة، يُهمل الرد القديم
@@ -892,31 +909,58 @@ export default function SongsStudio() {
     setKaraokeNote("");
     if (!auto) setError("");
     try {
-      const fd = new FormData();
-      fd.append("audio", result.blob, `song.${result.ext}`);
-      const res = await fetch("/api/karaoke", {
-        method: "POST",
-        headers: await authHeaders(),
-        body: fd,
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error ?? "تعذّرت مزامنة الكلمات");
+      let aligned = await syncOnce(result.blob, result.ext);
+      let pct = adherencePercent(aligned);
+      let refined = false;
+
+      // نسبة منخفضة على المزيج الكامل غالباً ضجيج قياس: الموسيقى تشوّش أذن
+      // التفريغ فيسمع كلمات غير المغناة. نعزل الغناء وحده ونعيد القياس عليه
+      // ونعتمد الأصدق (الأعلى) — تصعيد واحد لكل ناتج، للأعضاء وغير التجريبي
+      if (
+        pct !== null &&
+        pct < 90 &&
+        signedIn &&
+        !result.mock &&
+        isolateSyncRef.current !== forJobId
+      ) {
+        isolateSyncRef.current = forJobId;
+        try {
+          const fd = new FormData();
+          fd.append("audio", result.blob, `song.${result.ext}`);
+          const iso = await fetch("/api/isolate", {
+            method: "POST",
+            headers: await authHeaders(),
+            body: fd,
+          });
+          if (iso.ok) {
+            const vocals = await iso.blob();
+            const alignedVocals = await syncOnce(vocals, "mp3");
+            const pctVocals = adherencePercent(alignedVocals);
+            if (pctVocals !== null && pctVocals > pct) {
+              aligned = alignedVocals;
+              pct = pctVocals;
+              refined = true;
+            }
+          }
+        } catch {
+          // التصعيد تحسين اختياري — قياس المزيج الأصلي يبقى معتمداً
+        }
+      }
+
       if (resultRef.current?.jobId !== forJobId) return;
       // عرض الكلمات بصورتها المكتوبة المشكّلة لا بصورة التفريغ العارية
-      const aligned = alignWordsToLyrics(data.words, lyrics);
       setKaraokeWords(aligned);
       // حدود المقاطع الحقيقية تُقاس من التوقيتات لا من المدد المخططة
       setKaraokeStarts(sections?.length ? measureSectionStarts(aligned, sections) : null);
       setActiveWord(-1);
       // نسبة الالتزام مقياس موضوعي يغذي العقل — لكل توليدة، بمحركها
-      const pct = adherencePercent(aligned);
       const song = resultRef.current;
       if (pct !== null && song && !song.mock) {
         emitSignal({
           kind: "adherence",
           maqamId,
           settings: { stylePrompt: song.prompt, engine: song.provider ?? "unknown" },
-          meta: { percent: pct, jobId: song.jobId },
+          meta: { percent: pct, jobId: song.jobId, ...(refined && { isolated: true }) },
         });
       }
     } catch (e) {
