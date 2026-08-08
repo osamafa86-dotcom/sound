@@ -233,8 +233,8 @@ export default function CardNode({ id, data }: NodeProps<CardNodeType>) {
           style={{
             top: portTop(i),
             background: inputBackground(p.accepts),
-            width: p.multi ? 15 : 12,
-            height: p.multi ? 15 : 12,
+            width: p.multi ? 18 : 15,
+            height: p.multi ? 18 : 15,
             border: "2px solid var(--surface-card, #fff)",
           }}
           title={`${p.label} — يقبل: ${p.accepts
@@ -263,8 +263,8 @@ export default function CardNode({ id, data }: NodeProps<CardNodeType>) {
           style={{
             top: portTop(i),
             background: PORT_META[p.type].color,
-            width: 12,
-            height: 12,
+            width: 15,
+            height: 15,
             border: "2px solid var(--surface-card, #fff)",
           }}
           title={`${p.label} (${PORT_META[p.type].label})`}
