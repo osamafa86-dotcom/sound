@@ -138,10 +138,16 @@ export function elevenLabsTTS(apiKey: string): TTSProvider {
   };
 }
 
+/**
+ * نموذج التفريغ: Scribe v2 (كانون الثاني 2026) افتراضياً — صدارة الدقة عالمياً
+ * (2.3% WER) وتحسن مباشر للعربية، وELEVEN_SCRIBE_MODEL=scribe_v1 مفتاح رجوع.
+ */
+const scribeModel = () => process.env.ELEVEN_SCRIBE_MODEL ?? "scribe_v2";
+
 /** تفريغ صوتي (Speech-to-Text) عبر نموذج Scribe */
 export async function elevenLabsTranscribe(apiKey: string, audio: Blob): Promise<string> {
   const form = new FormData();
-  form.append("model_id", "scribe_v1");
+  form.append("model_id", scribeModel());
   form.append("file", audio, "recording.webm");
   const res = await apiCallMultipart("/speech-to-text", apiKey, form);
   const data = (await res.json()) as { text?: string };
@@ -157,7 +163,7 @@ export async function elevenLabsTranscribeWords(
   audio: Blob
 ): Promise<{ text: string; words: { text: string; start: number; end: number }[] }> {
   const form = new FormData();
-  form.append("model_id", "scribe_v1");
+  form.append("model_id", scribeModel());
   form.append("timestamps_granularity", "word");
   // تثبيت العربية يمنع أخطاء كشف اللغة على الغناء الملحّن (ج/ح وأشباهها)
   form.append("language_code", "ar");
