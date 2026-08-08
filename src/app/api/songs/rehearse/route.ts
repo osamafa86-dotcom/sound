@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { DIALECTS } from "@/lib/maqamat";
 import { getTTSProvider } from "@/lib/providers";
 import { applyPronunciationRules, listRules } from "@/lib/pronunciation";
-import { proofreadLyrics } from "@/lib/lyricsProofread";
+import {
+  DELIBERATE_TASHKEEL_DENSITY,
+  proofreadLyrics,
+  vocalizationDensity,
+} from "@/lib/lyricsProofread";
 import { parseSections } from "@/lib/songSections";
 import { VOICES } from "@/lib/voices";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
@@ -42,11 +46,12 @@ export async function POST(req: NextRequest) {
     if (rules.length) lyrics = applyPronunciationRules(lyrics, rules);
   }
 
-  // ٢) الملقّن الغنائي — التشكيل الكامل حسب اللهجة بنفس قواعد التوليد
+  // ٢) الملقّن الغنائي — مرآة التوليد تماماً: نفس بوابة الكثافة، فالنص
+  // المشكّل عمداً يُقرأ كما هو حرفياً (كما سيُغنّى) بلا إعادة تلقين
   let dictated = lyrics;
   let issues: { original: string; fixed: string; reason: string }[] = [];
   const geminiKey = process.env.GEMINI_API_KEY;
-  if (geminiKey) {
+  if (geminiKey && vocalizationDensity(lyrics) < DELIBERATE_TASHKEEL_DENSITY) {
     try {
       const proofed = await proofreadLyrics(geminiKey, parseSections(lyrics), dialectId);
       dictated = proofed.sections!.map((s) => s.lyrics).filter(Boolean).join("\n\n");

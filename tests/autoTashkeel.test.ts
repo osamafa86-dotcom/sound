@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { enforceLetterSkeleton, letterSkeleton, needsTashkeel } from "@/lib/lyricsProofread";
+import {
+  DELIBERATE_TASHKEEL_DENSITY,
+  enforceLetterSkeleton,
+  letterSkeleton,
+  needsTashkeel,
+  vocalizationDensity,
+} from "@/lib/lyricsProofread";
 
 describe("كاشف الحاجة للتشكيل", () => {
   it("نص عربي طويل عارٍ من الحركات ⟵ يحتاج تشكيلاً", () => {
@@ -41,5 +47,25 @@ describe("حارس قدسية الحروف (المدقق يشكّل ولا يب�
   it("اختلاف عدد أسطر أو كلمات السطر ⟵ يبقى الأصل", () => {
     expect(enforceLetterSkeleton("سطر واحد", "سَطْرْ\nسَطْرَانْ")).toBe("سطر واحد");
     expect(enforceLetterSkeleton("قول لها يا طير", "قُولْلهَا يَا طَيْر")).toBe("قول لها يا طير");
+  });
+});
+
+describe("بوابة الكثافة الذكية — المشكّل عمداً لا يُعاد تلقينه", () => {
+  it("النص العاري كثافته صفرية والمشكّل كاملاً يتجاوز العتبة", () => {
+    expect(vocalizationDensity("يا ليل يا عين وقلبي حزين")).toBe(0);
+    expect(
+      vocalizationDensity("يَا لَيْلُ يَا عَيْنُ وَقَلْبِي حَزِينٌ عَلَى فِرَاقِ الحَبَايِبِ")
+    ).toBeGreaterThan(DELIBERATE_TASHKEEL_DENSITY);
+  });
+
+  it("المشكّل جزئياً يبقى تحت العتبة فيلتقطه الملقّن", () => {
+    const partial = "يَا ليل يا عين وقلبي حزين على فراق الحبايب والدار بعيدة والشوق يزيد";
+    const d = vocalizationDensity(partial);
+    expect(d).toBeGreaterThan(0);
+    expect(d).toBeLessThan(DELIBERATE_TASHKEEL_DENSITY);
+  });
+
+  it("نص بلا حروف عربية ⟵ صفر بلا قسمة على صفر", () => {
+    expect(vocalizationDensity("Hello 123")).toBe(0);
   });
 });

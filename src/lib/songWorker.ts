@@ -3,7 +3,11 @@ import { refundCredits } from "./credits";
 import { getMusicProvider, mockMusic } from "./providers";
 import { LyriaError } from "./providers/lyria";
 import { isInstrumentalRequest } from "./providers/compositionPlan";
-import { proofreadLyrics } from "./lyricsProofread";
+import {
+  DELIBERATE_TASHKEEL_DENSITY,
+  proofreadLyrics,
+  vocalizationDensity,
+} from "./lyricsProofread";
 import { defuseStylePrompt } from "./stylePrompt";
 import { joinSections, parseSections } from "./songSections";
 import { SONG_SAMPLE_ONE_IN, autoEvalSong, sampleOneIn } from "./autoEval";
@@ -53,11 +57,16 @@ export async function runSongJob(jobId: string): Promise<void> {
   const job = await store.get(jobId);
   if (!job || job.status !== "pending") return;
 
-  // الملقّن الغنائي قبل أي تلحين — أعلى رافعة لسلامة النطق المغنّى:
-  // يمر عليه كل نص مغنّى دائماً (لا العاري من التشكيل وحده): يكمل الناقص،
-  // يثبت وقف القوافي والشدّات، ويحترم ما شكّله المستخدم عمداً
+  // الملقّن الغنائي قبل أي تلحين — أعلى رافعة لسلامة النطق المغنّى.
+  // بوابة الكثافة الذكية: العاري والجزئي يُلقَّنان؛ أما المشكّل عمداً
+  // (من المساعد بنموذج أعلى، أو المستخدم، أو ملقّنٍ سابق) فيمرّ حرفياً —
+  // إعادة تلقينه بنموذج أخف تُفسد الجيد وتراكم الانجراف بين النسخ
   const sungText = job.request.sections?.map((s) => s.lyrics).join("\n") ?? job.request.lyrics ?? "";
-  if (!isInstrumentalRequest(job.request) && sungText.trim()) {
+  if (
+    !isInstrumentalRequest(job.request) &&
+    sungText.trim() &&
+    vocalizationDensity(sungText) < DELIBERATE_TASHKEEL_DENSITY
+  ) {
     await store.update(jobId, {
       status: "running",
       stage: "الملقّن الغنائي يضبط النطق الكامل حسب اللهجة...",
