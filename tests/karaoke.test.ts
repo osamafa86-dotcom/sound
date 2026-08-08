@@ -197,3 +197,28 @@ describe("نسبة مطابقة الغناء للنص — الإشارة الم�
     expect(adherencePercent([])).toBeNull();
   });
 });
+
+describe("الطيّ الصوتي — إملاء التفريغ لصوت واحد لا يخصم من المطابقة", () => {
+  it("س/ص وط/ت وظ/ز حروف متطابقة سماعاً: تُحاذى وتُعرض بصورتها المكتوبة", () => {
+    const sung: KaraokeWord[] = [
+      { text: "وسمودك", start: 0, end: 0.5 },
+      { text: "تهر", start: 0.6, end: 1 },
+      { text: "زلك", start: 1.1, end: 1.5 },
+    ];
+    const aligned = alignWordsToLyrics(sung, "وَصُمُودَكْ طُهْر ظِلَّك");
+    expect(aligned.map((w) => w.matched)).toEqual([true, true, true]);
+    expect(aligned[0].text).toBe("وَصُمُودَكْ");
+    expect(aligned[1].text).toBe("طُهْر");
+    expect(adherencePercent(aligned)).toBe(100);
+  });
+
+  it("الاختلاف الحقيقي في الحروف يبقى انحرافاً مكشوفاً بنقاطه", () => {
+    const sung: KaraokeWord[] = [
+      { text: "قمر", start: 0, end: 0.5 },
+      { text: "الليل", start: 0.6, end: 1 },
+    ];
+    const aligned = alignWordsToLyrics(sung, "بَحْر اللَّيْل");
+    expect(aligned[0].matched).toBe(false);
+    expect(aligned[1].matched).toBe(true);
+  });
+});

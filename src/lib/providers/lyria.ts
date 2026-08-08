@@ -105,6 +105,11 @@ export function lyriaMusic(apiKey: string): MusicProvider {
               // كلمات المستخدم الأصلية لتأليف جديد — لا اقتباس من عمل قائم
               "The following are ORIGINAL Arabic lyrics written by the user themselves",
               "specifically for this brand-new composition (not from any existing song).",
+              // حرفية الغناء: كل كلمة كما كُتبت وبترتيبها — الانحراف والارتجال
+              // اللفظي أكبر خاصم لنسبة مطابقة الغناء للنص المقيسة آلياً
+              "Sing the lyrics verbatim: every word exactly as written and in order —",
+              "no substitutions, no paraphrasing, no ad-lib filler words",
+              "(repeating written lines for musical structure is fine).",
               `Sing them as the vocals of this new original song:\n${sungLyrics}`,
             ]
               .filter(Boolean)
