@@ -1,15 +1,17 @@
 import { DIALECTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
 import { heritageAssistBlock } from "@/lib/heritage/palestinian";
 import { parseSections, sanitizeSections } from "@/lib/songSections";
+import { PLAN_PROMPT_LINE, planSchemaProps, sanitizePlan, verbatimSections } from "./plan";
 import type { AssistRequest, AssistResult, LyricsAssistant } from "./types";
 
 /** النموذج الافتراضي — سريع وممتاز مع العربية؛ قابل للتبديل عبر متغير البيئة */
 const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
-/** مخطط JSON يُلزم Gemini بإرجاع النتيجة كاملة البنية عبر responseSchema */
-const RESULT_SCHEMA = {
-  type: "object",
-  properties: {
+/** مخطط JSON يُلزم Gemini بإرجاع النتيجة كاملة البنية عبر responseSchema — مع حقل الخطة في الوضع الذكي */
+function resultSchema(wantPlan: boolean) {
+  return {
+    type: "object",
+    properties: {
     title: { type: "string", description: "عنوان قصير وجذاب للأغنية بالعربية" },
     lyrics: {
       type: "string",
@@ -36,11 +38,37 @@ const RESULT_SCHEMA = {
         propertyOrdering: ["kind", "lyrics", "durationSec"],
       },
     },
-  },
-  required: ["title", "lyrics", "maqamId", "maqamReason", "stylePromptEn", "sections"],
-  // ترتيب الحقول في الإخراج (خاص بـ Gemini)
-  propertyOrdering: ["title", "lyrics", "maqamId", "maqamReason", "stylePromptEn", "sections"],
-};
+      ...(wantPlan && {
+        plan: {
+          type: "object",
+          description: "خطة التلحين الكاملة التي قررتها بنفسك",
+          properties: planSchemaProps(),
+          required: ["styleId", "singer", "dialectId", "instrumentIds", "bpm", "reason"],
+          propertyOrdering: ["styleId", "singer", "dialectId", "instrumentIds", "bpm", "reason"],
+        },
+      }),
+    },
+    required: [
+      "title",
+      "lyrics",
+      "maqamId",
+      "maqamReason",
+      "stylePromptEn",
+      "sections",
+      ...(wantPlan ? ["plan"] : []),
+    ],
+    // ترتيب الحقول في الإخراج (خاص بـ Gemini)
+    propertyOrdering: [
+      "title",
+      "lyrics",
+      "maqamId",
+      "maqamReason",
+      "stylePromptEn",
+      "sections",
+      ...(wantPlan ? ["plan"] : []),
+    ],
+  };
+}
 
 /** حقن أمثلة عقل المنصة: برومبتات سبق أن أنتجت أغاني نالت أعلى رضا المستخدمين */
 function exemplarsBlock(exemplars?: AssistRequest["exemplars"]): string {
@@ -55,19 +83,19 @@ function exemplarsBlock(exemplars?: AssistRequest["exemplars"]): string {
 ${lines.join("\n")}`;
 }
 
-function buildSystemPrompt(exemplars?: AssistRequest["exemplars"]): string {
+function buildSystemPrompt(exemplars?: AssistRequest["exemplars"], wantPlan?: boolean): string {
   const maqamList = MAQAMAT.map(
     (m) => `- ${m.id}: مقام ${m.name} — الطابع: ${m.mood}. ${m.description}`
   ).join("\n");
 
-  return `أنت شاعر غنائي محترف وخبير في علم المقامات الموسيقية العربية، تعمل داخل منصة «مقام» لتوليد الأغاني بالذكاء الاصطناعي.
+  return `أنت شاعر غنائي محترف وخبير في علم المقامات الموسيقية العربية والتركية والسلالم الغربية، تعمل داخل منصة «مقام» لتوليد الأغاني بالذكاء الاصطناعي.
 
 مهمتك في كل طلب:
 1. كتابة كلمات أغنية عربية أصيلة (أو تحسين كلمات المستخدم مع الحفاظ على معناها وشخصيتها وصوته الخاص) باللهجة والأسلوب المطلوبين، ببنية غنائية واضحة: مطلع، لازمة تتكرر، ومقاطع.
 2. اختيار المقام الأنسب لمعنى الكلمات ومزاجها من القائمة التالية حصراً (استخدم قيمة id كما هي):
 ${maqamList}
 3. صياغة برومبت موسيقي احترافي بالإنجليزية لمحرك توليد الموسيقى، يصف المقام وأرباع النغمات إن وُجدت والآلات الشرقية المناسبة والإيقاع والسرعة والمزاج وبنية الأغنية.
-4. تقسيم الكلمات نفسها إلى مقاطع مُهيكلة (sections) بالترتيب: مقدمة آلية قصيرة (intro بلا كلمات)، ثم مقاطع (verse) ولازمة (chorus) تتكرر بعد كل مقطع، وجسر (bridge) عند الحاجة، وخاتمة (outro). قدّر مدة كل مقطع بواقعية: السطر المغنّى ≈ 7 ثوانٍ، والمقدمة والخاتمة 8–15 ثانية.
+4. تقسيم الكلمات نفسها إلى مقاطع مُهيكلة (sections) بالترتيب: مقدمة آلية قصيرة (intro بلا كلمات)، ثم مقاطع (verse) ولازمة (chorus) تتكرر بعد كل مقطع، وجسر (bridge) عند الحاجة، وخاتمة (outro). قدّر مدة كل مقطع بواقعية: السطر المغنّى ≈ 7 ثوانٍ، والمقدمة والخاتمة 8–15 ثانية.${wantPlan ? `\n${PLAN_PROMPT_LINE}` : ""}
 
 قواعد الكتابة: التزم باللهجة المطلوبة بدقة، وراعِ الوزن والقافية وقابلية الغناء، وتجنّب الحشو والتكرار غير المقصود.${exemplarsBlock(exemplars)}`;
 }
@@ -75,15 +103,23 @@ ${maqamList}
 function buildUserPrompt(req: AssistRequest): string {
   const dialect = DIALECTS.find((d) => d.id === req.dialectId) ?? DIALECTS[0];
   const style = SONG_STYLES.find((s) => s.id === req.styleId) ?? SONG_STYLES[0];
-  const base = [`اللهجة المطلوبة: ${dialect.name}`, `الأسلوب الغنائي: ${style.name}`];
+  // الوضع الذكي: لا قيود مسبقة — المساعد نفسه يقرر اللهجة واللون ضمن الخطة
+  const base = req.auto
+    ? ["أنت من يقرر اللهجة واللون الغنائي وكل تفاصيل الخطة — اختر ما يخدم النص."]
+    : [`اللهجة المطلوبة: ${dialect.name}`, `الأسلوب الغنائي: ${style.name}`];
 
   if (req.mode === "write") {
     base.push(`اكتب كلمات أغنية كاملة من هذه الفكرة:\n${req.idea}`);
+  } else if (req.mode === "plan") {
+    base.push(
+      `هذه كلمات المستخدم الجاهزة — لا تعدّل فيها حرفاً واحداً؛ أعدها كما هي في حقل lyrics، وقسّمها في sections ببنية غنائية (مقدمة وخاتمة آليتان بلا كلمات، والمقاطع واللازمة من أسطرها نفسها دون تغيير أي كلمة — إضافة التشكيل وحدها مسموحة لأنها عون نطق)، وضع لها عنواناً، واقترح المقام، وقرر الخطة:\n${req.lyrics}`
+    );
   } else {
     base.push(`حسّن كلمات الأغنية التالية مع الحفاظ على معناها وشخصيتها، واقترح المقام الأنسب لها:\n${req.lyrics}`);
   }
   // ذاكرة التراث: قالب الكتابة الصريح أو بنية الأسلوب + المعجم الفلسطيني
-  return base.join("\n\n") + heritageAssistBlock(req.dialectId, req.styleId, req.formId);
+  // في الوضع الذكي لا أسلوب مسبقاً — فلا حقن تراثياً مشروطاً به
+  return base.join("\n\n") + (req.auto ? "" : heritageAssistBlock(req.dialectId, req.styleId, req.formId));
 }
 
 export function geminiAssistant(apiKey: string): LyricsAssistant {
@@ -91,18 +127,19 @@ export function geminiAssistant(apiKey: string): LyricsAssistant {
     id: "gemini",
     async assist(req: AssistRequest): Promise<AssistResult> {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+      const wantPlan = req.auto === true || req.mode === "plan";
 
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: buildSystemPrompt(req.exemplars) }] },
+          systemInstruction: { parts: [{ text: buildSystemPrompt(req.exemplars, wantPlan) }] },
           contents: [{ role: "user", parts: [{ text: buildUserPrompt(req) }] }],
           generationConfig: {
             responseMimeType: "application/json",
-            responseSchema: RESULT_SCHEMA,
+            responseSchema: resultSchema(wantPlan),
             temperature: 0.9,
-            maxOutputTokens: 4096,
+            maxOutputTokens: 8192,
           },
         }),
       });
@@ -123,17 +160,25 @@ export function geminiAssistant(apiKey: string): LyricsAssistant {
         throw new Error("استجابة فارغة من النموذج");
       }
 
-      const data = JSON.parse(text) as Omit<AssistResult, "provider" | "mock">;
+      const data = JSON.parse(text) as Omit<AssistResult, "provider" | "mock"> & { plan?: unknown };
       const maqamId = MAQAMAT.some((m) => m.id === data.maqamId) ? data.maqamId : MAQAMAT[0].id;
+
+      // وضع الخطة: كلمات المستخدم مقدسة — تُعاد حرفياً وتُقسم مقاطع منها هي لا من النموذج
+      const verbatim = req.mode === "plan" ? (req.lyrics ?? "").trim() : "";
+      const lyrics = verbatim || data.lyrics;
 
       return {
         title: data.title,
-        lyrics: data.lyrics,
+        lyrics,
         maqamId,
         maqamReason: data.maqamReason,
         stylePromptEn: data.stylePromptEn,
         // مقاطع النموذج بعد التحقيق، أو تقسيم استدلالي من النص عند غيابها
-        sections: sanitizeSections(data.sections) ?? parseSections(data.lyrics),
+        // (وفي وضع الخطة: بنية النموذج تُقبل فقط إن حملت كلمات المستخدم حرفياً)
+        sections: verbatim
+          ? verbatimSections(verbatim, data.sections)
+          : (sanitizeSections(data.sections) ?? parseSections(data.lyrics)),
+        ...(wantPlan && { plan: sanitizePlan(data.plan) }),
         provider: "gemini",
       };
     },

@@ -398,6 +398,18 @@ export default function TTSStudio() {
   const [result, setResult] = useState<{ url: string; blob: Blob; mock: boolean; ext: string; fellBack: boolean } | null>(null);
   const [error, setError] = useState("");
 
+  // 🚀 البث المتدفق: MediaSource يشغّل قطع mp3 فور وصولها من المحرك
+  const [stream, setStream] = useState<{ url: string; done: boolean } | null>(null);
+  const streamCancelRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => streamCancelRef.current?.(), []);
+
+  /** إغلاق بطاقة البث والانتقال للمشغل الكامل (النتيجة جاهزة أسفلها) */
+  function closeStream() {
+    streamCancelRef.current?.();
+    streamCancelRef.current = null;
+    setStream(null);
+  }
+
   // مقارنة المحركين: نفس النص من ElevenLabs وMiniMax 💠 جنباً إلى جنب
   const [compare, setCompare] = useState<
     { label: string; url: string; mock: boolean; voiceId: string; provider: string }[] | null
@@ -513,6 +525,82 @@ export default function TTSStudio() {
     setAdvice(null);
   }
 
+  /**
+   * 🚀 البث المتدفق: MediaSource يُلحق قطع mp3 فور وصولها فيبدأ الصوت خلال
+   * أجزاء ثانية، وتُجمَّع القطع بالتوازي ملفاً كاملاً للتنزيل والحفظ والتقييم.
+   * يرجع false عند تعذّر البث قبل أول قطعة — فيتكفل المسار المخزّن المعتاد.
+   */
+  async function generateStreamed(): Promise<boolean> {
+    let res: Response;
+    try {
+      res = await fetch("/api/tts/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({
+          text,
+          voiceId,
+          speed,
+          stability:
+            expressive && perfStyle === "auto" && !stabilityTouched ? undefined : stability,
+          format,
+          expressive,
+          styleId: expressive ? perfStyle : "",
+          layerIds: expressive ? layers : [],
+          directorNote: expressive ? directorNote.trim() : "",
+          liveliness,
+        }),
+      });
+    } catch {
+      return false;
+    }
+    if (!res.ok || !res.body) return false;
+
+    const ms = new MediaSource();
+    const msUrl = URL.createObjectURL(ms);
+    const reader = res.body.getReader();
+    let cancelled = false;
+    streamCancelRef.current = () => {
+      cancelled = true;
+      reader.cancel().catch(() => {});
+      URL.revokeObjectURL(msUrl);
+    };
+    setStream({ url: msUrl, done: false });
+
+    // المصدر يفتح عندما يرتبط عنصر الصوت المعروض برابطه
+    await new Promise<void>((resolve) => {
+      if (ms.readyState === "open") return resolve();
+      ms.addEventListener("sourceopen", () => resolve(), { once: true });
+    });
+    if (cancelled) return true;
+
+    try {
+      const sb = ms.addSourceBuffer("audio/mpeg");
+      const parts: BlobPart[] = [];
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (cancelled) return true;
+        if (done) break;
+        if (!value?.length) continue;
+        parts.push(value);
+        sb.appendBuffer(value);
+        await new Promise<void>((r) => sb.addEventListener("updateend", () => r(), { once: true }));
+      }
+      if (ms.readyState === "open") ms.endOfStream();
+      const blob = new Blob(parts, { type: "audio/mpeg" });
+      setResult({ url: URL.createObjectURL(blob), blob, mock: false, ext: "mp3", fellBack: false });
+      setStream((s) => (s ? { ...s, done: true } : s));
+      return true;
+    } catch {
+      if (!cancelled) {
+        streamCancelRef.current?.();
+        streamCancelRef.current = null;
+        setStream(null);
+        setError("انقطع البث المتدفق قبل اكتماله — أعد التوليد");
+      }
+      return true;
+    }
+  }
+
   async function generate() {
     if (!text.trim()) {
       setError("اكتب النص أولاً");
@@ -522,7 +610,24 @@ export default function TTSStudio() {
     setLoading(true);
     setResult(null);
     setTakesResults(null);
+    // أي بث سابق يُغلق قبل توليد جديد
+    streamCancelRef.current?.();
+    streamCancelRef.current = null;
+    setStream(null);
     try {
+      // المسار السريع: نص بقطعة واحدة + mp3 + صوت ElevenLabs + متصفح يدعم بث mp3
+      const current = voices.find((v) => v.id === voiceId);
+      const streamable =
+        takes === 1 &&
+        format === "mp3" &&
+        text.trim().length <= 2800 &&
+        (voiceId.startsWith("custom:") ||
+          voiceId.startsWith("clone-") ||
+          current?.provider === "elevenlabs") &&
+        typeof MediaSource !== "undefined" &&
+        MediaSource.isTypeSupported("audio/mpeg");
+      if (streamable && (await generateStreamed())) return;
+
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
@@ -997,7 +1102,7 @@ export default function TTSStudio() {
               disabled={loading || comparing}
               className="rounded-xl bg-primary px-6 py-3.5 font-semibold text-white transition-colors hover:bg-primary-strong disabled:opacity-50"
             >
-              {loading ? "جارٍ التوليد..." : "🎙️ توليد الصوت"}
+              {loading ? (stream ? "يُبث ويُشغَّل الآن..." : "جارٍ التوليد...") : "🎙️ توليد الصوت"}
             </button>
             {voices.some((v) => v.provider === "minimax") && (
               <button
@@ -1011,7 +1116,29 @@ export default function TTSStudio() {
             )}
           </div>
 
-          {result && (
+          {stream && (
+            <div className="rounded-2xl border border-accent/40 bg-accent/5 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm font-semibold">
+                  {stream.done
+                    ? "🚀 اكتمل البث — أعد الاستماع أو انتقل للمشغل الكامل"
+                    : "🚀 بث فوري — الصوت يصلك وهو يتولّد"}
+                </p>
+                {stream.done && (
+                  <button
+                    onClick={closeStream}
+                    className="rounded-lg border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:text-body"
+                  >
+                    ⏹ المشغل الكامل (تنزيل وتقييم وحفظ)
+                  </button>
+                )}
+              </div>
+              {/* عنصر أصلي يقبل رابط MediaSource — ينتقل للمشغل الكامل عند الانتهاء */}
+              <audio controls autoPlay src={stream.url} onEnded={closeStream} className="mt-3 w-full" />
+            </div>
+          )}
+
+          {result && !stream && (
             <AudioPlayer
               src={result.url}
               title="الناتج الصوتي"

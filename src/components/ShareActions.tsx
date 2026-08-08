@@ -52,8 +52,12 @@ export default function ShareActions({ path, title }: { path: string; title: str
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    setUrl(new URL(path, window.location.origin).toString());
-    setCanNative(typeof navigator !== "undefined" && !!navigator.share);
+    // تأجيل القراءة لما بعد الرسم الأول — يرضي قاعدة عدم التزامن في التأثيرات
+    const t = setTimeout(() => {
+      setUrl(new URL(path, window.location.origin).toString());
+      setCanNative(typeof navigator !== "undefined" && !!navigator.share);
+    }, 0);
+    return () => clearTimeout(t);
   }, [path]);
 
   if (!url) return null;

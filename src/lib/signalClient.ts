@@ -1,21 +1,15 @@
 "use client";
 
+import type { SignalKind } from "./signals";
+
 /**
  * مُرسل الإشارات من المتصفح — نداء «أطلق وانسَ»:
  * لا ينتظر ولا يفشل بصوت؛ keepalive يضمن الوصول حتى أثناء مغادرة الصفحة.
+ * (استيراد النوع وحده — شيفرة الخادم لا تدخل حزمة المتصفح)
  */
 
 export type ClientSignal = {
-  kind:
-    | "played_to_end"
-    | "replayed"
-    | "downloaded"
-    | "saved"
-    | "shared"
-    | "regenerated"
-    | "section_regen"
-    | "version_chosen"
-    | "version_rejected";
+  kind: SignalKind;
   voiceId?: string;
   maqamId?: string;
   settings?: Record<string, unknown>;

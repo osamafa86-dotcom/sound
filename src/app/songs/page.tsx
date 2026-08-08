@@ -6,7 +6,9 @@ import LyricsEditor from "@/components/LyricsEditor";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import SingAlongPanel from "@/components/SingAlongPanel";
 import StemsPanel from "@/components/StemsPanel";
+import LiveMaqamPanel from "@/components/LiveMaqamPanel";
 import {
+  adherencePercent,
   alignWordsToLyrics,
   findActiveWord,
   measureSectionStarts,
@@ -15,7 +17,15 @@ import {
 import { replaceWholeWord } from "@/lib/textCompare";
 import { HERITAGE_STYLE_IDS, LYRIC_FORMS, heritageStyle } from "@/lib/heritage/palestinian";
 import { emitSignal } from "@/lib/signalClient";
-import { AMBIENCES, DIALECTS, INSTRUMENTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
+import {
+  AMBIENCES,
+  DIALECTS,
+  INSTRUMENTS,
+  MAQAMAT,
+  MAQAM_FAMILIES,
+  SONG_STYLES,
+  type MaqamFamily,
+} from "@/lib/maqamat";
 import { authHeaders } from "@/lib/supabase";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -121,6 +131,15 @@ type CompareSlot = {
 
 export default function SongsStudio() {
   const [step, setStep] = useState(0);
+  // وضعا الاستوديو: يدوي (ثلاث خطوات يتحكم بها المستخدم) وذكي (الذكاء يقرر كل شيء)
+  const [studioMode, setStudioMode] = useState<"manual" | "smart">("manual");
+  const [smartSource, setSmartSource] = useState<"idea" | "lyrics">("idea");
+  const [smartText, setSmartText] = useState("");
+  const [smartBusy, setSmartBusy] = useState(false);
+  const [smartError, setSmartError] = useState("");
+  const [smartRan, setSmartRan] = useState(false);
+  // تصفية بطاقات المقامات حسب العائلة — عربية وتركية وغربية
+  const [maqamFamily, setMaqamFamily] = useState<MaqamFamily | "all">("all");
   const [lyrics, setLyrics] = useState("");
   const [maqamId, setMaqamId] = useState(MAQAMAT[0].id);
   const [styleId, setStyleId] = useState<string>(SONG_STYLES[0].id);
@@ -456,6 +475,74 @@ export default function SongsStudio() {
     }
   }
 
+  /**
+   * 🪄 الوضع الذكي — أمر واحد: فكرة (يؤلف الكلمات) أو كلمات جاهزة (لا تُمس)،
+   * والذكاء يقرر وحده المقام واللون الغنائي والصوت واللهجة والآلات والسرعة،
+   * تُعتمد قراراته في حالة الاستوديو (فيمكن تعديلها يدوياً لاحقاً) ويولّد فوراً.
+   */
+  async function runSmart() {
+    const text = smartText.trim();
+    if (!text || smartBusy || loading) return;
+    setSmartError("");
+    setSmartBusy(true);
+    try {
+      const res = await fetch("/api/lyrics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify(
+          smartSource === "idea"
+            ? { mode: "write", idea: text, auto: true, dialectId, styleId }
+            : { mode: "plan", lyrics: text, auto: true, dialectId, styleId }
+        ),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        throw new Error(data?.error ?? "تعذّر التخطيط الذكي، حاول مجدداً");
+      }
+      const smart = data as AssistResponse;
+
+      // اعتماد قرارات الذكاء في حالة الاستوديو كلها — تبقى مرجعاً للتعديل اليدوي
+      setAssist(smart);
+      setLyrics(smart.lyrics);
+      setSections(smart.sections?.length ? smart.sections : null);
+      setMaqamId(smart.maqamId);
+      const plan = smart.plan;
+      if (plan) {
+        setStyleId(plan.styleId);
+        setSinger(plan.singer);
+        setDialectId(plan.dialectId);
+        setDeliveryDialectId(plan.dialectId);
+        setAmbience(null);
+        setInstrumentIds(plan.instrumentIds);
+        setBpm(plan.bpm);
+      }
+      setSmartRan(true);
+
+      // التوليد فوراً بالقيم الصريحة — حالة React لم تُصيَّر بعد داخل هذه الدورة
+      await generate(
+        {
+          lyrics: smart.lyrics,
+          maqamId: smart.maqamId,
+          sections: tier === "full" && smart.sections?.length ? smart.sections : undefined,
+          aiStylePrompt: smart.stylePromptEn,
+          compare: false,
+          ...(plan && {
+            styleId: plan.styleId,
+            instrumentIds: plan.instrumentIds,
+            singer: plan.styleId === "instrumental" ? undefined : plan.singer,
+            dialectId: plan.styleId === "instrumental" ? undefined : plan.dialectId,
+            bpm: plan.bpm ?? undefined,
+          }),
+        },
+        { title: smart.title }
+      );
+    } catch (e) {
+      setSmartError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally {
+      setSmartBusy(false);
+    }
+  }
+
   async function analyzeImage(file: File) {
     setImageError("");
     setImageBrief(null);
@@ -587,7 +674,7 @@ export default function SongsStudio() {
     presentSong(winner.song);
   }
 
-  async function generate(extras?: Record<string, unknown>) {
+  async function generate(extras?: Record<string, unknown>, ui?: { title?: string }) {
     // إشارات نفور ضمنية: طلب نسخة أخرى أو إعادة مقطع = عدم رضا عن السابقة
     if (result && !result.mock) {
       if (extras?.regenerateSectionIndex !== undefined) {
@@ -661,7 +748,9 @@ export default function SongsStudio() {
       const snapshot = {
         maqamName,
         title:
-          assist?.title && assist.title !== "مسودة تجريبية"
+          ui?.title && ui.title !== "مسودة تجريبية"
+            ? ui.title
+            : assist?.title && assist.title !== "مسودة تجريبية"
             ? assist.title
             : imageBrief?.titleAr && styleId === "instrumental"
               ? imageBrief.titleAr
@@ -794,6 +883,23 @@ export default function SongsStudio() {
     setActiveWord((prev) => (prev === idx ? prev : idx));
   }
 
+  /** تفريغ موقوت لملف صوتي ثم محاذاته مع النص المكتوب — يرمي عند الفشل */
+  async function syncOnce(blob: Blob, ext: string): Promise<KaraokeWord[]> {
+    const fd = new FormData();
+    fd.append("audio", blob, `song.${ext}`);
+    const res = await fetch("/api/karaoke", {
+      method: "POST",
+      headers: await authHeaders(),
+      body: fd,
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error ?? "تعذّرت مزامنة الكلمات");
+    return alignWordsToLyrics(data.words, lyrics);
+  }
+
+  // تصعيد القياس للغناء المعزول — مرة واحدة لكل ناتج مهما تكررت المزامنة
+  const isolateSyncRef = useRef("");
+
   async function startKaraoke(auto = false) {
     if (!result || karaokeBusy) return;
     // حارس التقادم: لو تغيّر الناتج أثناء انتظار المزامنة، يُهمل الرد القديم
@@ -803,22 +909,60 @@ export default function SongsStudio() {
     setKaraokeNote("");
     if (!auto) setError("");
     try {
-      const fd = new FormData();
-      fd.append("audio", result.blob, `song.${result.ext}`);
-      const res = await fetch("/api/karaoke", {
-        method: "POST",
-        headers: await authHeaders(),
-        body: fd,
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error ?? "تعذّرت مزامنة الكلمات");
+      let aligned = await syncOnce(result.blob, result.ext);
+      let pct = adherencePercent(aligned);
+      let refined = false;
+
+      // نسبة منخفضة على المزيج الكامل غالباً ضجيج قياس: الموسيقى تشوّش أذن
+      // التفريغ فيسمع كلمات غير المغناة. نعزل الغناء وحده ونعيد القياس عليه
+      // ونعتمد الأصدق (الأعلى) — تصعيد واحد لكل ناتج، للأعضاء وغير التجريبي
+      if (
+        pct !== null &&
+        pct < 90 &&
+        signedIn &&
+        !result.mock &&
+        isolateSyncRef.current !== forJobId
+      ) {
+        isolateSyncRef.current = forJobId;
+        try {
+          const fd = new FormData();
+          fd.append("audio", result.blob, `song.${result.ext}`);
+          const iso = await fetch("/api/isolate", {
+            method: "POST",
+            headers: await authHeaders(),
+            body: fd,
+          });
+          if (iso.ok) {
+            const vocals = await iso.blob();
+            const alignedVocals = await syncOnce(vocals, "mp3");
+            const pctVocals = adherencePercent(alignedVocals);
+            if (pctVocals !== null && pctVocals > pct) {
+              aligned = alignedVocals;
+              pct = pctVocals;
+              refined = true;
+            }
+          }
+        } catch {
+          // التصعيد تحسين اختياري — قياس المزيج الأصلي يبقى معتمداً
+        }
+      }
+
       if (resultRef.current?.jobId !== forJobId) return;
       // عرض الكلمات بصورتها المكتوبة المشكّلة لا بصورة التفريغ العارية
-      const aligned = alignWordsToLyrics(data.words, lyrics);
       setKaraokeWords(aligned);
       // حدود المقاطع الحقيقية تُقاس من التوقيتات لا من المدد المخططة
       setKaraokeStarts(sections?.length ? measureSectionStarts(aligned, sections) : null);
       setActiveWord(-1);
+      // نسبة الالتزام مقياس موضوعي يغذي العقل — لكل توليدة، بمحركها
+      const song = resultRef.current;
+      if (pct !== null && song && !song.mock) {
+        emitSignal({
+          kind: "adherence",
+          maqamId,
+          settings: { stylePrompt: song.prompt, engine: song.provider ?? "unknown" },
+          meta: { percent: pct, jobId: song.jobId, ...(refined && { isolated: true }) },
+        });
+      }
     } catch (e) {
       if (resultRef.current?.jobId !== forJobId) return;
       // فشل المزامنة التلقائية لا يقاطع الاحتفال بالناتج — ملاحظة هادئة وزر يدوي
@@ -882,7 +1026,7 @@ export default function SongsStudio() {
 
   /** لمسة الماستر — معالجة نهائية في المتصفح: تطبيع + قص صمت + fade */
   const [mastering, setMastering] = useState(false);
-  async function applyMaster() {
+  async function applyMaster(auto = false) {
     if (!result || result.mastered || mastering) return;
     setMastering(true);
     const forJobId = result.jobId;
@@ -892,7 +1036,8 @@ export default function SongsStudio() {
       const mastered = await masterAudio(result.blob);
       if (resultRef.current?.jobId !== forJobId) return;
       if (!mastered.changed) {
-        setError("المقطع أقصر من أن يحتاج معالجة ماستر — بقي كما هو");
+        // في الماستر التلقائي عدم الحاجة ليست خبراً — لا إزعاج
+        if (!auto) setError("المقطع أقصر من أن يحتاج معالجة ماستر — بقي كما هو");
         return;
       }
       const song: SongResult = {
@@ -923,11 +1068,24 @@ export default function SongsStudio() {
       // الرابط القديم لم يعد مرجعاً في أي مكان — يُبطل فلا يتراكم WAV ضخم
       URL.revokeObjectURL(oldUrl);
     } catch {
-      setError("تعذّرت معالجة الماستر في هذا المتصفح — الملف الأصلي كما هو");
+      if (!auto) setError("تعذّرت معالجة الماستر في هذا المتصفح — الملف الأصلي كما هو");
     } finally {
       setMastering(false);
     }
   }
+
+  // 🪄 الوضع الذكي يطبّق «لمسة الماستر» تلقائياً — بعد حسم المزامنة أولاً،
+  // لأن قصّ مقدمة الملف يُصحح توقيتات الكلمات المتزامنة بعدها لا قبلها
+  const autoMasterRef = useRef("");
+  useEffect(() => {
+    if (studioMode !== "smart" || !result || result.mock || result.mastered || mastering) return;
+    const syncSettled = instrumental || !!karaokeWords || !!karaokeNote;
+    if (!syncSettled || karaokeBusy) return;
+    if (autoMasterRef.current === result.jobId) return;
+    autoMasterRef.current = result.jobId;
+    applyMaster(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyMaster مستقرة ضمن هذا النطاق
+  }, [studioMode, result, mastering, karaokeWords, karaokeNote, karaokeBusy, instrumental]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
@@ -937,33 +1095,200 @@ export default function SongsStudio() {
       <WaveLine className="mt-3" />
       <MemberNotice />
       <p className="mt-3 text-muted">
-        ثلاث خطوات: اكتب الكلمات، اختر المقام والأسلوب، ثم ولّد أغنيتك.
+        وضعان: يدوي تتحكم فيه بكل التفاصيل، أو ذكي يقرر فيه الذكاء كل شيء من فكرتك أو كلماتك.
       </p>
 
-      {/* شريط الخطوات */}
-      <ol className="mt-8 flex gap-2">
-        {STEPS.map((s, i) => (
-          <li key={s} className="flex-1">
-            <button
-              onClick={() => setStep(i)}
-              aria-current={i === step ? "step" : undefined}
-              className={`w-full rounded-xl border px-3 py-2.5 text-sm font-semibold transition-colors ${
-                i === step
-                  ? "border-primary bg-rose text-primary"
-                  : i < step
-                    ? "border-border-soft text-body"
-                    : "border-border-soft text-muted"
-              }`}
-            >
-              {i + 1}. {s}
-            </button>
-          </li>
-        ))}
-      </ol>
+      {/* مبدّل وضعي الاستوديو */}
+      <div className="mt-6 grid gap-3 sm:grid-cols-2" role="tablist" aria-label="وضع الاستوديو">
+        <button
+          role="tab"
+          aria-selected={studioMode === "manual"}
+          onClick={() => setStudioMode("manual")}
+          className={`rounded-2xl border p-4 text-start transition-colors ${
+            studioMode === "manual"
+              ? "border-primary bg-rose"
+              : "border-border-soft bg-surface-card hover:border-primary/50"
+          }`}
+        >
+          <span className="text-base font-bold">🎛️ الوضع اليدوي</span>
+          <span className="mt-1 block text-xs leading-relaxed text-muted">
+            ثلاث خطوات تتحكم فيها بكل التفاصيل: الكلمات، فالمقام والأسلوب، فالتوليد.
+          </span>
+        </button>
+        <button
+          role="tab"
+          aria-selected={studioMode === "smart"}
+          onClick={() => setStudioMode("smart")}
+          className={`rounded-2xl border p-4 text-start transition-colors ${
+            studioMode === "smart"
+              ? "border-gold bg-gold/10"
+              : "border-border-soft bg-surface-card hover:border-gold/60"
+          }`}
+        >
+          <span className="text-base font-bold">🪄 الوضع الذكي</span>
+          <span className="mt-1 block text-xs leading-relaxed text-muted">
+            فكرة أو كلماتك الجاهزة — والذكاء يقرر المقام واللون والصوت واللهجة والآلات ويولّد
+            مباشرة.
+          </span>
+        </button>
+      </div>
+
+      {/* شريط الخطوات — للوضع اليدوي */}
+      {studioMode === "manual" && (
+        <ol className="mt-6 flex gap-2">
+          {STEPS.map((s, i) => (
+            <li key={s} className="flex-1">
+              <button
+                onClick={() => setStep(i)}
+                aria-current={i === step ? "step" : undefined}
+                className={`w-full rounded-xl border px-3 py-2.5 text-sm font-semibold transition-colors ${
+                  i === step
+                    ? "border-primary bg-rose text-primary"
+                    : i < step
+                      ? "border-border-soft text-body"
+                      : "border-border-soft text-muted"
+                }`}
+              >
+                {i + 1}. {s}
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
 
       <div className="mt-8">
+        {/* 🪄 الوضع الذكي: أمر واحد والذكاء يتكفل بالباقي */}
+        {studioMode === "smart" && (
+          <div className="mb-8 flex flex-col gap-4">
+            <div className="rounded-2xl border border-gold/40 bg-surface-card p-5">
+              <h2 className="text-lg font-bold">
+                🪄 أعطِ الأمر — <span className="text-gradient">والذكاء يتكفل بالباقي</span>
+              </h2>
+              <p className="mt-1 text-sm leading-relaxed text-muted">
+                اكتب فكرة فيؤلّف الكلمات، أو الصق كلماتك الجاهزة (لن تُمس)، ثم يختار وحده
+                المقام الأنسب من كل العائلات (عربية وتركية وغربية) واللون الغنائي والصوت
+                واللهجة والآلات والسرعة — ويولّد الأغنية مباشرة مع شرح قراراته.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2" role="radiogroup" aria-label="مصدر الكلمات">
+                <button
+                  role="radio"
+                  aria-checked={smartSource === "idea"}
+                  onClick={() => setSmartSource("idea")}
+                  className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
+                    smartSource === "idea"
+                      ? "border-primary bg-rose text-primary"
+                      : "border-border-soft text-muted hover:text-body"
+                  }`}
+                >
+                  ✍️ عندي فكرة — اكتبوا الكلمات
+                </button>
+                <button
+                  role="radio"
+                  aria-checked={smartSource === "lyrics"}
+                  onClick={() => setSmartSource("lyrics")}
+                  className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
+                    smartSource === "lyrics"
+                      ? "border-primary bg-rose text-primary"
+                      : "border-border-soft text-muted hover:text-body"
+                  }`}
+                >
+                  📝 كلماتي جاهزة — لحّنوها كما هي
+                </button>
+              </div>
+              <textarea
+                value={smartText}
+                onChange={(e) => setSmartText(e.target.value)}
+                maxLength={smartSource === "idea" ? 500 : 3000}
+                placeholder={
+                  smartSource === "idea"
+                    ? "فكرة الأغنية... مثال: رثاء جدّي الذي علّمني الصبر — أو: فرحة عرس فلسطيني في الحارة"
+                    : "الصق كلماتك هنا كما هي — لن يغيّر الذكاء فيها حرفاً، فقط يلحّنها"
+                }
+                className={`mt-3 w-full resize-y rounded-xl border border-border-soft bg-surface p-4 text-sm leading-relaxed outline-none transition-colors focus:border-gold ${
+                  smartSource === "idea" ? "min-h-24" : "min-h-44"
+                }`}
+              />
+              <button
+                onClick={runSmart}
+                disabled={smartBusy || loading || !smartText.trim()}
+                className="mt-3 rounded-xl bg-primary px-6 py-3 font-semibold text-white transition-colors hover:bg-primary-strong disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {smartBusy
+                  ? "🧠 يقرأ ويقرر الخطة..."
+                  : loading
+                    ? "🎼 يولّد الآن..."
+                    : "🪄 لحّنها كاملة بأمر واحد"}
+              </button>
+              {smartError && (
+                <p className="mt-3 rounded-xl border border-primary/40 bg-rose px-4 py-3 text-sm text-primary-strong">
+                  {smartError}
+                </p>
+              )}
+            </div>
+
+            {/* بطاقة قرارات الذكاء — شفافية كاملة مع مخرج للتعديل اليدوي */}
+            {assist?.plan && smartRan && (
+              <div className="rounded-2xl border border-gold/40 bg-gold/5 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-bold">
+                    🧠 قرارات الذكاء
+                    {assist.title && assist.title !== "مسودة تجريبية" && ` — «${assist.title}»`}
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setStudioMode("manual");
+                      setStep(1);
+                    }}
+                    className="rounded-lg border border-border-soft px-3 py-1.5 text-xs text-muted transition-colors hover:text-body"
+                  >
+                    🎛️ عدّل القرارات يدوياً
+                  </button>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  <span className="rounded-full bg-primary/10 px-3 py-1 font-semibold text-primary">
+                    🎼 المقام: {MAQAMAT.find((m) => m.id === assist.maqamId)?.name}
+                    {(() => {
+                      const fam = MAQAMAT.find((m) => m.id === assist.maqamId)?.family;
+                      return fam === "turkish" ? " (تركي)" : fam === "western" ? " (غربي)" : "";
+                    })()}
+                  </span>
+                  <span className="rounded-full bg-gold/15 px-3 py-1 font-semibold text-gold">
+                    🎨 اللون: {SONG_STYLES.find((s) => s.id === assist.plan?.styleId)?.name}
+                  </span>
+                  <span className="rounded-full bg-accent/10 px-3 py-1 font-semibold text-accent">
+                    🎤 الصوت: {assist.plan.singer === "male" ? "رجالي" : "نسائي"}
+                  </span>
+                  <span className="rounded-full bg-accent/10 px-3 py-1 font-semibold text-accent">
+                    🗣️ اللهجة: {DIALECTS.find((d) => d.id === assist.plan?.dialectId)?.name}
+                  </span>
+                  <span className="rounded-full bg-surface px-3 py-1 text-muted">
+                    🪕{" "}
+                    {assist.plan.instrumentIds
+                      .map((id) => INSTRUMENTS.find((i) => i.id === id)?.name)
+                      .filter(Boolean)
+                      .join("، ")}
+                  </span>
+                  <span className="rounded-full bg-surface px-3 py-1 text-muted">
+                    ⏱️ {assist.plan.bpm ? `${assist.plan.bpm} نبضة/د` : "إيقاع حر"}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm leading-relaxed">{assist.maqamReason}</p>
+                {assist.plan.reason && (
+                  <p className="mt-1 text-sm leading-relaxed text-muted">{assist.plan.reason}</p>
+                )}
+                {assist.mock && (
+                  <p className="mt-2 text-xs text-muted">
+                    خطة من الوضع التجريبي — القرارات الذكية الفعلية تُفعَّل مع ربط مفاتيح
+                    الذكاء الاصطناعي.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* الخطوة 1: الكلمات */}
-        {step === 0 && (
+        {studioMode === "manual" && step === 0 && (
           <div className="flex flex-col gap-4">
             {/* مساعد الكلمات والمقامات */}
             <div className="rounded-2xl border border-border-soft bg-surface-card p-5">
@@ -1292,10 +1617,11 @@ export default function SongsStudio() {
         )}
 
         {/* الخطوة 2: المقام والأسلوب */}
-        {step === 1 && (
+        {studioMode === "manual" && step === 1 && (
           <div className="flex flex-col gap-8">
             <div>
               <h2 className="mb-4 text-xl font-bold">اختر المقام</h2>
+              <LiveMaqamPanel maqam={maqam} signedIn={signedIn} />
               {personalMaqam && (
                 <p className="mb-3 rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary">
                   ✨ بدأنا لك بمقام {personalMaqam} — الأقرب لذوقك المتعلم
@@ -1306,12 +1632,38 @@ export default function SongsStudio() {
                   {sampleError}
                 </p>
               )}
+              {/* عائلات ألوان الطرب: عربية وتركية وغربية */}
+              <div className="mb-3 flex flex-wrap items-center gap-2" role="radiogroup" aria-label="عائلة المقام">
+                {MAQAM_FAMILIES.map((f) => (
+                  <button
+                    key={f.id}
+                    role="radio"
+                    aria-checked={maqamFamily === f.id}
+                    onClick={() => setMaqamFamily(f.id)}
+                    className={`rounded-full border px-4 py-1.5 text-sm transition-colors ${
+                      maqamFamily === f.id
+                        ? "border-primary bg-rose font-semibold text-primary"
+                        : "border-border-soft text-muted hover:border-primary/50 hover:text-body"
+                    }`}
+                  >
+                    {f.name}
+                    <span className="ms-1.5 text-xs text-muted">
+                      {f.id === "all"
+                        ? MAQAMAT.length
+                        : MAQAMAT.filter((m) => m.family === f.id).length}
+                    </span>
+                  </button>
+                ))}
+              </div>
               <div
                 role="radiogroup"
                 aria-label="اختيار المقام"
                 className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
               >
-                {MAQAMAT.map((m) => (
+                {(maqamFamily === "all"
+                  ? MAQAMAT
+                  : MAQAMAT.filter((m) => m.family === maqamFamily)
+                ).map((m) => (
                   <div
                     key={m.id}
                     role="radio"
@@ -1331,7 +1683,14 @@ export default function SongsStudio() {
                     }`}
                   >
                     <span className="flex items-center justify-between">
-                      <span className="text-lg font-bold">{m.name}</span>
+                      <span className="text-lg font-bold">
+                        {m.name}
+                        {m.family !== "arabic" && (
+                          <span className="ms-2 rounded-full bg-accent/10 px-2 py-0.5 align-middle text-[10px] font-semibold text-accent">
+                            {m.family === "turkish" ? "تركي" : "غربي"}
+                          </span>
+                        )}
+                      </span>
                       {maqamId === m.id && <span className="text-primary">✓</span>}
                     </span>
                     <span className="mt-1 block text-xs font-semibold text-accent">{m.mood}</span>
@@ -1435,8 +1794,8 @@ export default function SongsStudio() {
           </div>
         )}
 
-        {/* الخطوة 3: التوليد */}
-        {step === 2 && (
+        {/* الخطوة 3: التوليد — وفي الوضع الذكي تظهر مع أول أمر ذكي أو استعادة مهمة */}
+        {(studioMode === "manual" ? step === 2 : smartRan || loading || !!result) && (
           <div className="flex flex-col gap-6">
             <div>
               <h2 className="mb-4 text-xl font-bold">مستوى التوليد</h2>
@@ -1828,7 +2187,7 @@ export default function SongsStudio() {
                   </button>
                   {!result.mock && (
                     <button
-                      onClick={applyMaster}
+                      onClick={() => applyMaster()}
                       disabled={mastering || result.mastered}
                       title="تطبيع علو الصوت + قص الصمت + دخول وخروج ناعمان — معالجة فورية في متصفحك"
                       className="rounded-xl border border-accent px-5 py-2.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"

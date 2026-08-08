@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  adherencePercent,
   alignWordsToLyrics,
   buildLrc,
   buildSrt,
@@ -177,5 +178,47 @@ describe("قياس بدايات المقاطع من التفريغ الموقو�
         { kind: "verse", lyrics: "نص آخر كلياً بلا تقاطع", durationSec: 30 },
       ])
     ).toBeNull();
+  });
+});
+
+describe("نسبة مطابقة الغناء للنص — الإشارة المبثوثة للعقل", () => {
+  it("تُحسب من الكلمات المحكومة وحدها وتُقرَّب لعدد صحيح", () => {
+    const judged: KaraokeWord[] = [
+      { text: "يا", start: 0, end: 0.3, matched: true },
+      { text: "ليل", start: 0.3, end: 0.6, matched: true },
+      { text: "ناسيكم", start: 0.6, end: 1, matched: false },
+    ];
+    expect(adherencePercent(judged)).toBe(67);
+  });
+
+  it("قبل المحاذاة (بلا أعلام) ⟵ null لا صفر", () => {
+    const raw: KaraokeWord[] = [{ text: "يا", start: 0, end: 0.3 }];
+    expect(adherencePercent(raw)).toBeNull();
+    expect(adherencePercent([])).toBeNull();
+  });
+});
+
+describe("الطيّ الصوتي — إملاء التفريغ لصوت واحد لا يخصم من المطابقة", () => {
+  it("س/ص وط/ت وظ/ز حروف متطابقة سماعاً: تُحاذى وتُعرض بصورتها المكتوبة", () => {
+    const sung: KaraokeWord[] = [
+      { text: "وسمودك", start: 0, end: 0.5 },
+      { text: "تهر", start: 0.6, end: 1 },
+      { text: "زلك", start: 1.1, end: 1.5 },
+    ];
+    const aligned = alignWordsToLyrics(sung, "وَصُمُودَكْ طُهْر ظِلَّك");
+    expect(aligned.map((w) => w.matched)).toEqual([true, true, true]);
+    expect(aligned[0].text).toBe("وَصُمُودَكْ");
+    expect(aligned[1].text).toBe("طُهْر");
+    expect(adherencePercent(aligned)).toBe(100);
+  });
+
+  it("الاختلاف الحقيقي في الحروف يبقى انحرافاً مكشوفاً بنقاطه", () => {
+    const sung: KaraokeWord[] = [
+      { text: "قمر", start: 0, end: 0.5 },
+      { text: "الليل", start: 0.6, end: 1 },
+    ];
+    const aligned = alignWordsToLyrics(sung, "بَحْر اللَّيْل");
+    expect(aligned[0].matched).toBe(false);
+    expect(aligned[1].matched).toBe(true);
   });
 });
