@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null);
   const mode = body?.mode;
-  if (mode !== "write" && mode !== "improve") {
+  if (mode !== "write" && mode !== "improve" && mode !== "plan") {
     return NextResponse.json({ error: "وضع الطلب غير صحيح" }, { status: 400 });
   }
 
@@ -30,6 +30,9 @@ export async function POST(req: NextRequest) {
   if (mode === "improve" && !lyrics) {
     return NextResponse.json({ error: "اكتب كلماتك أولاً ليتم تحسينها" }, { status: 400 });
   }
+  if (mode === "plan" && !lyrics) {
+    return NextResponse.json({ error: "الصق كلماتك أولاً ليخطط لها الذكاء" }, { status: 400 });
+  }
 
   const request: AssistRequest = {
     mode,
@@ -38,6 +41,8 @@ export async function POST(req: NextRequest) {
     dialectId: DIALECTS.some((d) => d.id === body.dialectId) ? body.dialectId : DIALECTS[0].id,
     styleId: SONG_STYLES.some((s) => s.id === body.styleId) ? body.styleId : SONG_STYLES[0].id,
     formId: LYRIC_FORMS.some((f) => f.id === body.formId) ? body.formId : undefined,
+    // الوضع الذكي: المساعد يقرر الخطة الموسيقية كاملة بنفسه
+    auto: body.auto === true,
     // عقل المنصة: أمثلة برومبتات نالت أعلى تقييم تُحقن في سياق المساعد
     exemplars: await getPromptExemplars().catch(() => []),
   };
