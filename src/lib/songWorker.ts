@@ -5,6 +5,7 @@ import { LyriaError } from "./providers/lyria";
 import { isInstrumentalRequest } from "./providers/compositionPlan";
 import {
   DELIBERATE_TASHKEEL_DENSITY,
+  completeFunctionWords,
   proofreadLyrics,
   vocalizationDensity,
 } from "./lyricsProofread";
@@ -76,6 +77,29 @@ export async function runSongJob(jobId: string): Promise<void> {
       job.request = sungRequest;
       await store.saveRequest(jobId, sungRequest);
       await logUsage("proofread", job.userId);
+    }
+  }
+
+  // الإكمال الحتمي للكلمات الوظيفية عارية النهاية (بِه ⟵ بِهِ) — بعد البوابة
+  // ودائماً حتى للمشكّل عمداً: إكمال موضعي لا إعادة تشكيل، والنهاية العارية
+  // تدعو المحرك للارتجال (سُمعت «بهر» بدل «بِه» على الإنتاج)
+  if (!isInstrumentalRequest(job.request)) {
+    const before =
+      job.request.sections?.map((s) => s.lyrics).join("\n") ?? job.request.lyrics ?? "";
+    if (before !== completeFunctionWords(before)) {
+      const completed: typeof job.request = job.request.sections?.length
+        ? {
+            ...job.request,
+            sections: job.request.sections.map((s) => ({
+              ...s,
+              lyrics: completeFunctionWords(s.lyrics),
+            })),
+          }
+        : { ...job.request, lyrics: completeFunctionWords(job.request.lyrics ?? "") };
+      if (completed.sections?.length) completed.lyrics = joinSections(completed.sections);
+      job.request = completed;
+      // الحفظ ليطابق العرضُ (المحرر والكاريوكي) ما غُنّي فعلاً
+      await store.saveRequest(jobId, completed);
     }
   }
 
