@@ -10,6 +10,7 @@ import {
   useNodesState,
   type Connection,
   type Edge,
+  type OnConnectEnd,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import WaveLine from "@/components/WaveLine";
@@ -138,6 +139,49 @@ export default function StudioSpace() {
     (conn: Connection) =>
       setEdges((eds) => addEdge({ ...conn, animated: true, style: { strokeWidth: 2 } }, eds)),
     [setEdges]
+  );
+
+  /** أُفلتت الوصلة في الفراغ: دليل فوري بكل الوجهات المتوافقة بدل الحيرة */
+  const onConnectEnd: OnConnectEnd = useCallback(
+    (_event, state) => {
+      if (state.isValid || !state.fromNode || state.toNode) return;
+      const data = state.fromNode.data as { kind?: NodeKind; config?: Record<string, string> };
+      if (!data?.kind) return;
+      const ref = { kind: data.kind, config: data.config, handle: state.fromHandle?.id };
+
+      if (state.fromHandle?.type === "source") {
+        const out = resolveOutput(ref);
+        if (!out) return;
+        const targets = [
+          ...new Set(
+            Object.values(NODE_DEFS).flatMap((d) =>
+              d.inputs
+                .filter((p) => p.accepts.includes(out.type))
+                .map((p) => (d.inputs.length > 1 ? `«${d.name}» (منفذ ${p.label})` : `«${d.name}»`))
+            )
+          ),
+        ];
+        showHint(
+          `خرج «${NODE_DEFS[data.kind].name}» ${PORT_META[out.type].chip} ${PORT_META[out.type].label} يوصَل بـ: ${targets.join(
+            "، "
+          )}. أفلت الوصلة قرب النقطة الملونة المتوافقة — تلتقط وحدها من مسافة قريبة.`
+        );
+      } else {
+        const inp = resolveInput(ref);
+        if (!inp) return;
+        const sources = [
+          ...new Set(
+            Object.values(NODE_DEFS)
+              .filter((d) => d.outputs.some((o) => inp.accepts.includes(o.type)))
+              .map((d) => `«${d.name}»`)
+          ),
+        ];
+        showHint(
+          `منفذ «${inp.label}» في «${NODE_DEFS[data.kind].name}» يستقبل من: ${sources.join("، ")}.`
+        );
+      }
+    },
+    [showHint]
   );
 
   function addCard(kind: NodeKind) {
@@ -747,11 +791,14 @@ export default function StudioSpace() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onConnectEnd={onConnectEnd}
           isValidConnection={isValidConnection}
           nodeTypes={nodeTypes}
           fitView
           minZoom={0.3}
           maxZoom={1.5}
+          // الالتقاط بالقرب: إفلات الوصلة قرب المنفذ يكفي — لا حاجة لإصابة 12 بكسل
+          connectionRadius={48}
           deleteKeyCode={["Delete", "Backspace"]}
           proOptions={{ hideAttribution: true }}
         >

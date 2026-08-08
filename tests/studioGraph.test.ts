@@ -186,3 +186,26 @@ describe("موجات التشغيل المتوازي والترتيب", () => {
     expect(byPort.get("ctx")?.map((e) => e.source)).toEqual(["a", "b", "c"]);
   });
 });
+
+describe("«صوت من عندك» يتصل بكل مستهلكي الصوت", () => {
+  it("خرجه الصوتي مقبول لدى البصمة والفصل والعازل والتفريغ والحفظ واللحن المرجعي والذكاء", () => {
+    const upload = { kind: "upload" as const };
+    for (const [kind, handle] of [
+      ["voiceprint", "in"],
+      ["split", "in"],
+      ["isolate", "in"],
+      ["stt", "in"],
+      ["save", "in"],
+      ["song", "melody"],
+      ["music", "melody"],
+      ["ai", "ctx"],
+    ] as const) {
+      expect(canConnect(upload, { kind, handle })).toBe(true);
+    }
+  });
+
+  it("ويُرفض حيث لا صوت يُقبل — منفذ الكلمات النصي مثلاً", () => {
+    expect(canConnect({ kind: "upload" }, { kind: "song", handle: "in" })).toBe(false);
+    expect(canConnect({ kind: "upload" }, { kind: "lyrics", handle: "in" })).toBe(false);
+  });
+});
