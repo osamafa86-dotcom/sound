@@ -26,6 +26,7 @@ export const ROUTE_LABELS: Record<string, string> = {
   podcast: "البودكاست",
   audiobook: "الكتب الصوتية",
   facebook: "النشر على فيسبوك",
+  whatsapp: "صندوق واتساب",
 };
 
 /**
@@ -49,6 +50,8 @@ export const DEFAULT_ROUTE_COST_USD: Record<string, number> = {
   audiobook: 0.02,
   // النشر مجاني لدى فيسبوك — يُحصى للمتابعة لا للكلفة
   facebook: 0,
+  // Meta تحاسب على المحادثة لا الرسالة، والخدمية مجانية ضمن نافذة ٢٤ ساعة
+  whatsapp: 0,
 };
 
 /** كلفة المسار مع احترام تجاوز البيئة (COST_TTS=0.03 مثلاً) */

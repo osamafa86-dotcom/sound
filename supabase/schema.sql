@@ -336,3 +336,28 @@ create table if not exists public.facebook_pages (
 );
 
 alter table public.facebook_pages enable row level security;
+
+
+-- ============================================================
+-- 12) صندوق واتساب (Cloud API)
+-- ============================================================
+
+-- Meta لا تحفظ الرسائل: تصل مرة واحدة إلى الـ webhook ثم تختفي.
+-- wa_id فريد لأن Meta تعيد إرسال الحمولة حتى تتلقى 200 — فيمنع التكرار.
+create table if not exists public.whatsapp_messages (
+  wa_id text primary key,
+  contact text not null,
+  name text,
+  direction text not null check (direction in ('in', 'out')),
+  type text not null default 'text',
+  text text,
+  media_id text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists whatsapp_contact_idx on public.whatsapp_messages (contact, created_at desc);
+create index if not exists whatsapp_time_idx on public.whatsapp_messages (created_at desc);
+
+-- RLS مفعّلة بلا سياسات: هذه أرقام زبائن ورسائلهم — لا وصول من المتصفح إطلاقاً.
+-- الخادم وحده يقرأ ويكتب بمفتاح الخدمة، والصندوق محمي بصلاحية المالك.
+alter table public.whatsapp_messages enable row level security;

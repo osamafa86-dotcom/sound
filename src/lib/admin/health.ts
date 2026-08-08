@@ -75,6 +75,15 @@ export function integrations(): IntegrationStatus[] {
       critical: false,
     },
     {
+      id: "whatsapp",
+      name: "WhatsApp Cloud API",
+      powers: ["استقبال رسائل الزبائن", "الرد عليهم من الصندوق"],
+      configured: has("WHATSAPP_PHONE_NUMBER_ID") && has("WHATSAPP_TOKEN") && has("WHATSAPP_VERIFY_TOKEN"),
+      envVars: ["WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_TOKEN", "WHATSAPP_VERIFY_TOKEN"],
+      model: process.env.WHATSAPP_API_VERSION ?? "v23.0",
+      critical: false,
+    },
+    {
       id: "supabase",
       name: "Supabase (حسابات ومكتبة)",
       powers: ["تسجيل الدخول", "المكتبة السحابية", "التقييمات"],
@@ -110,6 +119,7 @@ export function features(forceMock = false): FeatureStatus[] {
   const supabase = has("NEXT_PUBLIC_SUPABASE_URL") && has("NEXT_PUBLIC_SUPABASE_ANON_KEY");
   const service = has("SUPABASE_SERVICE_ROLE_KEY");
   const facebook = has("FACEBOOK_APP_ID") && has("FACEBOOK_APP_SECRET");
+  const whatsapp = has("WHATSAPP_PHONE_NUMBER_ID") && has("WHATSAPP_TOKEN") && has("WHATSAPP_VERIFY_TOKEN");
 
   const state = (live: boolean, fallbackMock = true): FeatureStatus["state"] =>
     forceMock ? "mock" : live ? "live" : fallbackMock ? "mock" : "off";
@@ -124,6 +134,7 @@ export function features(forceMock = false): FeatureStatus[] {
     { id: "audiobook", name: "استوديو الكتب الصوتية", path: "/audiobook", state: state(eleven), note: eleven ? "فهرسة محلية وإلقاء بـ ElevenLabs" : "الفهرسة تعمل، والإلقاء بوضع تجريبي" },
     { id: "library", name: "المكتبة السحابية والحسابات", path: "/library", state: supabase ? "live" : "off", note: supabase ? "Supabase Auth + Storage" : "مكتبة محلية في المتصفح فقط" },
     { id: "share", name: "المشاركة برابط عام", path: "/library", state: service ? "live" : "off", note: service ? "صفحات /s/… بوسوم OG" : "تحتاج SUPABASE_SERVICE_ROLE_KEY" },
+    { id: "whatsapp", name: "صندوق واتساب", path: "/whatsapp", state: whatsapp ? "live" : "off", note: whatsapp ? "Cloud API — استقبال وردّ" : "يحتاج WHATSAPP_PHONE_NUMBER_ID وWHATSAPP_TOKEN وWHATSAPP_VERIFY_TOKEN" },
     { id: "facebook", name: "النشر على فيسبوك", path: "/library", state: facebook && service ? "live" : "off", note: facebook ? (service ? "ربط الصفحات ونشر الروابط" : "يحتاج SUPABASE_SERVICE_ROLE_KEY أيضاً") : "يحتاج FACEBOOK_APP_ID وFACEBOOK_APP_SECRET" },
     { id: "jobs", name: "المهام الطويلة الدائمة", path: "/songs", state: service ? "live" : "mock", note: service ? "جدول song_jobs في Supabase" : "ذاكرة الخادم (تُفقد بين النسخ)" },
     { id: "limits", name: "حدود الاستهلاك الذرّية", path: "-", state: service ? "live" : "mock", note: service ? "دالة consume_rate_limit" : "عدّاد في ذاكرة النسخة" },

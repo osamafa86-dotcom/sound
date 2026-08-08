@@ -44,6 +44,8 @@ export const LIMITS = {
   audiobook: { perVisitor: envInt("RATE_LIMIT_AUDIOBOOK", 40), global: 400, windowSec: 3600 },
   // النشر لا يكلّف المزوّدين شيئاً، لكن الإفراط فيه يعرّض التطبيق لحظر فيسبوك
   facebook: { perVisitor: envInt("RATE_LIMIT_FACEBOOK", 10), global: 200, windowSec: 3600 },
+  // الردود على الزبائن: حد سخيّ لأن الصندوق أداة عمل يومية، وسقف يحمي من الحلقات
+  whatsapp: { perVisitor: envInt("RATE_LIMIT_WHATSAPP", 120), global: 1000, windowSec: 3600 },
 } satisfies Record<string, LimitRule>;
 
 export type LimitScope = keyof typeof LIMITS;
