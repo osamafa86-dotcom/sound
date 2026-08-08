@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { elevenLabsIsolateAudio } from "@/lib/providers/elevenlabs";
+import { elevenLabsIsolateAudio, humanizeElevenLabsError } from "@/lib/providers/elevenlabs";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
 import { logUsage } from "@/lib/usage";
@@ -40,6 +40,6 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     const message = e instanceof Error ? e.message : "تعذّر العزل";
     console.error("Audio isolation failed:", message);
-    return NextResponse.json({ error: message }, { status: 502 });
+    return NextResponse.json({ error: humanizeElevenLabsError(message) }, { status: 502 });
   }
 }

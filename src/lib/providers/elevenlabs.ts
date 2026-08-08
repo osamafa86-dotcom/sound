@@ -29,6 +29,24 @@ export class ElevenLabsError extends Error {
   }
 }
 
+/**
+ * تعريب أخطاء ElevenLabs التشغيلية لرسائل تنفيذية واضحة — أشهرها وضع
+ * «معرّف المفتاح» بدل المفتاح السرّي (يبدأ بـ sk_) في متغير البيئة،
+ * فتظهر للمستخدم رسالة JSON إنجليزية غامضة بدل تشخيص قابل للتنفيذ.
+ */
+export function humanizeElevenLabsError(message: string): string {
+  if (/api_key_id_used_as_api_key/i.test(message)) {
+    return "مفتاح ElevenLabs المضبوط في الخادم هو «معرّف المفتاح» لا المفتاح السرّي نفسه — المفتاح الصحيح يبدأ بـ sk_ ويظهر عند إنشائه أو تدويره في لوحة ElevenLabs؛ حدّث ELEVENLABS_API_KEY في إعدادات الاستضافة ثم أعد النشر";
+  }
+  if (/invalid_api_key|authentication_error|missing_permissions/i.test(message)) {
+    return "مفتاح ElevenLabs مرفوض من المحرك (غير صالح أو منتهٍ أو منقوص الصلاحيات) — حدّث ELEVENLABS_API_KEY في إعدادات الاستضافة";
+  }
+  if (/quota_exceeded|insufficient|payment_required/i.test(message)) {
+    return "رصيد ElevenLabs نفد — اشحن الرصيد أو انتظر تجدد الباقة ثم أعد المحاولة";
+  }
+  return message;
+}
+
 async function apiCall(path: string, apiKey: string, body: unknown, query = ""): Promise<Buffer> {
   const res = await fetch(`${API_BASE}${path}${query}`, {
     method: "POST",

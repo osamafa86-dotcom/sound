@@ -1,7 +1,7 @@
 import { DIALECTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
 import { heritageAssistBlock } from "@/lib/heritage/palestinian";
 import { parseSections, sanitizeSections } from "@/lib/songSections";
-import { PLAN_PROMPT_LINE, planSchemaProps, sanitizePlan } from "./plan";
+import { PLAN_PROMPT_LINE, planSchemaProps, sanitizePlan, verbatimSections } from "./plan";
 import type { AssistRequest, AssistResult, LyricsAssistant } from "./types";
 
 /** النموذج الافتراضي — سريع وممتاز مع العربية؛ قابل للتبديل عبر متغير البيئة */
@@ -112,7 +112,7 @@ function buildUserPrompt(req: AssistRequest): string {
     base.push(`اكتب كلمات أغنية كاملة من هذه الفكرة:\n${req.idea}`);
   } else if (req.mode === "plan") {
     base.push(
-      `هذه كلمات المستخدم الجاهزة — لا تعدّل فيها حرفاً واحداً؛ أعدها كما هي في حقل lyrics، وضع لها عنواناً، واقترح المقام، وقرر الخطة:\n${req.lyrics}`
+      `هذه كلمات المستخدم الجاهزة — لا تعدّل فيها حرفاً واحداً؛ أعدها كما هي في حقل lyrics، وقسّمها في sections ببنية غنائية (مقدمة وخاتمة آليتان بلا كلمات، والمقاطع واللازمة من أسطرها نفسها دون تغيير أي كلمة — إضافة التشكيل وحدها مسموحة لأنها عون نطق)، وضع لها عنواناً، واقترح المقام، وقرر الخطة:\n${req.lyrics}`
     );
   } else {
     base.push(`حسّن كلمات الأغنية التالية مع الحفاظ على معناها وشخصيتها، واقترح المقام الأنسب لها:\n${req.lyrics}`);
@@ -174,8 +174,9 @@ export function geminiAssistant(apiKey: string): LyricsAssistant {
         maqamReason: data.maqamReason,
         stylePromptEn: data.stylePromptEn,
         // مقاطع النموذج بعد التحقيق، أو تقسيم استدلالي من النص عند غيابها
+        // (وفي وضع الخطة: بنية النموذج تُقبل فقط إن حملت كلمات المستخدم حرفياً)
         sections: verbatim
-          ? parseSections(verbatim)
+          ? verbatimSections(verbatim, data.sections)
           : (sanitizeSections(data.sections) ?? parseSections(data.lyrics)),
         ...(wantPlan && { plan: sanitizePlan(data.plan) }),
         provider: "gemini",

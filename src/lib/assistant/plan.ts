@@ -1,4 +1,5 @@
 import { DIALECTS, INSTRUMENTS, SONG_STYLES } from "@/lib/maqamat";
+import { parseSections, sanitizeSections, type SongSection } from "@/lib/songSections";
 import type { MusicPlan } from "./types";
 
 /**
@@ -36,6 +37,28 @@ export function planSchemaProps() {
 
 /** السطر الذي يُضاف لتعليمات النظام في الوضع الذكي */
 export const PLAN_PROMPT_LINE = `5. بصفتك المنتج الموسيقي، قرر خطة التلحين كاملة في حقل plan: اللون الغنائي الأنسب (styleId)، جنس الصوت (singer)، اللهجة (dialectId — وإن أرسل المستخدم كلماته الجاهزة فاستنتج لهجتها من النص نفسه)، من آلتين إلى خمس آلات (instrumentIds)، والسرعة bpm (60–140، أو 0 لتركها للمحرك)، مع تعليل عربي واحد موجز (reason) يشرح للمستخدم لماذا اخترت هذا كله.`;
+
+/** هيكل الحروف: بلا حركات ولا ترقيم ولا مسافات — معيار «نفس الكلمات حرفياً» */
+function letterSkeleton(text: string): string {
+  return text.replace(/[ً-ْٰـ]/g, "").replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+/**
+ * مقاطع وضع «كلماتي جاهزة»: بنية النموذج (مقدمة/مقاطع/لازمة/خاتمة بمددها)
+ * مكسب موسيقي حقيقي — لكنها تُقبل فقط إن حملت كلمات المستخدم نفسها
+ * (هيكل الحروف متطابق؛ التشكيل المضاف مسموح لأنه عون نطق لا تعديل).
+ * وإلا فالتقسيم الاستدلالي من نص المستخدم الحرفي هو المرجع.
+ */
+export function verbatimSections(
+  userLyrics: string,
+  modelSections: SongSection[] | undefined | null
+): SongSection[] {
+  const sane = sanitizeSections(modelSections ?? undefined);
+  if (sane && letterSkeleton(sane.map((s) => s.lyrics).join(" ")) === letterSkeleton(userLyrics)) {
+    return sane;
+  }
+  return parseSections(userLyrics);
+}
 
 /** تعقيم خطة النموذج ضد الكتالوجات — أي قيمة خارجة تُستبدل بأقرب افتراض آمن */
 export function sanitizePlan(raw: unknown): MusicPlan | undefined {
