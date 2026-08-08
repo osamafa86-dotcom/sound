@@ -982,7 +982,7 @@ export default function SongsStudio() {
 
   /** لمسة الماستر — معالجة نهائية في المتصفح: تطبيع + قص صمت + fade */
   const [mastering, setMastering] = useState(false);
-  async function applyMaster() {
+  async function applyMaster(auto = false) {
     if (!result || result.mastered || mastering) return;
     setMastering(true);
     const forJobId = result.jobId;
@@ -992,7 +992,8 @@ export default function SongsStudio() {
       const mastered = await masterAudio(result.blob);
       if (resultRef.current?.jobId !== forJobId) return;
       if (!mastered.changed) {
-        setError("المقطع أقصر من أن يحتاج معالجة ماستر — بقي كما هو");
+        // في الماستر التلقائي عدم الحاجة ليست خبراً — لا إزعاج
+        if (!auto) setError("المقطع أقصر من أن يحتاج معالجة ماستر — بقي كما هو");
         return;
       }
       const song: SongResult = {
@@ -1023,11 +1024,24 @@ export default function SongsStudio() {
       // الرابط القديم لم يعد مرجعاً في أي مكان — يُبطل فلا يتراكم WAV ضخم
       URL.revokeObjectURL(oldUrl);
     } catch {
-      setError("تعذّرت معالجة الماستر في هذا المتصفح — الملف الأصلي كما هو");
+      if (!auto) setError("تعذّرت معالجة الماستر في هذا المتصفح — الملف الأصلي كما هو");
     } finally {
       setMastering(false);
     }
   }
+
+  // 🪄 الوضع الذكي يطبّق «لمسة الماستر» تلقائياً — بعد حسم المزامنة أولاً،
+  // لأن قصّ مقدمة الملف يُصحح توقيتات الكلمات المتزامنة بعدها لا قبلها
+  const autoMasterRef = useRef("");
+  useEffect(() => {
+    if (studioMode !== "smart" || !result || result.mock || result.mastered || mastering) return;
+    const syncSettled = instrumental || !!karaokeWords || !!karaokeNote;
+    if (!syncSettled || karaokeBusy) return;
+    if (autoMasterRef.current === result.jobId) return;
+    autoMasterRef.current = result.jobId;
+    applyMaster(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyMaster مستقرة ضمن هذا النطاق
+  }, [studioMode, result, mastering, karaokeWords, karaokeNote, karaokeBusy, instrumental]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
@@ -2129,7 +2143,7 @@ export default function SongsStudio() {
                   </button>
                   {!result.mock && (
                     <button
-                      onClick={applyMaster}
+                      onClick={() => applyMaster()}
                       disabled={mastering || result.mastered}
                       title="تطبيع علو الصوت + قص الصمت + دخول وخروج ناعمان — معالجة فورية في متصفحك"
                       className="rounded-xl border border-accent px-5 py-2.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"

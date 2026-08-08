@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { sanitizePlan } from "@/lib/assistant/plan";
+import { sanitizePlan, verbatimSections } from "@/lib/assistant/plan";
+import { humanizeElevenLabsError } from "@/lib/providers/elevenlabs";
 import { mockAssistant } from "@/lib/assistant/mock";
 
 describe("تعقيم الخطة الذكية ضد الكتالوجات", () => {
@@ -93,5 +94,44 @@ describe("الخطة في الوضع التجريبي", () => {
     });
     expect(r.plan).toBeUndefined();
     expect(r.stylePromptEn).toContain("modern Arabic pop");
+  });
+});
+
+describe("مقاطع «كلماتي جاهزة» الحرفية", () => {
+  const userLyrics = "يا دار جدي وقفت بالباب\nوالدمع من عيني ما غاب";
+
+  it("بنية النموذج تُقبل حين تحمل كلمات المستخدم نفسها — ولو مشكّلة", () => {
+    const sections = verbatimSections(userLyrics, [
+      { kind: "intro", lyrics: "", durationSec: 10 },
+      {
+        kind: "verse",
+        lyrics: "يَا دَارَ جَدِّي وَقَفْتُ بِالْبَابِ\nوَالدَّمْعُ مِنْ عَيْنِي مَا غَابْ",
+        durationSec: 20,
+      },
+      { kind: "outro", lyrics: "", durationSec: 8 },
+    ]);
+    expect(sections.map((s) => s.kind)).toEqual(["intro", "verse", "outro"]);
+  });
+
+  it("بنية بدّلت الكلمات تُرفض ويعود التقسيم الاستدلالي من نص المستخدم", () => {
+    const sections = verbatimSections(userLyrics, [
+      { kind: "verse", lyrics: "كلمات مختلفة تماماً كتبها النموذج", durationSec: 20 },
+    ]);
+    expect(sections.map((s) => s.lyrics).join("\n")).toContain("يا دار جدي");
+  });
+});
+
+describe("تعريب أخطاء ElevenLabs التشغيلية", () => {
+  it("معرّف المفتاح بدل المفتاح السرّي ⟵ تشخيص تنفيذي بالعربية", () => {
+    const msg = humanizeElevenLabsError(
+      'ElevenLabs 400: {"detail":{"type":"authentication_error","code":"invalid_api_key","status":"api_key_id_used_as_api_key"}}'
+    );
+    expect(msg).toContain("sk_");
+    expect(msg).toContain("ELEVENLABS_API_KEY");
+  });
+
+  it("نفاد الرصيد ⟵ رسالة شحن واضحة، وما عداه يمر كما هو", () => {
+    expect(humanizeElevenLabsError("quota_exceeded: not enough credits")).toContain("الرصيد");
+    expect(humanizeElevenLabsError("network timeout")).toBe("network timeout");
   });
 });
