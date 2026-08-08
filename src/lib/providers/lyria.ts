@@ -2,8 +2,16 @@ import { pcm16ToWav } from "@/lib/mockAudio";
 import { isInstrumentalRequest } from "./compositionPlan";
 import type { AudioResult, MusicProvider, MusicRequest } from "./types";
 
-/** نموذج توليد الموسيقى — Lyria 3 Pro يدعم أغانٍ حتى ~3 دقائق بجودة عالية */
-const MODEL = process.env.LYRIA_MODEL ?? "lyria-3-pro-preview";
+/**
+ * سلسلة نماذج التوليد المرشحة (بفواصل في LYRIA_MODEL): يُجرَّب الأول،
+ * فإن لم يكن موجوداً لدى الـAPI بعد (404 — طرح تدريجي كما مع Lyria 3.5
+ * المعلن في Flow قبل وصوله للمطورين) انتقل للتالي تلقائياً — فيمكن ضبط
+ * "lyria-3-5-pro-preview,lyria-3-pro-preview" يوم الإعلان بلا أي مخاطرة.
+ */
+const MODELS = (process.env.LYRIA_MODEL ?? "lyria-3-pro-preview")
+  .split(",")
+  .map((m) => m.trim())
+  .filter(Boolean);
 
 export class LyriaError extends Error {
   constructor(
@@ -117,22 +125,26 @@ export function lyriaMusic(apiKey: string): MusicProvider {
       ].join("\n");
 
       // النموذج يعيد 503 عند الازدحام المؤقت — نعيد المحاولة قبل الرجوع للمزوّد البديل
+      // وعبر سلسلة المرشحين: 404 (النموذج لم يصل الـAPI بعد) ينتقل للمرشح التالي
       let res: Response | null = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-            body: JSON.stringify({
-              contents: [{ role: "user", parts: [{ text: prompt }] }],
-              generationConfig: { responseModalities: ["AUDIO"] },
-              ...(safetySettings() && { safetySettings: safetySettings() }),
-            }),
-          }
-        );
-        if (res.status !== 503) break;
-        if (attempt < 2) await new Promise((r) => setTimeout(r, 4000 * (attempt + 1)));
+      for (const model of MODELS) {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+              body: JSON.stringify({
+                contents: [{ role: "user", parts: [{ text: prompt }] }],
+                generationConfig: { responseModalities: ["AUDIO"] },
+                ...(safetySettings() && { safetySettings: safetySettings() }),
+              }),
+            }
+          );
+          if (res.status !== 503) break;
+          if (attempt < 2) await new Promise((r) => setTimeout(r, 4000 * (attempt + 1)));
+        }
+        if (!(res && res.status === 404 && MODELS.length > 1)) break;
       }
 
       if (!res || !res.ok) {
