@@ -267,6 +267,14 @@ export default function SongsStudio() {
   const [deliveryDialectId, setDeliveryDialectId] = useState<string>(DIALECTS[0].id);
 
   // المدقق اللغوي: إملاء + تشكيل تام حسب اللهجة
+  // 🎧 بروفة النطق: قراءة مسموعة للنص الملقَّن قبل دفع كلفة التلحين
+  const [rehearsing, setRehearsing] = useState(false);
+  const [rehearsal, setRehearsal] = useState<{
+    url: string;
+    dictated: string;
+    issues: { original: string; fixed: string; reason: string }[];
+    mock: boolean;
+  } | null>(null);
   const [proofing, setProofing] = useState(false);
   const [proofIssues, setProofIssues] = useState<{ original: string; fixed: string; reason: string }[] | null>(null);
 
@@ -986,6 +994,43 @@ export default function SongsStudio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- startKaraoke مستقرة ضمن هذا النطاق
   }, [result, karaokeWords, karaokeBusy, instrumental]);
 
+  /**
+   * 🎧 بروفة النطق — نفس خط التلقين الذي سيصل المولد حرفياً (ذاكرة النطق
+   * ثم الملقّن الغنائي بالتشكيل الكامل) يُقرأ بصوت واضح متأنٍّ، فيُكتشف
+   * أي لفظ منحرف ويُصحح قبل دفع كلفة التلحين.
+   */
+  async function rehearse() {
+    if (!lyrics.trim() || rehearsing) return;
+    setError("");
+    setRehearsing(true);
+    try {
+      const res = await fetch("/api/songs/rehearse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ lyrics, dialectId: deliveryDialectId }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "تعذّرت البروفة، حاول مجدداً");
+      const bin = atob(data.audio as string);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([bytes], { type: data.mimeType ?? "audio/mpeg" }));
+      setRehearsal((prev) => {
+        if (prev) URL.revokeObjectURL(prev.url);
+        return {
+          url,
+          dictated: data.dictated as string,
+          issues: Array.isArray(data.issues) ? data.issues : [],
+          mock: !!data.mock,
+        };
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally {
+      setRehearsing(false);
+    }
+  }
+
   async function makeCover() {
     if (!result || coverBusy) return;
     setCoverBusy(true);
@@ -1585,6 +1630,64 @@ export default function SongsStudio() {
                   </div>
                 </div>
               </>
+            )}
+
+            {/* 🎧 بروفة النطق — متاحة لوضعي النص الحر والمقاطع معاً */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={rehearse}
+                disabled={rehearsing || loading || !lyrics.trim()}
+                title="اسمع الكلمات بالتلقين الكامل (ذاكرة النطق + التشكيل باللهجة) قبل دفع كلفة التلحين"
+                className="rounded-xl border border-gold/60 px-4 py-2 text-sm font-semibold text-gold transition-colors hover:bg-gold/10 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {rehearsing ? "🎧 يجهّز التلقين ويقرأ..." : "🎧 بروفة النطق — اسمعها قبل التلحين"}
+              </button>
+              <span className="text-xs text-muted">
+                قراءة واضحة لما سيُلقَّن للمولد حرفياً — لفظ منحرف هنا يعني لفظاً منحرفاً في الغناء
+              </span>
+            </div>
+
+            {rehearsal && (
+              <div className="rounded-2xl border border-gold/40 bg-gold/5 p-4 text-sm">
+                <p className="font-semibold">
+                  🎧 هذا ما سيُلقَّن للمولد حرفياً
+                  {rehearsal.mock && (
+                    <span className="ms-2 text-xs font-normal text-muted">
+                      (قراءة تجريبية — محرك النطق غير مفعّل في هذه البيئة)
+                    </span>
+                  )}
+                </p>
+                <audio controls src={rehearsal.url} className="mt-2 w-full" />
+                <p dir="rtl" className="mt-3 max-h-44 overflow-y-auto whitespace-pre-wrap rounded-xl bg-surface p-3 leading-loose">
+                  {rehearsal.dictated}
+                </p>
+                {rehearsal.issues.length > 0 && (
+                  <ul className="mt-2 flex flex-col gap-1 text-xs">
+                    {rehearsal.issues.map((issue, i) => (
+                      <li key={i} className="rounded-lg bg-surface px-3 py-1.5">
+                        <span className="text-primary-strong line-through">{issue.original}</span>
+                        {" ← "}
+                        <span className="font-semibold text-accent">{issue.fixed}</span>
+                        <span className="ms-2 text-muted">({issue.reason})</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setLyrics(rehearsal.dictated);
+                      if (sections) applySections(parseSections(rehearsal.dictated));
+                    }}
+                    className="rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-primary-strong"
+                  >
+                    ✓ اعتمد النص الملقَّن للتلحين
+                  </button>
+                  <span className="text-xs text-muted">
+                    سمعت لفظاً خاطئاً؟ عدّل الكلمة في النص (أو شكّلها بنفسك — تشكيلك يُحترم) ثم أعد البروفة.
+                  </span>
+                </div>
+              </div>
             )}
 
             {proofIssues && (
