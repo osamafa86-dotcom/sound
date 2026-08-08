@@ -34,17 +34,35 @@ function mockLyrics(idea: string): string {
   ].join("\n");
 }
 
+/** لون غنائي إرشادي من كلمات مفتاحية — نظير الخطة الذكية في الوضع التجريبي */
+const STYLE_RULES: { pattern: RegExp; styleId: string }[] = [
+  { pattern: /رثاء|وداع|فقيد|رحل|توفي/, styleId: "ritha" },
+  { pattern: /حزن|حزين|فراق|دمع|جرح/, styleId: "shajan" },
+  { pattern: /عتاب|لوم|ليش|هجر/, styleId: "atab" },
+  { pattern: /غربة|وطن|حنين|اشتقت|بعاد/, styleId: "haneen" },
+  { pattern: /دعاء|ربي|مناجا|استغفار/, styleId: "ibtihal" },
+  { pattern: /عرس|زفة|فرح|عريس|عروس/, styleId: "afrah" },
+];
+
 export const mockAssistant: LyricsAssistant = {
   id: "mock",
   async assist(req: AssistRequest): Promise<AssistResult> {
     const text = `${req.idea ?? ""} ${req.lyrics ?? ""}`;
     const matched = MOOD_RULES.find((r) => r.pattern.test(text))?.maqamId;
     const maqam = MAQAMAT.find((m) => m.id === matched) ?? MAQAMAT[0];
-    const style = SONG_STYLES.find((s) => s.id === req.styleId) ?? SONG_STYLES[0];
+    const wantPlan = req.auto === true || req.mode === "plan";
+    // في الوضع الذكي يقرر البديل اللون بنفسه من النص؛ وإلا يلتزم باختيار المستخدم
+    const styleId = wantPlan
+      ? (STYLE_RULES.find((r) => r.pattern.test(text))?.styleId ?? "tarab")
+      : req.styleId;
+    const style = SONG_STYLES.find((s) => s.id === styleId) ?? SONG_STYLES[0];
     const dialect = DIALECTS.find((d) => d.id === req.dialectId) ?? DIALECTS[0];
 
-    // في وضع التحسين لا يستطيع البديل التجريبي تحسين الصياغة فعلياً، فيعيد الكلمات كما هي
-    const lyrics = req.mode === "improve" ? (req.lyrics ?? "").trim() : mockLyrics((req.idea ?? "").trim());
+    // في وضعي التحسين والخطة لا يعدّل البديل التجريبي كلمات المستخدم — تعود كما هي
+    const lyrics =
+      req.mode === "improve" || req.mode === "plan"
+        ? (req.lyrics ?? "").trim()
+        : mockLyrics((req.idea ?? "").trim());
 
     return {
       title: "مسودة تجريبية",
@@ -58,6 +76,17 @@ export const mockAssistant: LyricsAssistant = {
         `${dialect.en} vocals`,
         "oud, qanun, darbuka rhythm, expressive Arabic singing, high quality studio production",
       ].join(", "),
+      ...(wantPlan && {
+        plan: {
+          styleId: style.id,
+          singer: "female" as const,
+          dialectId: dialect.id,
+          instrumentIds: ["oud", "qanun", "darbuka"],
+          bpm: null,
+          reason:
+            "خطة تجريبية مبسّطة من كلمات مفتاحية — الخطة الذكية الفعلية تُفعَّل مع ربط مفاتيح الذكاء الاصطناعي.",
+        },
+      }),
       provider: "mock",
       mock: true,
     };

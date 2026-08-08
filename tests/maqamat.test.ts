@@ -7,11 +7,34 @@ describe("بيانات المقامات", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("كل مقام يحمل سلّماً من 8 درجات يبدأ من الأساس وينتهي بالجواب", () => {
+  it("كل مقام يحمل سلّماً تصاعدياً يبدأ من الأساس وينتهي بالجواب", () => {
     for (const m of MAQAMAT) {
-      expect(m.scale).toHaveLength(8);
+      // السباعية 8 درجات؛ البلوز 7 والخماسي 6 — كلها سلالم مشروعة للمولّد
+      expect(m.scale.length).toBeGreaterThanOrEqual(6);
+      expect(m.scale.length).toBeLessThanOrEqual(8);
       expect(m.scale[0]).toBe(0);
-      expect(m.scale[7]).toBe(12);
+      expect(m.scale[m.scale.length - 1]).toBe(12);
+      for (let i = 1; i < m.scale.length; i++) {
+        expect(m.scale[i]).toBeGreaterThan(m.scale[i - 1]);
+      }
+    }
+  });
+
+  it("العائلات الثلاث ممثلة بغنى — عربية وتركية وغربية", () => {
+    for (const family of ["arabic", "turkish", "western"] as const) {
+      expect(MAQAMAT.filter((m) => m.family === family).length).toBeGreaterThanOrEqual(5);
+    }
+  });
+
+  it("السلالم الغربية بلا أرباع نغمات — أنصاف صحيحة فقط", () => {
+    for (const m of MAQAMAT.filter((x) => x.family === "western")) {
+      expect(m.scale.every((deg) => Number.isInteger(deg))).toBe(true);
+    }
+  });
+
+  it("ألوان الغناء الجديدة حاضرة بمعرّفاتها", () => {
+    for (const id of ["ritha", "shajan", "atab", "haneen", "ibtihal", "afrah"]) {
+      expect(SONG_STYLES.some((s) => s.id === id)).toBe(true);
     }
   });
 
