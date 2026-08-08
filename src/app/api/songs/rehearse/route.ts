@@ -4,6 +4,7 @@ import { getTTSProvider } from "@/lib/providers";
 import { applyPronunciationRules, listRules } from "@/lib/pronunciation";
 import {
   DELIBERATE_TASHKEEL_DENSITY,
+  completeFunctionWords,
   proofreadLyrics,
   vocalizationDensity,
 } from "@/lib/lyricsProofread";
@@ -61,6 +62,9 @@ export async function POST(req: NextRequest) {
       console.warn("rehearse proofread failed, reading raw lyrics:", e);
     }
   }
+
+  // ٢.٥) الإكمال الحتمي للكلمات الوظيفية — مرآة التوليد حرفياً
+  dictated = completeFunctionWords(dictated);
 
   // ٣) قراءة واضحة متأنية بصوت فصيح — لا غناء: المطلوب فحص اللفظ وحده
   const voiceId =

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DELIBERATE_TASHKEEL_DENSITY,
+  completeFunctionWords,
   enforceLetterSkeleton,
   letterSkeleton,
   needsTashkeel,
@@ -67,5 +68,24 @@ describe("بوابة الكثافة الذكية — المشكّل عمداً �
 
   it("نص بلا حروف عربية ⟵ صفر بلا قسمة على صفر", () => {
     expect(vocalizationDensity("Hello 123")).toBe(0);
+  });
+});
+
+describe("الإكمال الحتمي للكلمات الوظيفية عارية النهاية", () => {
+  it("«بِه» العارية النهاية تكتمل «بِهِ» — والمشكّلة نهايتها لا تُمس", () => {
+    expect(completeFunctionWords("شَيْخْ بِه رُوحُ النُّبُوَّة")).toBe(
+      "شَيْخْ بِهِ رُوحُ النُّبُوَّة"
+    );
+    expect(completeFunctionWords("به روح")).toBe("بِهِ روح");
+    // نهاية محرّكة أو مسكّنة وقفاً = اختيار متعمد يُحترم
+    expect(completeFunctionWords("قال بِهْ وسكت")).toBe("قال بِهْ وسكت");
+    expect(completeFunctionWords("آمنتُ بِهِ حقاً")).toBe("آمنتُ بِهِ حقاً");
+  });
+
+  it("يشمل القاموس فيه وله وعليه — وما سواها لا يُمس", () => {
+    expect(completeFunctionWords("فيه خير له وعليه سلام")).toBe(
+      "فِيهِ خير لَهُ وعَلَيْهِ سلام"
+    );
+    expect(completeFunctionWords("بهر الحاضرين")).toBe("بهر الحاضرين"); // كلمة أخرى
   });
 });
