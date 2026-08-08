@@ -2101,9 +2101,11 @@ export default function SongsStudio() {
                             }
                             note={
                               slot.song.fellBack
-                                ? `تعذّر هذا المحرك فعُرض بديل تجريبي — لا يصلح للمقارنة. السبب: ${
-                                    slot.song.fellBackReason?.slice(0, 160) ?? "غير معروف"
-                                  }`
+                                ? slot.song.mock
+                                  ? `تعذّر هذا المحرك فعُرض بديل تجريبي — لا يصلح للمقارنة. السبب: ${
+                                      slot.song.fellBackReason?.slice(0, 160) ?? "غير معروف"
+                                    }`
+                                  : "رفض مرشّح ليرا الكلمات فغنّتها هذه النسخة عبر Eleven Music — النسختان من المحرك نفسه فالمقارنة غير دالة هذه الجولة."
                                 : undefined
                             }
                           />
@@ -2141,9 +2143,11 @@ export default function SongsStudio() {
                   filename={`maqam-song-v${versions.length}.${result.ext}`}
                   note={
                     result.fellBack
-                      ? `تعذّر محرك التوليد فعُرض سلّم المقام التجريبي بدلاً منه. السبب: ${
-                          result.fellBackReason?.slice(0, 160) ?? "غير معروف"
-                        }`
+                      ? result.mock
+                        ? `تعذّر محرك التوليد فعُرض سلّم المقام التجريبي بدلاً منه. السبب: ${
+                            result.fellBackReason?.slice(0, 160) ?? "غير معروف"
+                          }`
+                        : `أصرّ مرشّح محتوى ليرا على رفض الكلمات بعد ثلاث محاولات (رفض متقلب لا يعيب كلماتك) فغنّاها محرك Eleven Music كاملةً — هذه أغنية حقيقية. «ولّد نسخة أخرى بنفس الإعدادات» يعيد المحاولة على ليرا.`
                       : undefined
                   }
                 >
