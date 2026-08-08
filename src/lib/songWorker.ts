@@ -3,7 +3,7 @@ import { refundCredits } from "./credits";
 import { getMusicProvider, mockMusic } from "./providers";
 import { LyriaError } from "./providers/lyria";
 import { isInstrumentalRequest } from "./providers/compositionPlan";
-import { needsTashkeel, proofreadLyrics } from "./lyricsProofread";
+import { proofreadLyrics } from "./lyricsProofread";
 import { defuseStylePrompt } from "./stylePrompt";
 import { joinSections, parseSections } from "./songSections";
 import { SONG_SAMPLE_ONE_IN, autoEvalSong, sampleOneIn } from "./autoEval";
@@ -53,12 +53,14 @@ export async function runSongJob(jobId: string): Promise<void> {
   const job = await store.get(jobId);
   if (!job || job.status !== "pending") return;
 
-  // التشكيل الكامل حسب اللهجة قبل أي تلحين — أعلى رافعة لسلامة النطق المغنّى
+  // الملقّن الغنائي قبل أي تلحين — أعلى رافعة لسلامة النطق المغنّى:
+  // يمر عليه كل نص مغنّى دائماً (لا العاري من التشكيل وحده): يكمل الناقص،
+  // يثبت وقف القوافي والشدّات، ويحترم ما شكّله المستخدم عمداً
   const sungText = job.request.sections?.map((s) => s.lyrics).join("\n") ?? job.request.lyrics ?? "";
-  if (!isInstrumentalRequest(job.request) && needsTashkeel(sungText)) {
+  if (!isInstrumentalRequest(job.request) && sungText.trim()) {
     await store.update(jobId, {
       status: "running",
-      stage: "جارٍ التشكيل الكامل للكلمات حسب اللهجة...",
+      stage: "الملقّن الغنائي يضبط النطق الكامل حسب اللهجة...",
     });
     const sungRequest = await autoTashkeel(job.request);
     if (sungRequest) {
