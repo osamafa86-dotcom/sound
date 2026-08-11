@@ -3,9 +3,17 @@
  * عبر نماذج توليد الصور في Gemini، مع سلسلة نماذج احتياطية.
  */
 
+/**
+ * سلسلة نماذج الصور بالأحدثية: المخصص من البيئة أولاً (ارفعه إلى
+ * gemini-3-pro-image لجودة أعلى ونص مقروء داخل الصورة — يتطلب فوترة)،
+ * ثم Flash 3.1 فـ 2.5 رجوعاً — غير المتاح للمفتاح يُتخطى تلقائياً.
+ */
 const MODELS = [
-  process.env.GEMINI_IMAGE_MODEL ?? "gemini-3.1-flash-image",
-  "gemini-2.5-flash-image",
+  ...new Set([
+    process.env.GEMINI_IMAGE_MODEL ?? "gemini-3.1-flash-image",
+    "gemini-3.1-flash-image",
+    "gemini-2.5-flash-image",
+  ]),
 ];
 
 export type CoverRequest = {
