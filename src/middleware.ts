@@ -17,11 +17,18 @@ export async function middleware(request: NextRequest) {
     const token = request.cookies.get(GATE_COOKIE)?.value;
     const authed = await verifyGateToken(token);
     if (!authed) {
+      // طلبات RSC والجلب المسبق: 401 صريحة غير قابلة للتخزين — التحويل هنا
+      // كان يُخزَّن في كاش راوتر المتصفح فتظهر البوابة عند كل تنقل لاحق
+      if (request.headers.get("rsc") || request.headers.get("next-router-prefetch")) {
+        return new NextResponse(null, { status: 401, headers: { "Cache-Control": "no-store" } });
+      }
       const url = request.nextUrl.clone();
       url.pathname = "/gate";
       url.search = "";
       url.searchParams.set("next", pathname + request.nextUrl.search);
-      return NextResponse.redirect(url);
+      const redirect = NextResponse.redirect(url);
+      redirect.headers.set("Cache-Control", "no-store");
+      return redirect;
     }
   }
 

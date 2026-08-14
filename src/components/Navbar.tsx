@@ -189,6 +189,9 @@ export default function Navbar() {
     </div>
   );
 
+  // صفحة كلمة السر: لا قائمة ولا روابط جلب مسبق قبل المصادقة
+  if (pathname.startsWith("/gate")) return null;
+
   return (
     <>
       {/* الشريط الجانبي — الشاشات الكبيرة */}

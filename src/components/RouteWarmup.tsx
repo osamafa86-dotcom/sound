@@ -29,6 +29,7 @@ export default function RouteWarmup() {
   const router = useRouter();
   const pathname = usePathname();
   useEffect(() => {
+    if (pathname.startsWith("/gate")) return; // غير مصادَق بعد — أي جلب سيُرفض
     const t = setTimeout(() => {
       for (const r of WARM_ROUTES) {
         if (r === pathname) continue; // الصفحة الحالية محمّلة أصلاً
