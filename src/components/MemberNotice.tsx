@@ -23,6 +23,8 @@ export default function MemberNotice() {
     };
   }, []);
 
+  // نسخة خاصة بلا حسابات — لا داعي لأي دعوة تسجيل
+  return null;
   if (!signedOut) return null;
 
   return (

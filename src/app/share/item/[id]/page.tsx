@@ -75,13 +75,13 @@ function describe(item: SharedItem): { icon: string; label: string; cta: string;
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { id } = await params;
   const item = await loadItem(id);
-  if (!item) return { title: "منصة مقام" };
+  if (!item) return { title: "منصة لحّن" };
 
   const d = describe(item);
-  const title = `${item.title || d.label} — منصة مقام`;
+  const title = `${item.title || d.label} — منصة لحّن`;
   const description =
     item.content?.slice(0, 160) ||
-    "عمل أنشأه أحد مستخدمي مقام — المنصة العربية لتوليد الأصوات والأغاني والوسائط بالذكاء الاصطناعي.";
+    "عمل أنشأه أحد مستخدمي لحّن — المنصة العربية لتوليد الأصوات والأغاني والوسائط بالذكاء الاصطناعي.";
 
   return {
     title,
@@ -128,7 +128,7 @@ export default async function ShareItemPage({ params }: Params) {
   return (
     <div className="mx-auto max-w-2xl px-4 py-16">
       <div className="rounded-3xl border border-border-soft bg-surface-card p-8">
-        <p className="text-sm text-muted">من معرض إبداعات مستخدمي منصة مقام</p>
+        <p className="text-sm text-muted">من معرض إبداعات مستخدمي منصة لحّن</p>
         <h1 className="mt-2 text-2xl font-extrabold md:text-3xl">
           {d.icon} {item.title || d.label}
         </h1>
@@ -164,7 +164,7 @@ export default async function ShareItemPage({ params }: Params) {
         </div>
 
         <div className="mt-8 border-t border-border-soft pt-6 text-center">
-          <p className="text-sm text-muted">أُنشئ هذا العمل بالذكاء الاصطناعي على منصة مقام</p>
+          <p className="text-sm text-muted">أُنشئ هذا العمل بالذكاء الاصطناعي على منصة لحّن</p>
           <Link
             href={d.href}
             className="mt-3 inline-block rounded-xl bg-primary px-6 py-3 font-semibold text-white transition-colors hover:bg-primary-strong"

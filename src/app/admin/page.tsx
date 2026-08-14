@@ -102,7 +102,7 @@ export default function AdminDashboard() {
         />
         <div className="mt-6 flex justify-center gap-3">
           {error.status === 401 && (
-            <Link href="/login" className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-strong">
+            <Link href="/" className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-strong">
               تسجيل الدخول
             </Link>
           )}

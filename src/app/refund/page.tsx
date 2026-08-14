@@ -1,6 +1,6 @@
 export const metadata = {
   title: "سياسة الاسترجاع",
-  description: "شروط استرجاع المدفوعات في منصة مقام.",
+  description: "شروط استرجاع المدفوعات في منصة لحّن.",
 };
 
 const SECTIONS: { title: string; body: string[] }[] = [

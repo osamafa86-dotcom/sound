@@ -62,7 +62,7 @@ export default function ShareActions({ path, title }: { path: string; title: str
 
   if (!url) return null;
 
-  const text = `${title} — منصة مقام`;
+  const text = `${title} — منصة لحّن`;
   const pill =
     "flex items-center gap-1 rounded-full border border-border-soft px-2.5 py-1.5 text-xs transition-colors hover:border-primary hover:text-primary";
 

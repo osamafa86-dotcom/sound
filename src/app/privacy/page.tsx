@@ -1,6 +1,6 @@
 export const metadata = {
   title: "سياسة الخصوصية",
-  description: "كيف تجمع منصة مقام بياناتك وتستخدمها وتحميها.",
+  description: "كيف تجمع منصة لحّن بياناتك وتستخدمها وتحميها.",
 };
 
 const SECTIONS: { title: string; body: string[] }[] = [

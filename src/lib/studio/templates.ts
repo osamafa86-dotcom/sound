@@ -1,7 +1,7 @@
 import type { NodeKind } from "./graph";
 
 /**
- * قوالب مساحة مقام — خطوط إنتاج جاهزة بضغطة:
+ * قوالب مساحة لحّن — خطوط إنتاج جاهزة بضغطة:
  * مواضع مرتبة يميناً-يساراً بصرياً (المصدر في اليمين على لوحة LTR معكوسة العرض).
  * الوصلات قد تسمي منفذها (sourceHandle/targetHandle) — الغائب يعني المنفذ الأول.
  */
@@ -90,7 +90,7 @@ export const SPACE_TEMPLATES: SpaceTemplate[] = [
     nodes: [
       { id: "p1", kind: "upload", x: 0, y: 60 },
       { id: "p2", kind: "voiceprint", x: 340, y: 60 },
-      { id: "p3", kind: "text", x: 340, y: 340, config: { text: "أهلاً بكم في منصة مقام — هذا النص يُقرأ ببصمة صوتي أنا." } },
+      { id: "p3", kind: "text", x: 340, y: 340, config: { text: "أهلاً بكم في منصة لحّن — هذا النص يُقرأ ببصمة صوتي أنا." } },
       { id: "p4", kind: "tts", x: 680, y: 180 },
     ],
     edges: [
