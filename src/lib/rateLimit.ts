@@ -166,13 +166,14 @@ export async function checkLimit(
     return { allowed: false, message: gate.message, status: 503 };
   }
 
-  // صلاحيات الأعضاء: التوليد الصوتي يتطلب حساباً — على الإنتاج حيث نظام
-  // الحسابات مفعّل، وبمفتاح رجوع سريع دون نشر جديد
+  // نسخة خاصة بلا حسابات: الموقع كله خلف كلمة سر الدخول، فالتوليد متاح
+  // لكل من دخل — تبقى الحماية عبر السقف العام وحدود الزائر أدناه.
+  // (مفتاح رجوع: REQUIRE_MEMBER_GENERATION=1 يعيد قصر التوليد على الأعضاء)
   if (
     !userId &&
     MEMBER_ONLY_SCOPES.has(scope) &&
     getSupabaseAdmin() &&
-    process.env.ALLOW_VISITOR_GENERATION !== "1"
+    process.env.REQUIRE_MEMBER_GENERATION === "1"
   ) {
     return { allowed: false, message: MEMBER_ONLY_MESSAGE, status: 401 };
   }
