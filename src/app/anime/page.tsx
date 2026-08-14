@@ -112,13 +112,27 @@ const BASE_QUALITY =
 
 type Creation = {
   url: string;
+  kind: "image" | "video";
   styleName: string;
   brief: string;
   at: number;
 };
 
+const VIDEO_LOADING_LINES = [
+  "🎬 تحريك الإطارات واحداً واحداً... (يأخذ ١-٣ دقائق)",
+  "🌀 رسم ما بين الحركات (in-between frames)...",
+  "🎥 ضبط حركة الكاميرا السينمائية...",
+  "✨ نفخ الروح في المشهد...",
+  "🍿 اللقطات الأخيرة — يستاهل الانتظار!",
+];
+
+const VIDEO_MOTION =
+  "Smooth high-quality 2D anime animation, fluid natural character motion, flowing hair and clothes in the wind, subtle particle effects, cinematic camera movement, consistent character design across all frames.";
+
 export default function AnimePage() {
   const [mode, setMode] = useState<"imagine" | "photo">("imagine");
+  const [output, setOutput] = useState<"image" | "video">("image");
+  const [vidDuration, setVidDuration] = useState<6 | 10>(6);
   const [styleId, setStyleId] = useState<string>(STYLES[0].id);
   const [aspect, setAspect] = useState<(typeof ASPECTS)[number]["id"]>("square");
   const [mood, setMood] = useState<string>("");
@@ -153,8 +167,11 @@ export default function AnimePage() {
     const moodHint = MOODS.find((m) => m.id === mood)?.hint ?? "";
     const parts = [
       mode === "photo"
-        ? "Transform the attached photo into an anime illustration, faithfully preserving the person's identity, facial features, pose and overall composition."
+        ? output === "video"
+          ? "Animate the attached photo as an anime character brought to life, faithfully preserving the person's identity, facial features and composition."
+          : "Transform the attached photo into an anime illustration, faithfully preserving the person's identity, facial features, pose and overall composition."
         : "",
+      output === "video" ? VIDEO_MOTION : "",
       style.prompt,
       moodHint,
       aspectHint,
@@ -176,17 +193,22 @@ export default function AnimePage() {
     }
     setError("");
     setBusy(true);
+    const lines = output === "video" ? VIDEO_LOADING_LINES : LOADING_LINES;
     let lineIdx = 0;
-    setLoadingLine(LOADING_LINES[0]);
+    setLoadingLine(lines[0]);
     loadingTimer.current = setInterval(() => {
-      lineIdx = (lineIdx + 1) % LOADING_LINES.length;
-      setLoadingLine(LOADING_LINES[lineIdx]);
-    }, 2600);
+      lineIdx = (lineIdx + 1) % lines.length;
+      setLoadingLine(lines[lineIdx]);
+    }, output === "video" ? 6000 : 2600);
 
     try {
       const fd = new FormData();
-      fd.append("mode", "image");
+      fd.append("mode", output);
       fd.append("prompt", buildPrompt());
+      if (output === "video") {
+        fd.append("durationSec", String(vidDuration));
+        fd.append("aspectRatio", aspect === "portrait" ? "9:16" : "16:9");
+      }
       if (mode === "photo" && photo) fd.append("image", photo, photo.name || "photo.jpg");
       const res = await fetch("/api/studio/ai", { method: "POST", body: fd });
       if (!res.ok) {
@@ -197,6 +219,7 @@ export default function AnimePage() {
       const styleName = STYLES.find((s) => s.id === styleId)?.name ?? "";
       const creation: Creation = {
         url: URL.createObjectURL(blob),
+        kind: output,
         styleName,
         brief: brief.trim() || (mode === "photo" ? "تحويل صورة إلى أنمي" : ""),
         at: Date.now(),
@@ -214,7 +237,7 @@ export default function AnimePage() {
   function download(c: Creation) {
     const a = document.createElement("a");
     a.href = c.url;
-    a.download = `anime-${c.styleName}-${c.at}.png`;
+    a.download = `anime-${c.styleName}-${c.at}.${c.kind === "video" ? "mp4" : "png"}`;
     a.click();
   }
 
@@ -230,8 +253,31 @@ export default function AnimePage() {
         </h1>
         <p className="mx-auto mt-3 max-w-2xl leading-relaxed text-muted">
           اكتب مشهدك بالعربية — أو ارفع صورتك الحقيقية — واختر أسلوبك الفني،
-          وخلال لحظات تستلم لوحة أنمي احترافية جاهزة للتنزيل.
+          واستلم لوحة أنمي احترافية أو فيديو أنمي متحركاً جاهزَين للتنزيل.
         </p>
+      </div>
+
+      {/* نوع الناتج: صورة أم فيديو */}
+      <div className="mx-auto mt-8 flex max-w-md rounded-2xl border border-border-soft bg-surface-card p-1.5">
+        {(
+          [
+            { id: "image", label: "🖼️ لوحة (صورة)" },
+            { id: "video", label: "🎬 فيديو متحرك" },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.id}
+            onClick={() => {
+              setOutput(t.id);
+              if (t.id === "video" && aspect === "square") setAspect("wide");
+            }}
+            className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-bold transition-colors ${
+              output === t.id ? "bg-primary text-white" : "text-muted hover:text-body"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {/* اختيار الوضع */}
@@ -333,7 +379,7 @@ export default function AnimePage() {
             <div className="rounded-3xl border border-border-soft bg-surface-card p-6">
               <h2 className="text-sm font-bold">الأبعاد</h2>
               <div className="mt-3 flex flex-col gap-2">
-                {ASPECTS.map((a) => (
+                {ASPECTS.filter((a) => output === "image" || a.id !== "square").map((a) => (
                   <button
                     key={a.id}
                     onClick={() => setAspect(a.id)}
@@ -347,6 +393,24 @@ export default function AnimePage() {
               </div>
             </div>
             <div className="rounded-3xl border border-border-soft bg-surface-card p-6">
+              {output === "video" && (
+                <div className="mb-5">
+                  <h2 className="text-sm font-bold">مدة الفيديو</h2>
+                  <div className="mt-3 flex gap-2">
+                    {([6, 10] as const).map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => setVidDuration(d)}
+                        className={`flex-1 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors ${
+                          vidDuration === d ? "border-primary bg-rose text-primary" : "border-border-soft text-muted hover:text-body"
+                        }`}
+                      >
+                        {d === 6 ? "٦ ثوانٍ" : "١٠ ثوانٍ"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <h2 className="text-sm font-bold">الإضاءة والمزاج</h2>
               <div className="mt-3 flex flex-wrap gap-2">
                 {MOODS.map((m) => (
@@ -370,7 +434,7 @@ export default function AnimePage() {
             disabled={busy}
             className="w-full rounded-2xl bg-primary py-4 text-lg font-extrabold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary-strong disabled:opacity-60"
           >
-            {busy ? loadingLine : `🎨 ولّد لوحة ${style.name}`}
+            {busy ? loadingLine : output === "video" ? `🎬 ولّد فيديو ${style.name}` : `🎨 ولّد لوحة ${style.name}`}
           </button>
           {error && <p className="text-center text-sm font-semibold text-primary-strong">{error}</p>}
         </div>
@@ -381,12 +445,23 @@ export default function AnimePage() {
             <h2 className="font-bold">اللوحة</h2>
             {result ? (
               <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={result.url}
-                  alt={result.brief || "لوحة أنمي"}
-                  className="mt-4 w-full rounded-2xl border border-border-soft"
-                />
+                {result.kind === "video" ? (
+                  <video
+                    src={result.url}
+                    controls
+                    autoPlay
+                    loop
+                    playsInline
+                    className="mt-4 w-full rounded-2xl border border-border-soft"
+                  />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={result.url}
+                    alt={result.brief || "لوحة أنمي"}
+                    className="mt-4 w-full rounded-2xl border border-border-soft"
+                  />
+                )}
                 <p className="mt-2 text-xs text-muted">
                   {result.styleName}
                   {result.brief ? ` — ${result.brief.slice(0, 80)}` : ""}
@@ -425,14 +500,29 @@ export default function AnimePage() {
               <div className="mt-3 grid grid-cols-3 gap-2">
                 {galleryItems.map((g) => (
                   <button key={g.at} onClick={() => setResult(g)} title={g.brief} className="group relative">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={g.url}
-                      alt={g.brief || g.styleName}
-                      className={`aspect-square w-full rounded-xl object-cover transition-all ${
-                        result?.at === g.at ? "ring-2 ring-primary" : "opacity-80 group-hover:opacity-100"
-                      }`}
-                    />
+                    {g.kind === "video" ? (
+                      <video
+                        src={g.url}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        className={`aspect-square w-full rounded-xl object-cover transition-all ${
+                          result?.at === g.at ? "ring-2 ring-primary" : "opacity-80 group-hover:opacity-100"
+                        }`}
+                      />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={g.url}
+                        alt={g.brief || g.styleName}
+                        className={`aspect-square w-full rounded-xl object-cover transition-all ${
+                          result?.at === g.at ? "ring-2 ring-primary" : "opacity-80 group-hover:opacity-100"
+                        }`}
+                      />
+                    )}
+                    {g.kind === "video" && (
+                      <span className="absolute bottom-1 end-1 rounded bg-body/60 px-1 text-[10px] text-white">🎬</span>
+                    )}
                   </button>
                 ))}
               </div>
