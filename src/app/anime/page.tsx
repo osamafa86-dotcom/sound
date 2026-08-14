@@ -113,6 +113,8 @@ const BASE_QUALITY =
 type Creation = {
   url: string;
   kind: "image" | "video";
+  /** المشهد المتصل: روابط المقاطع بترتيب التشغيل (الأول = url) */
+  parts?: string[];
   styleName: string;
   brief: string;
   at: number;
@@ -132,7 +134,7 @@ const VIDEO_MOTION =
 export default function AnimePage() {
   const [mode, setMode] = useState<"imagine" | "photo">("imagine");
   const [output, setOutput] = useState<"image" | "video">("image");
-  const [vidDuration, setVidDuration] = useState<6 | 10>(6);
+  const [vidDuration, setVidDuration] = useState<6 | 10 | 30 | 60>(6);
   const [styleId, setStyleId] = useState<string>(STYLES[0].id);
   const [aspect, setAspect] = useState<(typeof ASPECTS)[number]["id"]>("square");
   const [mood, setMood] = useState<string>("");
@@ -145,15 +147,99 @@ export default function AnimePage() {
   const [result, setResult] = useState<Creation | null>(null);
   const [galleryItems, setGalleryItems] = useState<Creation[]>([]);
   const loadingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const chainRef = useRef(""); // «المقطع ٢/٦» أثناء بناء المشهد المتصل
+  const [partIdx, setPartIdx] = useState(0);
+
+  // إعادة فهرس التشغيل عند تبديل النتيجة (نمط التعديل أثناء التصيير)
+  const [lastResultAt, setLastResultAt] = useState(0);
+  if ((result?.at ?? 0) !== lastResultAt) {
+    setLastResultAt(result?.at ?? 0);
+    setPartIdx(0);
+  }
 
   // تحرير روابط الصور المؤقتة عند مغادرة الصفحة
   useEffect(() => {
     return () => {
-      galleryItems.forEach((g) => URL.revokeObjectURL(g.url));
+      galleryItems.forEach((g) => {
+        URL.revokeObjectURL(g.url);
+        g.parts?.forEach((u) => u !== g.url && URL.revokeObjectURL(u));
+      });
       if (photoPreview) URL.revokeObjectURL(photoPreview);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** آخر إطار من مقطع فيديو كصورة JPEG — نقطة الوصل بين مقاطع المشهد المتصل */
+  function lastFrameOf(blob: Blob): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      const v = document.createElement("video");
+      v.muted = true;
+      v.playsInline = true;
+      v.preload = "auto";
+      v.src = URL.createObjectURL(blob);
+      v.onloadedmetadata = () => {
+        v.currentTime = Math.max(0, v.duration - 0.1);
+      };
+      v.onseeked = () => {
+        const cv = document.createElement("canvas");
+        cv.width = v.videoWidth;
+        cv.height = v.videoHeight;
+        cv.getContext("2d")?.drawImage(v, 0, 0);
+        cv.toBlob(
+          (b) => {
+            URL.revokeObjectURL(v.src);
+            if (b) resolve(b);
+            else reject(new Error("تعذّر التقاط إطار الوصل"));
+          },
+          "image/jpeg",
+          0.92
+        );
+      };
+      v.onerror = () => {
+        URL.revokeObjectURL(v.src);
+        reject(new Error("تعذّر قراءة المقطع لاستخراج إطار الوصل"));
+      };
+    });
+  }
+
+  /** المشهد المتصل: مقاطع ١٠ ثوانٍ متسلسلة، كلٌّ يبدأ من آخر إطار في سابقه */
+  async function generateChained(count: number): Promise<string[]> {
+    const parts: string[] = [];
+    let frame: Blob | null = mode === "photo" ? photo : null;
+    for (let i = 0; i < count; i++) {
+      chainRef.current = `🎞️ المقطع ${i + 1}/${count}`;
+      setLoadingLine(`${chainRef.current} · ${VIDEO_LOADING_LINES[0]}`);
+      const fd = new FormData();
+      fd.append("mode", "video");
+      fd.append(
+        "prompt",
+        buildPrompt() +
+          `
+This is part ${i + 1} of ${count} of ONE seamless continuous scene.` +
+          (frame
+            ? " Continue the exact same scene from the attached reference frame: same character, same environment, same art style — the motion flows naturally onward with no cut and no scene change."
+            : "")
+      );
+      fd.append("durationSec", "10");
+      fd.append("aspectRatio", aspect === "portrait" ? "9:16" : "16:9");
+      if (frame) fd.append("image", frame, "frame.jpg");
+      const res = await fetch("/api/studio/ai", { method: "POST", body: fd });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        const msg = data?.error ?? "تعذّر توليد المقطع";
+        if (parts.length) {
+          setError(`اكتمل ${parts.length} من ${count} مقاطع ثم توقف التوليد: ${msg}`);
+          break;
+        }
+        throw new Error(msg);
+      }
+      const blob = await res.blob();
+      parts.push(URL.createObjectURL(blob));
+      if (i < count - 1) frame = await lastFrameOf(blob);
+    }
+    chainRef.current = "";
+    return parts;
+  }
 
   function pickPhoto(f: File | null) {
     if (photoPreview) URL.revokeObjectURL(photoPreview);
@@ -196,12 +282,32 @@ export default function AnimePage() {
     const lines = output === "video" ? VIDEO_LOADING_LINES : LOADING_LINES;
     let lineIdx = 0;
     setLoadingLine(lines[0]);
+    chainRef.current = "";
     loadingTimer.current = setInterval(() => {
       lineIdx = (lineIdx + 1) % lines.length;
-      setLoadingLine(lines[lineIdx]);
+      setLoadingLine((chainRef.current ? chainRef.current + " · " : "") + lines[lineIdx]);
     }, output === "video" ? 6000 : 2600);
 
     try {
+      // المشهد المتصل: سلسلة مقاطع تُبنى واحداً فوق آخر إطار من سابقه
+      if (output === "video" && vidDuration >= 30) {
+        const count = vidDuration === 30 ? 3 : 6;
+        const parts = await generateChained(count);
+        if (parts.length) {
+          const creation: Creation = {
+            url: parts[0],
+            parts,
+            kind: "video",
+            styleName: STYLES.find((s) => s.id === styleId)?.name ?? "",
+            brief: brief.trim() || "مشهد أنمي متصل",
+            at: Date.now(),
+          };
+          setResult(creation);
+          setGalleryItems((prev) => [creation, ...prev].slice(0, 24));
+        }
+        return;
+      }
+
       const fd = new FormData();
       fd.append("mode", output);
       fd.append("prompt", buildPrompt());
@@ -235,10 +341,17 @@ export default function AnimePage() {
   }
 
   function download(c: Creation) {
-    const a = document.createElement("a");
-    a.href = c.url;
-    a.download = `anime-${c.styleName}-${c.at}.${c.kind === "video" ? "mp4" : "png"}`;
-    a.click();
+    const urls = c.parts ?? [c.url];
+    urls.forEach((u, i) => {
+      setTimeout(() => {
+        const a = document.createElement("a");
+        a.href = u;
+        a.download = `anime-${c.styleName}-${c.at}${urls.length > 1 ? `-${i + 1}` : ""}.${
+          c.kind === "video" ? "mp4" : "png"
+        }`;
+        a.click();
+      }, i * 500);
+    });
   }
 
   const style = STYLES.find((s) => s.id === styleId) ?? STYLES[0];
@@ -396,19 +509,32 @@ export default function AnimePage() {
               {output === "video" && (
                 <div className="mb-5">
                   <h2 className="text-sm font-bold">مدة الفيديو</h2>
-                  <div className="mt-3 flex gap-2">
-                    {([6, 10] as const).map((d) => (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        { d: 6, l: "٦ ثوانٍ" },
+                        { d: 10, l: "١٠ ثوانٍ" },
+                        { d: 30, l: "٣٠ ث · مشهد متصل" },
+                        { d: 60, l: "دقيقة · مشهد متصل" },
+                      ] as const
+                    ).map(({ d, l }) => (
                       <button
                         key={d}
                         onClick={() => setVidDuration(d)}
-                        className={`flex-1 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors ${
+                        className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${
                           vidDuration === d ? "border-primary bg-rose text-primary" : "border-border-soft text-muted hover:text-body"
                         }`}
                       >
-                        {d === 6 ? "٦ ثوانٍ" : "١٠ ثوانٍ"}
+                        {l}
                       </button>
                     ))}
                   </div>
+                  {vidDuration >= 30 && (
+                    <p className="mt-2 text-[11px] leading-relaxed text-muted">
+                      🎞️ يُبنى من مقاطع ١٠ ثوانٍ متسلسلة — كل مقطع يبدأ من آخر إطار في سابقه
+                      فيبدو مشهداً واحداً متواصلاً. التوليد يأخذ {vidDuration === 30 ? "٥-١٠" : "١٠-٢٠"} دقيقة.
+                    </p>
+                  )}
                 </div>
               )}
               <h2 className="text-sm font-bold">الإضاءة والمزاج</h2>
@@ -446,14 +572,27 @@ export default function AnimePage() {
             {result ? (
               <>
                 {result.kind === "video" ? (
-                  <video
-                    src={result.url}
-                    controls
-                    autoPlay
-                    loop
-                    playsInline
-                    className="mt-4 w-full rounded-2xl border border-border-soft"
-                  />
+                  <>
+                    <video
+                      key={result.at + "-" + partIdx}
+                      src={result.parts ? result.parts[partIdx] : result.url}
+                      controls
+                      autoPlay
+                      loop={!result.parts || result.parts.length === 1}
+                      playsInline
+                      onEnded={() => {
+                        if (result.parts && result.parts.length > 1) {
+                          setPartIdx((i) => (i + 1) % result.parts!.length);
+                        }
+                      }}
+                      className="mt-4 w-full rounded-2xl border border-border-soft"
+                    />
+                    {result.parts && result.parts.length > 1 && (
+                      <p className="mt-1 text-center text-xs font-semibold text-muted">
+                        🎞️ مشهد متصل — المقطع {partIdx + 1} من {result.parts.length} (يتابع تلقائياً)
+                      </p>
+                    )}
+                  </>
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
