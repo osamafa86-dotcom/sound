@@ -18,9 +18,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { jobId } = await params;
   const job = await loadJob(jobId);
   const maqam = job ? MAQAMAT.find((m) => m.id === job.request.maqamId) : null;
-  const title = maqam ? `أغنية بمقام ${maqam.name} — منصة مقام` : "منصة مقام";
+  const title = maqam ? `أغنية بمقام ${maqam.name} — منصة لحّن` : "منصة لحّن";
   const description = maqam
-    ? `استمع لأغنية وُلّدت بالذكاء الاصطناعي بمقام ${maqam.name} (${maqam.mood}) على منصة مقام، وأنشئ أغنيتك الخاصة مجاناً.`
+    ? `استمع لأغنية وُلّدت بالذكاء الاصطناعي بمقام ${maqam.name} (${maqam.mood}) على منصة لحّن، وأنشئ أغنيتك الخاصة مجاناً.`
     : "منصة عربية لتوليد الأغاني والأصوات بالذكاء الاصطناعي";
   return {
     title,
@@ -56,7 +56,7 @@ export default async function SharePage({ params }: Params) {
   return (
     <div className="mx-auto max-w-2xl px-4 py-12">
       <div className="rounded-3xl border border-gold/30 bg-surface-card p-8">
-        <p className="text-sm text-muted">مشاركة من منصة مقام 🎼</p>
+        <p className="text-sm text-muted">مشاركة من منصة لحّن 🎼</p>
         <h1 className="mt-2 text-3xl font-bold">
           أغنية بمقام <span className="text-gradient">{maqam?.name ?? "عربي"}</span>
         </h1>

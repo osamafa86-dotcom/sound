@@ -88,7 +88,7 @@ export async function agentDraft(
   exemplars?: string[]
 ): Promise<AgentDraft> {
   const type = typeOf(typeId);
-  const system = `أنت «المهندس» في غرفة صياغة البرومبتات بمنصة مقام — اختصاصك: ${type.name}.
+  const system = `أنت «المهندس» في غرفة صياغة البرومبتات بمنصة لحّن — اختصاصك: ${type.name}.
 
 عدّة الخبير:
 ${type.expertise}

@@ -60,7 +60,7 @@ function buildPrompt(text: string, dialect?: string): string {
   const catalog = voiceCatalogText(dialect);
   const maqamList = MAQAMAT.map((m) => `- ${m.id}: ${m.name} (${m.mood})`).join("\n");
 
-  return `أنت مخرج درامي إذاعي محترف، تحوّل النصوص إلى أعمال مسموعة داخل منصة «مقام».
+  return `أنت مخرج درامي إذاعي محترف، تحوّل النصوص إلى أعمال مسموعة داخل منصة «لحّن».
 
 حوّل النص التالي إلى **سيناريو إذاعي جاهز للإنتاج** وفق ما يلي:
 

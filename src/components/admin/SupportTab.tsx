@@ -113,7 +113,7 @@ export default function SupportTab() {
                 ) : (
                   <div className="mt-3 flex gap-2">
                     <a
-                      href={`mailto:${t.email}?subject=${encodeURIComponent(`رد مقام: ${t.topic}`)}`}
+                      href={`mailto:${t.email}?subject=${encodeURIComponent(`رد لحّن: ${t.topic}`)}`}
                       className="rounded-lg border border-primary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10"
                     >
                       📧 رد بالبريد

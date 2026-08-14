@@ -11,7 +11,7 @@ export default function Footer() {
                 <span key={i} className="w-[2.5px] rounded-full bg-wine" style={{ height: h }} />
               ))}
             </span>
-            مقام
+            لحّن
           </p>
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-cream/70">
             استوديو الصوتيات بالذكاء الاصطناعي — نص إلى صوت عالي الجودة،
@@ -41,7 +41,7 @@ export default function Footer() {
         </div>
       </div>
       <div className="border-t border-cream/20 py-5 text-center text-xs text-cream/60">
-        © {new Date().getFullYear()} مقام — جميع الحقوق محفوظة
+        © {new Date().getFullYear()} لحّن — جميع الحقوق محفوظة
       </div>
     </footer>
   );
