@@ -190,9 +190,7 @@ export async function checkLimit(
   if (!ok) {
     return {
       allowed: false,
-      message:
-        "تجاوزت الحد المسموح من الطلبات مؤقتاً — حاول بعد قليل" +
-        (userId ? "" : "، أو سجّل الدخول لحدود أعلى"),
+      message: "تجاوزت الحد المسموح من الطلبات مؤقتاً — حاول بعد قليل",
     };
   }
 

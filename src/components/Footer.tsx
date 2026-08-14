@@ -29,7 +29,6 @@ export default function Footer() {
             <Link href="/podcast" className="text-cream/75 transition-colors hover:text-cream">البودكاست الذكي</Link>
             <Link href="/prompts" className="text-cream/75 transition-colors hover:text-cream">وكيل البرومبتات</Link>
             <Link href="/library" className="text-cream/75 transition-colors hover:text-cream">مكتبتي</Link>
-            <Link href="/pricing" className="text-cream/75 transition-colors hover:text-cream">الأسعار</Link>
             <Link href="/support" className="text-cream/75 transition-colors hover:text-cream">الدعم والتواصل</Link>
           </nav>
         </div>

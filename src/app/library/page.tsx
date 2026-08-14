@@ -156,23 +156,17 @@ export default function Library() {
       <div className="mx-auto max-w-6xl px-4 py-12">
         <h1 className="text-3xl font-bold">مكتبتي</h1>
         <div className="mt-10 rounded-3xl border border-dashed border-border-soft bg-surface-card/50 p-16 text-center">
-          <span className="text-5xl">🔐</span>
-          <h2 className="mt-4 text-xl font-bold">سجّل الدخول لترى مكتبتك</h2>
+          <span className="text-5xl">🎵</span>
+          <h2 className="mt-4 text-xl font-bold">هذه نسخة خاصة بلا حسابات</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-            بحساب مجاني تُحفظ كل أعمالك تلقائياً، وتستمع إليها وتنزّلها في أي وقت من أي جهاز.
+            نزّل كل عمل يعجبك فور توليده من زر التنزيل في الاستوديو — لا تسجيل دخول ولا اشتراكات هنا.
           </p>
           <div className="mt-6 flex justify-center gap-3">
             <Link
-              href="/login?mode=signup"
+              href="/songs"
               className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-strong"
             >
-              أنشئ حساباً مجانياً
-            </Link>
-            <Link
-              href="/login"
-              className="rounded-xl border border-border-soft px-5 py-2.5 text-sm font-semibold hover:border-primary"
-            >
-              تسجيل الدخول
+              إلى استوديو الأغاني ←
             </Link>
           </div>
         </div>

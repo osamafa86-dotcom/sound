@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import {
   AudioLines,
   Brain,
-  CreditCard,
   Drama,
   FlaskConical,
   Home,
@@ -56,7 +55,6 @@ const groups: { label: string | null; items: { href: string; label: string; icon
     label: "حسابي",
     items: [
       { href: "/library", label: "مكتبتي", icon: Library },
-      { href: "/pricing", label: "الأسعار", icon: CreditCard },
       { href: "/support", label: "الدعم والتواصل", icon: LifeBuoy },
     ],
   },
@@ -183,15 +181,7 @@ export default function Navbar() {
             خروج
           </button>
         </div>
-      ) : (
-        <Link
-          href="/login"
-          onClick={() => setOpen(false)}
-          className="block rounded-xl bg-primary px-4 py-2.5 text-center text-sm font-semibold text-white shadow-md shadow-primary/25 transition-colors hover:bg-primary-strong"
-        >
-          تسجيل الدخول
-        </Link>
-      )}
+      ) : null}
     </div>
   );
 
