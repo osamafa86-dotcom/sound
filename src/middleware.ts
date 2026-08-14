@@ -2,7 +2,9 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { GATE_COOKIE, verifyGateToken } from "@/lib/siteGate";
 
-const GATE_EXEMPT_PATHS = ["/gate", "/api/gate"];
+// ملفات تثبيت التطبيق (PWA) مستثناة — نظام التشغيل يجلبها بلا كوكي،
+// وحجبها يمنع «إضافة إلى الشاشة الرئيسية». لا تمسّ أي خدمة مدفوعة.
+const GATE_EXEMPT_PATHS = ["/gate", "/api/gate", "/manifest.webmanifest", "/sw.js", "/offline.html"];
 
 /** تحديث جلسة Supabase على كل طلب حتى لا تنتهي أثناء التصفح */
 export async function middleware(request: NextRequest) {
