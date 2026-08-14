@@ -49,7 +49,7 @@ export default function SupportPage() {
         <h1 className="mt-4 text-2xl font-bold">وصلت تذكرتك!</h1>
         <p className="mx-auto mt-2 max-w-md leading-relaxed text-muted">
           سنقرؤها ونرد عليك على بريدك <span className="font-semibold text-body">{email}</span> في
-          أقرب وقت. شكراً لأنك تساعدنا نحسّن مقام.
+          أقرب وقت. شكراً لأنك تساعدنا نحسّن لحّن.
         </p>
       </div>
     );

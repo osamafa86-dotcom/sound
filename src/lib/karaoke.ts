@@ -67,7 +67,7 @@ export function buildSrt(words: KaraokeWord[]): string {
 
 /** ملف كلمات LRC — لمشغلات الموسيقى */
 export function buildLrc(words: KaraokeWord[], title?: string): string {
-  const header = title ? `[ti:${title}]\n[by:منصة مقام]\n` : "";
+  const header = title ? `[ti:${title}]\n[by:منصة لحّن]\n` : "";
   return (
     header +
     groupWords(words)

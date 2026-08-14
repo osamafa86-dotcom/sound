@@ -27,7 +27,7 @@ export const PROMPT_TYPES: PromptType[] = [
     name: "نص إخباري",
     icon: "📰",
     desc: "خبر أو تقرير أو موجز نشرة بلغة صحفية محترفة",
-    platforms: ["ChatGPT / Claude / Gemini", "منصة مقام (تعليق صوتي)"],
+    platforms: ["ChatGPT / Claude / Gemini", "منصة لحّن (تعليق صوتي)"],
     primaryLang: "ar",
     expertise: `قواعد البرومبت الإخباري المحترف:
 - الهرم المقلوب: مقدمة تجيب من/ماذا/متى/أين/لماذا في جملتين، ثم التفاصيل تنازلياً بالأهمية.
@@ -40,7 +40,7 @@ export const PROMPT_TYPES: PromptType[] = [
     name: "نص سردي",
     icon: "📖",
     desc: "قصة أو مشهد أو حلقة سرد أدبي",
-    platforms: ["ChatGPT / Claude / Gemini", "منصة مقام (الاستوديو الدرامي)"],
+    platforms: ["ChatGPT / Claude / Gemini", "منصة لحّن (الاستوديو الدرامي)"],
     primaryLang: "ar",
     expertise: `قواعد برومبت السرد المحترف:
 - قوس قصصي واضح: وضع ابتدائي ← حدث قادح ← تصاعد ← ذروة ← حل.
@@ -79,12 +79,12 @@ export const PROMPT_TYPES: PromptType[] = [
     name: "توليد أغنية",
     icon: "🎼",
     desc: "برومبت موسيقي لمولدات الأغاني",
-    platforms: ["منصة مقام", "Suno / Udio"],
+    platforms: ["منصة لحّن", "Suno / Udio"],
     primaryLang: "en",
     expertise: `Professional music-prompt craft:
 - Structure: genre and cultural style → mood → tempo (BPM) → key instruments → vocal type and language/dialect → song structure (intro, verse, chorus, bridge) → production quality tags.
 - For Arabic music: name the maqam and its quarter tones, oriental instruments (oud, qanun, nay, mijwiz), and the rhythmic cycle (maqsum, dabke, samai).
-- For منصة مقام: اكتب الفكرة والكلمات بالعربية واللهجة، ودع المنصة تبني البرومبت الموسيقي — البرومبت هنا هو فكرة الأغنية ومزاجها وبنيتها.
+- For منصة لحّن: اكتب الفكرة والكلمات بالعربية واللهجة، ودع المنصة تبني البرومبت الموسيقي — البرومبت هنا هو فكرة الأغنية ومزاجها وبنيتها.
 - Keep it one dense paragraph; engines dilute long rambling prompts.`,
   },
   {
@@ -92,7 +92,7 @@ export const PROMPT_TYPES: PromptType[] = [
     name: "بودكاست",
     icon: "🎧",
     desc: "برومبت حلقة حوارية كاملة",
-    platforms: ["ChatGPT / Claude / Gemini", "منصة مقام (البودكاست)"],
+    platforms: ["ChatGPT / Claude / Gemini", "منصة لحّن (البودكاست)"],
     primaryLang: "ar",
     expertise: `قواعد برومبت البودكاست المحترف:
 - خطاف افتتاحي في أول ٣٠ ثانية، ثم خارطة حلقة: ٣-٥ فقرات بمنحنى تشويق.
@@ -105,7 +105,7 @@ export const PROMPT_TYPES: PromptType[] = [
     name: "إعلان تسويقي",
     icon: "📢",
     desc: "سكربت إعلان قصير يبيع فعلاً",
-    platforms: ["ChatGPT / Claude / Gemini", "منصة مقام (تعليق صوتي)"],
+    platforms: ["ChatGPT / Claude / Gemini", "منصة لحّن (تعليق صوتي)"],
     primaryLang: "ar",
     expertise: `قواعد برومبت الإعلان المحترف:
 - الخطاف في أول ٣ ثوانٍ (سؤال، مفارقة، ألم يعرفه الجمهور).
@@ -131,7 +131,7 @@ export const PROMPT_TYPES: PromptType[] = [
     name: "تعليق صوتي",
     icon: "🎙️",
     desc: "نص تعليق جاهز للإلقاء الصوتي",
-    platforms: ["ChatGPT / Claude / Gemini", "منصة مقام (النص إلى صوت)"],
+    platforms: ["ChatGPT / Claude / Gemini", "منصة لحّن (النص إلى صوت)"],
     primaryLang: "ar",
     expertise: `قواعد برومبت التعليق الصوتي المحترف:
 - الكتابة للأذن لا للعين: جمل قصيرة، لا تراكيب متداخلة، تكرار مقصود للمفاتيح.
@@ -186,7 +186,7 @@ export async function craftPrompt(
   const type = PROMPT_TYPES.find((t) => t.id === typeId);
   if (!type) throw new Error("نوع برومبت غير معروف");
 
-  const system = `أنت مهندس برومبتات محترف في منصة «مقام»، اختصاصك اليوم: ${type.name}.
+  const system = `أنت مهندس برومبتات محترف في منصة «لحّن»، اختصاصك اليوم: ${type.name}.
 
 عدّة الخبير التي تلتزم بها حرفياً:
 ${type.expertise}

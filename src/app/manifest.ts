@@ -3,8 +3,8 @@ import type { MetadataRoute } from "next";
 /** بيان تطبيق الويب (PWA) — يجعل الموقع قابلاً للتثبيت على الموبايل وسطح المكتب */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "مقام — استوديو الصوتيات بالذكاء الاصطناعي",
-    short_name: "مقام",
+    name: "لحّن — استوديو الصوتيات بالذكاء الاصطناعي",
+    short_name: "لحّن",
     description:
       "منصة عربية لتحويل النص إلى صوت بجودة عالية، وكتابة وتلحين الأغاني حسب المقامات الصوتية بالذكاء الاصطناعي.",
     lang: "ar",

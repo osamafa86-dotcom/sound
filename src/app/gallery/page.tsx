@@ -70,7 +70,7 @@ export default function PublicGallery() {
       </h1>
       <WaveLine className="mt-3" />
       <p className="mt-2 max-w-2xl leading-relaxed text-muted">
-        أعمال حقيقية أنشأها مستخدمو مقام ونشروها بأنفسهم — استمع لما يصنعه الآخرون،
+        أعمال حقيقية أنشأها مستخدمو لحّن ونشروها بأنفسهم — استمع لما يصنعه الآخرون،
         وخذ الإلهام لعملك التالي.
       </p>
 
