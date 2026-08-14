@@ -80,6 +80,19 @@ export default function AudioPlayer({
   children?: React.ReactNode;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
+
+  // إسكات فوري عند إزالة المشغّل (حذف العنصر أو مغادرة الصفحة) —
+  // عناصر الصوت المفصولة عن DOM تواصل التشغيل في بعض المتصفحات
+  useEffect(() => {
+    const a = audioRef.current;
+    return () => {
+      if (a) {
+        a.pause();
+        a.removeAttribute("src");
+        a.load();
+      }
+    };
+  }, []);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef(0);
   // مرجع حي للمستمع كي لا تعلق حلقة rAF على نسخة قديمة منه

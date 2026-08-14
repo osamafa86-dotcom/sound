@@ -132,6 +132,14 @@ export default function Library() {
   }
 
   async function remove(id: string) {
+    // إسكات مشغّل البطاقة قبل إزالتها — وإلا يواصل المتصفح تشغيل الصوت المفصول
+    document
+      .querySelectorAll<HTMLMediaElement>(`[data-gen-id="${CSS.escape(id)}"] audio, [data-gen-id="${CSS.escape(id)}"] video`)
+      .forEach((m) => {
+        m.pause();
+        m.removeAttribute("src");
+        m.load();
+      });
     setItems((prev) => prev.filter((i) => i.id !== id));
     await fetch(`/api/generations?id=${id}`, { method: "DELETE" }).catch(() => {});
   }
@@ -276,7 +284,7 @@ export default function Library() {
 
           <div className="mt-5 grid gap-4">
           {shown.map((g) => (
-            <div key={g.id} className="rounded-2xl border border-border-soft bg-surface-card p-5">
+            <div key={g.id} data-gen-id={g.id} className="rounded-2xl border border-border-soft bg-surface-card p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-bold">
