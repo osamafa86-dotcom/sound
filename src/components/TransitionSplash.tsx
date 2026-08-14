@@ -2,13 +2,13 @@
 
 /**
  * شاشة الانتقال الاحتفالية — بطلب صاحب الموقع: كل تنقل بين الصفحات
- * يعرض شعار لحّن النابض ١٠ ثوانٍ بالضبط مع شريط تقدم، ثم تنكشف الصفحة.
+ * يعرض شعار لحّن النابض ٥ ثوانٍ بالضبط مع شريط تقدم، ثم تنكشف الصفحة.
  * (لا تظهر عند الفتح الأول للموقع — للتنقلات الداخلية فقط.)
  */
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
-const SPLASH_MS = 10_000;
+const SPLASH_MS = 5_000;
 
 export default function TransitionSplash() {
   const pathname = usePathname();
