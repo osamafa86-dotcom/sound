@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Sparkles,
   Wand2,
+  Palette,
   Workflow,
   X,
   type LucideIcon,
@@ -42,6 +43,7 @@ const groups: { label: string | null; items: { href: string; label: string; icon
       { href: "/voice", label: "معمل الصوت", icon: FlaskConical },
       { href: "/studio", label: "مساحة لحّن", icon: Workflow },
       { href: "/anime", label: "مولد الأنمي", icon: Wand2 },
+      { href: "/draw", label: "أكاديمية الرسم", icon: Palette },
     ],
   },
   {
