@@ -56,13 +56,22 @@ function timingSafeEq(a: string, b: string): boolean {
   return diff === 0;
 }
 
-export async function verifyGateTokenEdge(token: string | undefined, secret: string): Promise<boolean> {
+const GATE_TTL_SEC = 60 * 60 * 24 * 30; // يطابق GATE_TOKEN_TTL_SEC في security.ts
+
+export async function verifyGateTokenEdge(
+  token: string | undefined,
+  secret: string,
+  maxAgeSec?: number
+): Promise<boolean> {
   if (!token || !secret) return false;
   const dot = token.indexOf(".");
   if (dot < 1) return false;
   const expStr = token.slice(0, dot);
   const exp = Number(expStr);
-  if (!Number.isFinite(exp) || exp < Math.floor(Date.now() / 1000)) return false;
+  const now = Math.floor(Date.now() / 1000);
+  if (!Number.isFinite(exp) || exp < now) return false;
+  // شرط الطزاجة: عمر الرمز منذ إصداره = TTL - (exp - now)
+  if (maxAgeSec !== undefined && GATE_TTL_SEC - (exp - now) > maxAgeSec) return false;
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",

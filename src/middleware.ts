@@ -26,7 +26,14 @@ export async function middleware(request: NextRequest) {
     const state = await getEdgeSecurityState();
     if (state.protectedSite) {
       const token = request.cookies.get(GATE_COOKIE)?.value;
-      const authed = await verifyGateTokenEdge(token, state.secret);
+      // بطلب صاحب الموقع: كلمة السر تُطلب عند كل تنقل — طلبات التنقل
+      // (وثيقة أو RSC) تشترط دخولاً طازجاً خلال ٢٥ ثانية، بينما نداءات
+      // الصفحة المفتوحة (API) تبقى سارية فلا ينقطع عملها وأنت عليها
+      const isNavigation =
+        request.headers.get("sec-fetch-mode") === "navigate" ||
+        !!request.headers.get("rsc") ||
+        !!request.headers.get("next-router-prefetch");
+      const authed = await verifyGateTokenEdge(token, state.secret, isNavigation ? 25 : undefined);
       if (!authed) {
         // طلبات RSC/الجلب المسبق: 401 غير قابلة للتخزين — التحويل يسمم كاش الراوتر
         if (request.headers.get("rsc") || request.headers.get("next-router-prefetch")) {
