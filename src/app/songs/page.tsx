@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import AudioPlayer, { type PlayerControl } from "@/components/AudioPlayer";
+import { renderSongVideo } from "@/lib/songVideo";
 import LyricsEditor from "@/components/LyricsEditor";
 import SaveToLibrary from "@/components/SaveToLibrary";
 import SingAlongPanel from "@/components/SingAlongPanel";
@@ -864,6 +865,32 @@ export default function SongsStudio() {
     wordStopRef.current = setTimeout(() => ctl.pause(), durMs);
   }
   const [coverUrl, setCoverUrl] = useState("");
+  const [ytProgress, setYtProgress] = useState<number | null>(null);
+
+  /** نشر على يوتيوب: تصنيع فيديو (غلاف + موجات + صوت) ثم فتح صفحة الرفع */
+  async function publishToYouTube() {
+    if (!result || ytProgress !== null) return;
+    setYtProgress(0);
+    try {
+      const video = await renderSongVideo({
+        audioBlob: result.blob,
+        title: result.title || "أغنية من لحّن",
+        subtitle: "أُنتجت على منصة لحّن 🎵",
+        coverUrl: coverUrl || undefined,
+        onProgress: (f) => setYtProgress(f),
+      });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(video);
+      a.download = `${(result.title || "song").replace(/[\\/:*?"<>|]+/g, "_")}-youtube.webm`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+      window.open("https://www.youtube.com/upload", "_blank", "noopener");
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "تعذّر تصنيع الفيديو");
+    } finally {
+      setYtProgress(null);
+    }
+  }
   const [coverBusy, setCoverBusy] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
 
@@ -2370,6 +2397,18 @@ export default function SongsStudio() {
                       className="rounded-xl border border-border-soft px-5 py-2.5 text-sm font-semibold transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
                     >
                       {coverBusy ? "جارٍ الرسم..." : coverUrl ? "🎨 غلاف آخر" : "🎨 غلاف الألبوم"}
+                    </button>
+                  )}
+                  {!result.mock && (
+                    <button
+                      onClick={publishToYouTube}
+                      disabled={ytProgress !== null}
+                      title="يصنع فيديو جاهزاً (الغلاف + موجات متحركة + الصوت) وينزّله ويفتح صفحة رفع يوتيوب — يوتيوب لا يقبل ملفات صوت"
+                      className="rounded-xl bg-[#FF0000] px-5 py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                    >
+                      {ytProgress !== null
+                        ? `🎬 يصنع الفيديو ${Math.round(ytProgress * 100)}٪`
+                        : "▶️ نشر على يوتيوب"}
                     </button>
                   )}
                   {!result.mock && (
