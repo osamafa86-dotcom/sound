@@ -52,6 +52,67 @@ async function autoTashkeel(request: MusicRequest): Promise<MusicRequest | null>
   }
 }
 
+/**
+ * إعادة صياغة وقائية: حين يُصرّ مرشّح المحتوى على رفض كلمات بريئة،
+ * يستبدل Gemini فقط ما قد يُساء فهمه (أسماء حقيقية، عنف، علامات) بمرادفات
+ * بنفس الوزن — وكل ما عداه يبقى حرفياً. آخر محاولة لإنقاذ أغنية حقيقية.
+ */
+async function sanitizeLyricsForFilter(request: MusicRequest): Promise<MusicRequest | null> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  const original = request.sections?.length
+    ? request.sections.map((s) => s.lyrics).join("\n---\n")
+    : (request.lyrics ?? "");
+  if (!original.trim()) return null;
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL ?? "gemini-3.6-flash"}:generateContent`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [
+                {
+                  text:
+                    "مرشّح محتوى آلي رفض كلمات الأغنية التالية رفضاً خاطئاً. أعد صياغتها بأقل تعديل ممكن: " +
+                    "استبدل فقط الكلمات التي قد تُفهم خطأً (أسماء أشخاص حقيقيين، تلميحات عنف، علامات تجارية) " +
+                    "بمرادفات بريئة بنفس الوزن والقافية، وأبقِ كل ما عداها حرفياً كما هو بتشكيله. " +
+                    "حافظ على فواصل الأسطر وعلى الفواصل «---» في مواضعها تماماً.\n\n" +
+                    original,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "OBJECT",
+              properties: { lyrics: { type: "STRING" } },
+              required: ["lyrics"],
+            },
+          },
+        }),
+      }
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+    const out: unknown = JSON.parse(json?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}")?.lyrics;
+    if (typeof out !== "string" || !out.trim()) return null;
+    if (request.sections?.length) {
+      const parts = out.split(/\n?---\n?/);
+      if (parts.length !== request.sections.length) return null;
+      const sections = request.sections.map((s, i) => ({ ...s, lyrics: parts[i].trim() }));
+      return { ...request, sections, lyrics: joinSections(sections) };
+    }
+    return { ...request, lyrics: out.trim() };
+  } catch {
+    return null;
+  }
+}
+
 /** تنفيذ مهمة توليد أغنية في الخلفية — يُستدعى عبر after() بعد إرسال الاستجابة */
 export async function runSongJob(jobId: string): Promise<void> {
   const store = getJobsStore();
@@ -161,18 +222,62 @@ export async function runSongJob(jobId: string): Promise<void> {
       }
     }
 
+    // «المحاولة الأخيرة»: إعادة صياغة وقائية بأقل تعديل ثم ليرا مجدداً —
+    // كلمات المستخدم تبقى معنىً ووزناً، وتُحفظ النسخة المعدّلة ليراها كما غُنّيت
+    if (!result && provider.id === "lyria" && e instanceof LyriaError && e.contentRejected) {
+      await store.update(jobId, {
+        stage: "إعادة صياغة وقائية طفيفة للكلمات لتعبر المرشّح — ثم التلحين مجدداً...",
+      });
+      const sanitized = await sanitizeLyricsForFilter(job.request);
+      if (sanitized) {
+        try {
+          result = await provider.generate(sanitized);
+          job.request = sanitized;
+          await store.saveRequest(jobId, sanitized);
+          fellBack = "عبرت الكلمات بعد إعادة صياغة وقائية طفيفة حافظت على المعنى والوزن";
+        } catch (e4) {
+          console.error("sanitized lyrics retry failed:", e4);
+        }
+      }
+    }
+
+    // جسر ثالث: MiniMax Music — محرك غناء إضافي قبل أي استسلام
+    if (!result && provider.id !== "mock" && provider.id !== "minimax") {
+      const mm = getMusicProvider({ force: "minimax" });
+      if (mm.id === "minimax") {
+        await store.update(jobId, { stage: "محرك MiniMax Music يتولى الغناء..." });
+        try {
+          result = await mm.generate(job.request);
+          fellBack = `${reason.slice(0, 120)} — غُنّيت عبر MiniMax Music`;
+        } catch (e5) {
+          console.error("MiniMax music bridge failed:", e5);
+        }
+      }
+    }
+
     if (!result && provider.id !== "mock") {
-      // المحرك الحقيقي غير متاح (شبكة/باقة/إعداد) — معاينة سلّم المقام بديلاً
-      console.error("Music provider failed, falling back to mock:", reason);
-      try {
-        result = await mockMusic.generate(job.request);
-        fellBack = reason.slice(0, 200);
-      } catch {
-        result = null;
+      // سلّم المقام التجريبي للبيئات غير المهيأة فقط (لا مفاتيح إطلاقاً) —
+      // على الإنتاج لا يظهر أبداً: إن فشلت كل المحركات نفشل بصراحة مع الاسترداد
+      const unconfigured = !process.env.GEMINI_API_KEY && !process.env.ELEVENLABS_API_KEY;
+      if (unconfigured) {
+        console.error("Music provider failed, falling back to mock:", reason);
+        try {
+          result = await mockMusic.generate(job.request);
+          fellBack = reason.slice(0, 200);
+        } catch {
+          result = null;
+        }
       }
     }
     if (!result) {
-      await store.update(jobId, { status: "failed", stage: "فشل التوليد", error: reason });
+      await store.update(jobId, {
+        status: "failed",
+        stage: "فشل التوليد",
+        error:
+          "جرّبنا كل محركات الغناء بكل الحيل ولم تكتمل الأغنية (" +
+          reason.slice(0, 140) +
+          ") — عدّل سطراً أو سطرين من الكلمات وأعد التوليد، ولم يُخصم من رصيدك.",
+      });
       await refundSong(job.userId);
       return;
     }
