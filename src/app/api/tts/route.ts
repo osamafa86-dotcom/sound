@@ -2,6 +2,8 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { getTTSProvider, mockTTS } from "@/lib/providers";
 import { TTS_SAMPLE_ONE_IN, autoEvalTTS, sampleOneIn } from "@/lib/autoEval";
 import { elevenLabsTranscribe } from "@/lib/providers/elevenlabs";
+import { minimaxTTS } from "@/lib/providers/minimax";
+import { VOICES } from "@/lib/voices";
 import { pronunciationAccuracy } from "@/lib/textCompare";
 import { prepareTTSRequest } from "@/lib/tts/prepare";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
@@ -68,6 +70,35 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       if (provider.id === "mock") throw e;
       fallbackReason = e instanceof Error ? e.message : "unknown";
+      // إنقاذ حقيقي أولاً: نفاد رصيد/حصة ElevenLabs → محرك MiniMax الاقتصادي
+      // ينطق فعلاً بصوت بديل من نفس الجنس (رصيده اشتراك شهري شبه مجاني)
+      const mmKey = process.env.MINIMAX_API_KEY;
+      const mmGroup = process.env.MINIMAX_GROUP_ID;
+      if (/quota_exceeded|exceeds your quota|401/i.test(fallbackReason) && mmKey && mmGroup) {
+        try {
+          const wanted = VOICES.find((v) => v.id === request.voiceId);
+          const alt =
+            VOICES.find((v) => v.provider === "minimax" && v.gender === wanted?.gender) ??
+            VOICES.find((v) => v.provider === "minimax");
+          const rescued = await minimaxTTS(mmKey, mmGroup).synthesize({
+            ...request,
+            voiceId: alt?.id ?? request.voiceId,
+          });
+          await logUsage("tts", user?.id ?? null);
+          return new NextResponse(new Uint8Array(rescued.audio), {
+            headers: {
+              "Content-Type": rescued.mimeType,
+              "X-Provider": "minimax",
+              "X-Mock": "0",
+              "X-Fallback": encodeURIComponent(
+                "نفد رصيد ElevenLabs الشهري — نُطق النص فعلياً بصوت المحرك الاقتصادي 💠 بديلاً"
+              ),
+            },
+          });
+        } catch (e2) {
+          console.error("MiniMax TTS rescue failed:", e2);
+        }
+      }
       // مفاتيح حقيقية مضبوطة → لا صوت تجريبياً أبداً: خطأ صريح بالسبب،
       // والوضع التجريبي للبيئات غير المهيأة (بلا أي مفتاح) حصراً
       if (process.env.ELEVENLABS_API_KEY || process.env.AZURE_SPEECH_KEY) {
