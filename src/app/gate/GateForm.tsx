@@ -2,40 +2,12 @@
 
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { startAuthentication } from "@simplewebauthn/browser";
 
-export default function GateForm({ hasPasskeys = false }: { hasPasskeys?: boolean }) {
+export default function GateForm() {
   const params = useSearchParams();
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  /** الدخول بالبصمة أو الوجه — Passkey مسجل من صفحة الحماية */
-  async function passkeyLogin() {
-    if (loading) return;
-    setError("");
-    setLoading(true);
-    try {
-      const opt = await fetch("/api/security", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "passkey_login_options" }),
-      }).then((r) => r.json());
-      if (!opt.options) throw new Error(opt.error || "تعذّر بدء الدخول بالبصمة");
-      const credential = await startAuthentication({ optionsJSON: opt.options });
-      const ver = await fetch("/api/security", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "passkey_login_verify", credential }),
-      }).then((r) => r.json());
-      if (!ver.ok) throw new Error(ver.error || "فشل التحقق من البصمة");
-      const next = params.get("next") || "/";
-      window.location.href = next.startsWith("/") ? next : "/";
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "تعذّر الدخول بالبصمة");
-      setLoading(false);
-    }
-  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -107,16 +79,6 @@ export default function GateForm({ hasPasskeys = false }: { hasPasskeys?: boolea
         </button>
       </form>
 
-      {hasPasskeys && (
-        <button
-          type="button"
-          onClick={passkeyLogin}
-          disabled={loading}
-          className="mt-3 w-full rounded-xl border border-primary px-6 py-3 font-semibold text-primary transition-colors hover:bg-rose disabled:opacity-50"
-        >
-          👆 الدخول بالبصمة أو الوجه
-        </button>
-      )}
     </div>
   );
 }

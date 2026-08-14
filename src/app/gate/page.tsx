@@ -13,7 +13,7 @@ export default async function GatePage() {
     <div className="flex min-h-[70vh] items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <Suspense>
-          <GateForm hasPasskeys={cfg.passkeys.length > 0} />
+          <GateForm />
         </Suspense>
       </div>
     </div>
