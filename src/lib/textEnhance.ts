@@ -52,7 +52,7 @@ function buildPrompt(text: string, dialectHint?: string): string {
     (v) => `- ${v.id}: ${v.name} — ${v.gender === "male" ? "ذكر" : "أنثى"}، لهجة ${v.dialect}. ${v.tone}`
   ).join("\n");
 
-  return `أنت خبير في الصوتيات العربية وإخراج التعليق الصوتي، تعمل داخل منصة «مقام».
+  return `أنت خبير في الصوتيات العربية وإخراج التعليق الصوتي، تعمل داخل منصة «لحّن».
 
 مهمتك على النص التالي:
 

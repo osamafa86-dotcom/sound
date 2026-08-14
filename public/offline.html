@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>لا يوجد اتصال — لحّن</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fbf8f4;
+      color: #262019;
+      font-family: "Tajawal", "Segoe UI", "Noto Naskh Arabic", Tahoma, sans-serif;
+      text-align: center;
+    }
+    .card {
+      padding: 2.5rem 2rem;
+      max-width: 26rem;
+    }
+    .wave {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      align-items: center;
+      height: 64px;
+      margin-bottom: 1.5rem;
+    }
+    .wave span {
+      width: 10px;
+      border-radius: 999px;
+      background: #c0453e;
+      opacity: 0.35;
+    }
+    .wave span:nth-child(1) { height: 24px; }
+    .wave span:nth-child(2) { height: 40px; }
+    .wave span:nth-child(3) { height: 60px; }
+    .wave span:nth-child(4) { height: 40px; }
+    .wave span:nth-child(5) { height: 24px; }
+    h1 { font-size: 1.4rem; margin: 0 0 0.5rem; }
+    p { color: #8a7d74; margin: 0 0 1.5rem; line-height: 1.8; }
+    button {
+      background: #c0453e;
+      color: #fff;
+      border: 0;
+      border-radius: 999px;
+      padding: 0.7rem 2rem;
+      font-size: 1rem;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    button:hover { background: #a5352e; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="wave"><span></span><span></span><span></span><span></span><span></span></div>
+    <h1>لا يوجد اتصال بالإنترنت</h1>
+    <p>يبدو أنك غير متصل حالياً. توليد الصوت والأغاني يحتاج اتصالاً بالإنترنت — تحقق من الشبكة ثم أعد المحاولة.</p>
+    <button onclick="location.reload()">إعادة المحاولة</button>
+  </div>
+</body>
+</html>

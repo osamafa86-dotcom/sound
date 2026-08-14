@@ -19,13 +19,13 @@ const tajawal = Tajawal({
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://sound-five-inky.vercel.app"),
   title: {
-    default: "مقام — استوديو الصوتيات بالذكاء الاصطناعي",
-    template: "%s | مقام",
+    default: "لحّن — استوديو الصوتيات بالذكاء الاصطناعي",
+    template: "%s | لحّن",
   },
   description:
     "منصة عربية لتحويل النص إلى صوت بجودة عالية، وكتابة وتلحين الأغاني حسب المقامات الصوتية بالذكاء الاصطناعي.",
   openGraph: {
-    title: "مقام — استوديو الصوتيات بالذكاء الاصطناعي",
+    title: "لحّن — استوديو الصوتيات بالذكاء الاصطناعي",
     description:
       "حوّل كلماتك إلى صوتٍ وأغنية: نص إلى صوت بالفصحى واللهجات، وأغانٍ ملحّنة على المقامات العربية.",
     type: "website",

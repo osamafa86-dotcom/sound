@@ -762,7 +762,7 @@ export default function TTSStudio() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             maxLength={20000}
-            placeholder={"اكتب النص هنا...\nمثال: أهلاً بكم في منصة مقام، حيث تتحول الكلمات إلى صوتٍ نابضٍ بالحياة."}
+            placeholder={"اكتب النص هنا...\nمثال: أهلاً بكم في منصة لحّن، حيث تتحول الكلمات إلى صوتٍ نابضٍ بالحياة."}
             className="min-h-72 w-full resize-y rounded-2xl border border-border-soft bg-surface-card p-5 leading-relaxed outline-none transition-colors focus:border-primary"
           />
           {/* المخرج الصوتي — المحرك التعبيري (الجيل الثالث) */}

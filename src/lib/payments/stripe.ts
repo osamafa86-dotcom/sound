@@ -49,7 +49,7 @@ export async function createStripeSubscriptionCheckout(
     "line_items[0][price_data][currency]": "usd",
     "line_items[0][price_data][unit_amount]": String(Math.round(plan.usd * 100)),
     "line_items[0][price_data][recurring][interval]": "month",
-    "line_items[0][price_data][product_data][name]": `مقام — باقة ${plan.name}`,
+    "line_items[0][price_data][product_data][name]": `لحّن — باقة ${plan.name}`,
     "line_items[0][price_data][product_data][description]": `${plan.monthlyCredits} نقطة شهرياً`,
   });
   const url = session.url;
@@ -73,7 +73,7 @@ export async function createStripePackCheckout(
     "line_items[0][quantity]": "1",
     "line_items[0][price_data][currency]": "usd",
     "line_items[0][price_data][unit_amount]": String(Math.round(pack.usd * 100)),
-    "line_items[0][price_data][product_data][name]": `مقام — ${pack.name}`,
+    "line_items[0][price_data][product_data][name]": `لحّن — ${pack.name}`,
     "line_items[0][price_data][product_data][description]": `${pack.credits} نقطة تُضاف لرصيدك فوراً`,
   });
   const url = session.url;

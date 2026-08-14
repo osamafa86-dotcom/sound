@@ -360,11 +360,11 @@ export default function Home() {
         </section>
       </div>
 
-      {/* لماذا مقام — حزام رملي بعرض كامل */}
+      {/* لماذا لحّن — حزام رملي بعرض كامل */}
       <section className="bg-surface-raised py-16">
         <div className="mx-auto max-w-6xl px-4">
           <div className="mb-12 flex flex-col items-center gap-3">
-            <h2 className="text-center text-3xl font-extrabold">لماذا مقام؟</h2>
+            <h2 className="text-center text-3xl font-extrabold">لماذا لحّن؟</h2>
             <WaveLine />
           </div>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">

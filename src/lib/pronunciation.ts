@@ -46,7 +46,7 @@ async function createDictionary(apiKey: string, rules: PronunciationRule[]): Pro
   const lexicon = buildLexicon(rules);
   const form = new FormData();
   form.append("name", DICT_NAME);
-  form.append("description", "قاموس النطق العربي المتراكم لمنصة مقام");
+  form.append("description", "قاموس النطق العربي المتراكم لمنصة لحّن");
   form.append("file", new Blob([lexicon], { type: "text/xml" }), "lexicon.pls");
 
   const res = await fetch(`${API_BASE}/pronunciation-dictionaries/add-from-file`, {

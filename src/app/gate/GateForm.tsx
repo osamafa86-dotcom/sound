@@ -47,7 +47,7 @@ export default function GateForm() {
           ))}
         </span>
       </div>
-      <h1 className="text-center text-2xl font-bold">مقام</h1>
+      <h1 className="text-center text-2xl font-bold">لحّن</h1>
       <p className="mt-2 text-center text-sm text-muted">
         هذا الموقع خاص حالياً — أدخل كلمة السر للمتابعة
       </p>

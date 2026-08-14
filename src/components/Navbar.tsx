@@ -202,7 +202,7 @@ export default function Navbar() {
         <Link href="/" className="flex items-center gap-2.5 border-b border-border-soft px-5 py-4">
           <LogoMark size={38} />
           <span className="font-heading text-xl font-extrabold">
-            مقام<span className="text-primary">.</span>
+            لحّن<span className="text-primary">.</span>
           </span>
         </Link>
         {navList}
@@ -214,7 +214,7 @@ export default function Navbar() {
         <Link href="/" className="flex items-center gap-2" onClick={() => setOpen(false)}>
           <LogoMark size={32} />
           <span className="font-heading text-lg font-extrabold">
-            مقام<span className="text-primary">.</span>
+            لحّن<span className="text-primary">.</span>
           </span>
         </Link>
         <button
@@ -239,7 +239,7 @@ export default function Navbar() {
               <Link href="/" className="flex items-center gap-2" onClick={() => setOpen(false)}>
                 <LogoMark size={32} />
                 <span className="font-heading text-lg font-extrabold">
-                  مقام<span className="text-primary">.</span>
+                  لحّن<span className="text-primary">.</span>
                 </span>
               </Link>
               <button
