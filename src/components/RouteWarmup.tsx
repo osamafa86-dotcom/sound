@@ -1,12 +1,13 @@
 "use client";
 
 /**
- * التسخين المسبق للاستوديوهات — بعد استقرار الصفحة الحالية بلحظات،
- * تُجلب حزم بقية الصفحات بهدوء في الخلفية (RSC + JS) فيصبح التنقل
- * إليها شبه فوري بدل شاشة الانتظار، حتى في تطبيق الجوال المثبت.
+ * التسخين المسبق للاستوديوهات — بعد ١٠ ثوانٍ من الهدوء عقب كل تنقل،
+ * تُجلب حزم بقية الصفحات في الخلفية (RSC + JS) فيصبح التنقل التالي
+ * شبه فوري. المهلة الطويلة تضمن ألا يزاحم التسخينُ الصفحةَ المفتوحة
+ * ولا يستهلك بياناتها وهي ما زالت تحمّل. التنقل يعيد ضبط المؤقت.
  */
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const WARM_ROUTES = [
   "/tts",
@@ -22,20 +23,23 @@ const WARM_ROUTES = [
   "/library",
 ];
 
+const CALM_DELAY_MS = 10_000;
+
 export default function RouteWarmup() {
   const router = useRouter();
+  const pathname = usePathname();
   useEffect(() => {
-    // ننتظر ثانيتين كي لا نزاحم تحميل الصفحة المفتوحة نفسها
     const t = setTimeout(() => {
       for (const r of WARM_ROUTES) {
+        if (r === pathname) continue; // الصفحة الحالية محمّلة أصلاً
         try {
           router.prefetch(r);
         } catch {
           /* المتصفح قد يرفض على اتصالات موفّرة للبيانات — لا بأس */
         }
       }
-    }, 2000);
+    }, CALM_DELAY_MS);
     return () => clearTimeout(t);
-  }, [router]);
+  }, [router, pathname]);
   return null;
 }
