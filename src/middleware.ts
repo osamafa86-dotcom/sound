@@ -1,37 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { GATE_COOKIE, verifyGateToken } from "@/lib/siteGate";
 
-// ملفات تثبيت التطبيق (PWA) مستثناة — نظام التشغيل يجلبها بلا كوكي،
-// وحجبها يمنع «إضافة إلى الشاشة الرئيسية». لا تمسّ أي خدمة مدفوعة.
-const GATE_EXEMPT_PATHS = ["/gate", "/api/gate", "/manifest.webmanifest", "/sw.js", "/offline.html"];
-
-/** تحديث جلسة Supabase على كل طلب حتى لا تنتهي أثناء التصفح */
+/**
+ * بوابة كلمة السر أُلغيت بطلب صاحب الموقع — الموقع مفتوح مباشرة.
+ * (كود البوابة كاملاً محفوظ في تاريخ Git وفي src/lib/siteGate.ts لإعادته متى شاء.)
+ *
+ * يبقى دور الوسيط الوحيد: تحديث جلسة Supabase على كل طلب حتى لا تنتهي أثناء التصفح.
+ */
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  // بوابة كلمة سر الموقع: تسبق كل شيء (حتى مسارات API) — تحمي أرصدة
-  // المزوّدين المدفوعة من أي زائر لا يملك كلمة السر. صفحة البوابة ونقطة
-  // التحقق نفسها مُستثناتان حتى يمكن الوصول إليهما لإدخال كلمة السر.
-  if (!GATE_EXEMPT_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
-    const token = request.cookies.get(GATE_COOKIE)?.value;
-    const authed = await verifyGateToken(token);
-    if (!authed) {
-      // طلبات RSC والجلب المسبق: 401 صريحة غير قابلة للتخزين — التحويل هنا
-      // كان يُخزَّن في كاش راوتر المتصفح فتظهر البوابة عند كل تنقل لاحق
-      if (request.headers.get("rsc") || request.headers.get("next-router-prefetch")) {
-        return new NextResponse(null, { status: 401, headers: { "Cache-Control": "no-store" } });
-      }
-      const url = request.nextUrl.clone();
-      url.pathname = "/gate";
-      url.search = "";
-      url.searchParams.set("next", pathname + request.nextUrl.search);
-      const redirect = NextResponse.redirect(url);
-      redirect.headers.set("Cache-Control", "no-store");
-      return redirect;
-    }
-  }
-
   let response = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
