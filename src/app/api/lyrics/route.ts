@@ -61,6 +61,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: message }, { status: 500 });
     }
     fallbackReason = e instanceof Error ? e.message : "unknown";
+    // مفاتيح ذكاء حقيقية مضبوطة → لا اقتراح تجريبياً أبداً: خطأ صريح بالسبب
+    if (process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY) {
+      console.error("Lyrics assistant failed (no mock on configured env):", fallbackReason);
+      return NextResponse.json(
+        { error: "تعذّر مساعد الكلمات: " + fallbackReason.slice(0, 180) + " — أعد المحاولة" },
+        { status: 502 }
+      );
+    }
     console.error("Lyrics assistant failed, falling back to mock:", fallbackReason);
     result = await mockAssistant.assist(request);
   }

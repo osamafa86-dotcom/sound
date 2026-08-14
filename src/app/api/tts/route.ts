@@ -66,9 +66,17 @@ export async function POST(req: NextRequest) {
         }
       }
     } catch (e) {
-      // المحرك الحقيقي غير متاح (شبكة/رصيد/إعداد) — نرجع للوضع التجريبي بدل كسر التجربة
       if (provider.id === "mock") throw e;
       fallbackReason = e instanceof Error ? e.message : "unknown";
+      // مفاتيح حقيقية مضبوطة → لا صوت تجريبياً أبداً: خطأ صريح بالسبب،
+      // والوضع التجريبي للبيئات غير المهيأة (بلا أي مفتاح) حصراً
+      if (process.env.ELEVENLABS_API_KEY || process.env.AZURE_SPEECH_KEY) {
+        console.error("TTS provider failed (no mock on configured env):", fallbackReason);
+        return NextResponse.json(
+          { error: "تعذّر التوليد: " + fallbackReason.slice(0, 180) + " — أعد المحاولة بعد لحظات" },
+          { status: 502 }
+        );
+      }
       console.error("TTS provider failed, falling back to mock:", fallbackReason);
       result = await mockTTS.synthesize(request);
     }
