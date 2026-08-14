@@ -5,6 +5,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SiteBanner from "@/components/SiteBanner";
 import RouteWarmup from "@/components/RouteWarmup";
+import TransitionSplash from "@/components/TransitionSplash";
 
 const alexandria = Alexandria({
   variable: "--font-alexandria",
@@ -50,6 +51,7 @@ export default function RootLayout({
         <div className="flex min-h-screen flex-col lg:ms-[264px]">
           <SiteBanner />
           <RouteWarmup />
+          <TransitionSplash />
           <main className="flex-1">{children}</main>
           <Footer />
         </div>
