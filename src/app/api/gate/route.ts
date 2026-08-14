@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkGatePassword, createGateToken, GATE_COOKIE, GATE_TOKEN_TTL_SEC } from "@/lib/siteGate";
+import {
+  GATE_COOKIE,
+  GATE_TOKEN_TTL_SEC,
+  checkPassword,
+  createGateToken,
+  readSecurity,
+} from "@/lib/security";
 import { consumeRateLimit, visitorIp } from "@/lib/rateLimit";
 
-/** بوابة كلمة سر الموقع: كلمة سر واحدة مشتركة، لا صلة لها بحسابات Supabase */
+/** دخول بكلمة سر الموقع (الديناميكية من صفحة الحماية) — كوكي جلسة ٣٠ يوماً */
 export async function POST(req: NextRequest) {
   const ip = visitorIp(req);
-  // تقييد المحاولات: ١٠ كل ١٥ دقيقة لكل IP — يبطئ التخمين الآلي بلا إزعاج المستخدم الحقيقي
+  // تقييد المحاولات: ١٠ كل ١٥ دقيقة لكل IP — يبطئ التخمين الآلي
   const okRate = await consumeRateLimit(`gate:${ip}`, 10, 15 * 60);
   if (!okRate) {
     return NextResponse.json(
@@ -14,18 +20,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const cfg = await readSecurity(true);
+  if (!cfg.passwordHash) return NextResponse.json({ ok: true, open: true });
+
   const body = await req.json().catch(() => null);
   const password = typeof body?.password === "string" ? body.password : "";
-
-  if (!checkGatePassword(password)) {
-    // إبطاء خفيف ضد قياس التوقيت وهجمات القوة الغاشمة الآلية
+  if (!password || !checkPassword(password, cfg)) {
     await new Promise((r) => setTimeout(r, 300 + Math.random() * 300));
     return NextResponse.json({ ok: false, error: "كلمة السر غير صحيحة" }, { status: 401 });
   }
 
-  const token = await createGateToken();
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(GATE_COOKIE, token, {
+  res.cookies.set(GATE_COOKIE, createGateToken(cfg), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

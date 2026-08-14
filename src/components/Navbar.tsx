@@ -59,6 +59,7 @@ const groups: { label: string | null; items: { href: string; label: string; icon
     label: "حسابي",
     items: [
       { href: "/library", label: "مكتبتي", icon: Library },
+      { href: "/security", label: "الحماية", icon: ShieldCheck },
       { href: "/support", label: "الدعم والتواصل", icon: LifeBuoy },
     ],
   },
