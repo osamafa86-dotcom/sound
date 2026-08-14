@@ -85,16 +85,7 @@ export default function SaveToLibrary(props: Props) {
 
   if (signedIn === null) return null;
 
-  if (!signedIn) {
-    return (
-      <p className="mt-3 text-xs text-muted">
-        <Link href="/login?mode=signup" className="font-semibold text-primary hover:underline">
-          أنشئ حساباً مجانياً
-        </Link>{" "}
-        لحفظ أعمالك في مكتبتك والوصول إليها من أي جهاز.
-      </p>
-    );
-  }
+  if (!signedIn) return null; // لا حسابات — المكتبة المحلية تحفظ تلقائياً في المتصفح
 
   if (state === "saved") {
     return (
