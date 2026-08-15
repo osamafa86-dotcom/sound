@@ -11,6 +11,10 @@ export type SongVideoInput = {
   title: string;
   subtitle?: string;
   coverUrl?: string;
+  /** landscape ليوتيوب (1920×1080) — portrait لشورتس وتيك توك (1080×1920) */
+  orientation?: "landscape" | "portrait";
+  /** سقف المدة بالثواني — شورتس/تيك توك يفضلان ٦٠ ثانية */
+  maxDurationSec?: number;
   onProgress?: (fraction: number) => void;
 };
 
@@ -32,8 +36,11 @@ export async function renderSongVideo({
   title,
   subtitle = "",
   coverUrl,
+  orientation = "landscape",
+  maxDurationSec,
   onProgress,
 }: SongVideoInput): Promise<Blob> {
+  const portrait = orientation === "portrait";
   const mime = pickMime();
   if (!mime) throw new Error("متصفحك لا يدعم تصنيع الفيديو — جرّب كروم أو سفاري حديثاً");
 
@@ -50,8 +57,8 @@ export async function renderSongVideo({
   }
 
   const canvas = document.createElement("canvas");
-  canvas.width = 1920;
-  canvas.height = 1080; // Full HD 1080p
+  canvas.width = portrait ? 1080 : 1920;
+  canvas.height = portrait ? 1920 : 1080; // Full HD
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("تعذّر تهيئة لوحة الرسم");
 
@@ -91,9 +98,9 @@ export async function renderSongVideo({
     ctx.fillRect(0, 0, w, h);
 
     // الغلاف في المنتصف الأعلى
-    const coverSize = 460;
+    const coverSize = portrait ? 660 : 460;
     const coverX = (w - coverSize) / 2;
-    const coverY = 130;
+    const coverY = portrait ? 320 : 130;
     if (cover) {
       ctx.save();
       ctx.beginPath();
@@ -127,26 +134,27 @@ export async function renderSongVideo({
     // العنوان
     ctx.textAlign = "center";
     ctx.fillStyle = "#fdf6ee";
-    ctx.font = "bold 66px Cairo, Tajawal, sans-serif";
-    ctx.fillText(title.slice(0, 60), w / 2, coverY + coverSize + 105);
+    ctx.font = `bold ${portrait ? 74 : 66}px Cairo, Tajawal, sans-serif`;
+    ctx.fillText(title.slice(0, 60), w / 2, coverY + coverSize + (portrait ? 130 : 105));
     if (subtitle) {
       ctx.fillStyle = "rgba(253,246,238,.75)";
-      ctx.font = "40px Cairo, Tajawal, sans-serif";
-      ctx.fillText(subtitle.slice(0, 80), w / 2, coverY + coverSize + 168);
+      ctx.font = `${portrait ? 46 : 40}px Cairo, Tajawal, sans-serif`;
+      ctx.fillText(subtitle.slice(0, 80), w / 2, coverY + coverSize + (portrait ? 200 : 168));
     }
 
     // موجات تتراقص مع الصوت
     analyser.getByteFrequencyData(bars);
-    const n = 56;
-    const bw = 20;
-    const gap = (w - 240 - n * bw) / (n - 1);
+    const n = portrait ? 34 : 56;
+    const bw = portrait ? 22 : 20;
+    const margin = portrait ? 80 : 120;
+    const gap = (w - 2 * margin - n * bw) / (n - 1);
     for (let i = 0; i < n; i++) {
       const v = bars[Math.floor((i / n) * bars.length)] / 255;
-      const bh = 18 + v * 170;
-      const x = 120 + i * (bw + gap);
+      const bh = 18 + v * (portrait ? 230 : 170);
+      const x = margin + i * (bw + gap);
       ctx.fillStyle = `rgba(212,175,55,${0.45 + v * 0.55})`;
       ctx.beginPath();
-      ctx.roundRect(x, h - 90 - bh, bw, bh, 10);
+      ctx.roundRect(x, h - (portrait ? 200 : 90) - bh, bw, bh, 10);
       ctx.fill();
     }
 
@@ -173,7 +181,14 @@ export async function renderSongVideo({
       setTimeout(() => recorder.state !== "inactive" && recorder.stop(), 300);
     };
     audio.ontimeupdate = () => {
-      if (audio.duration) onProgress?.(Math.min(1, audio.currentTime / audio.duration));
+      const target = Math.min(audio.duration || Infinity, maxDurationSec ?? Infinity);
+      if (Number.isFinite(target) && target > 0) {
+        onProgress?.(Math.min(1, audio.currentTime / target));
+      }
+      if (maxDurationSec && audio.currentTime >= maxDurationSec) {
+        audio.pause();
+        setTimeout(() => recorder.state !== "inactive" && recorder.stop(), 300);
+      }
     };
     audio.onerror = () => {
       cleanup();

@@ -874,8 +874,10 @@ export default function SongsStudio() {
    * ٣) تصنيع الفيديو (الغلاف + الموجات + الصوت الممستر) وفتح صفحة الرفع
    */
   const [ytStage, setYtStage] = useState("");
-  async function publishToYouTube() {
+  const [ytKind, setYtKind] = useState<"youtube" | "shorts">("youtube");
+  async function publishToYouTube(kind: "youtube" | "shorts" = "youtube") {
     if (!result || ytProgress !== null) return;
+    setYtKind(kind);
     setYtProgress(0);
     try {
       // ١) الماستر: صوت بجهارة يوتيوب القياسية — إن لم يُطبَّق سابقاً
@@ -918,11 +920,13 @@ export default function SongsStudio() {
         title: result.title || "أغنية من لحّن",
         subtitle: "أُنتجت على منصة لحّن 🎵",
         coverUrl: effectiveCover || undefined,
+        orientation: kind === "shorts" ? "portrait" : "landscape",
+        maxDurationSec: kind === "shorts" ? 60 : undefined,
         onProgress: (f) => setYtProgress(f),
       });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(video);
-      a.download = `${(result.title || "song").replace(/[\\/:*?"<>|]+/g, "_")}-youtube.webm`;
+      a.download = `${(result.title || "song").replace(/[\\/:*?"<>|]+/g, "_")}-${kind}.webm`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
       window.open("https://www.youtube.com/upload", "_blank", "noopener");
@@ -2442,14 +2446,26 @@ export default function SongsStudio() {
                   )}
                   {!result.mock && (
                     <button
-                      onClick={publishToYouTube}
+                      onClick={() => publishToYouTube("youtube")}
                       disabled={ytProgress !== null}
                       title="يصنع فيديو جاهزاً (الغلاف + موجات متحركة + الصوت) وينزّله ويفتح صفحة رفع يوتيوب — يوتيوب لا يقبل ملفات صوت"
                       className="rounded-xl bg-[#FF0000] px-5 py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
                     >
-                      {ytProgress !== null
+                      {ytProgress !== null && ytKind === "youtube"
                         ? ytStage || `🎬 يصنع الفيديو ${Math.round(ytProgress * 100)}٪`
                         : "▶️ نشر على يوتيوب"}
+                    </button>
+                  )}
+                  {!result.mock && (
+                    <button
+                      onClick={() => publishToYouTube("shorts")}
+                      disabled={ytProgress !== null}
+                      title="نسخة عمودية 9:16 من أول ٦٠ ثانية — جاهزة لشورتس وتيك توك وريلز"
+                      className="rounded-xl bg-black px-5 py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-85 disabled:opacity-60"
+                    >
+                      {ytProgress !== null && ytKind === "shorts"
+                        ? ytStage || `📱 يصنع الشورتس ${Math.round(ytProgress * 100)}٪`
+                        : "📱 شورتس / تيك توك"}
                     </button>
                   )}
                   {!result.mock && (
