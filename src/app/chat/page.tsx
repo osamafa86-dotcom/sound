@@ -157,6 +157,21 @@ export default function ChatPage() {
     }
   }
 
+  async function deleteMsg(id: number) {
+    // إزالة فورية متفائلة، ثم الخادم
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+    try {
+      const d = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", id, name }),
+      }).then((r) => r.json());
+      if (d.error) setError(d.error);
+    } catch {
+      /* الاستطلاع سيعيد الرسالة إن فشل الحذف */
+    }
+  }
+
   async function copyMsg(t: string) {
     try {
       await navigator.clipboard.writeText(t);
@@ -257,6 +272,15 @@ export default function ChatPage() {
                     >
                       📋
                     </button>
+                    {mine && (
+                      <button
+                        onClick={() => deleteMsg(m.id)}
+                        title="حذف رسالتي"
+                        className="text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-70"
+                      >
+                        🗑️
+                      </button>
+                    )}
                     <span className={`text-[10px] ${mine ? "text-white/70" : "text-muted"}`}>{fmtTime(m.at)}</span>
                   </div>
                 </div>

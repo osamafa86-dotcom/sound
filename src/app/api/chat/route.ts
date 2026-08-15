@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { appendMessage, chatSnapshot, clearChat, heartbeat, readChat, MAX_TEXT_LEN } from "@/lib/chatStore";
+import { appendMessage, chatSnapshot, clearChat, deleteMessage, heartbeat, MAX_TEXT_LEN } from "@/lib/chatStore";
 import { checkOwnerKey, ownerKeyConfigured } from "@/lib/security";
 import { consumeRateLimit, visitorIp } from "@/lib/rateLimit";
 
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const ip = visitorIp(req);
   const body = (await req.json().catch(() => null)) as
-    | { action?: string; name?: string; text?: string; ownerKey?: string }
+    | { action?: string; name?: string; text?: string; ownerKey?: string; id?: number }
     | null;
   const action = String(body?.action ?? "send");
 
@@ -41,6 +41,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, cleared: true });
   }
 
+  // حذف رسالة: صاحبها (بالاسم) أو المالك (بمفتاح المالك)
+  if (action === "delete") {
+    const id = Number(body?.id ?? 0);
+    if (!id) return NextResponse.json({ error: "معرّف غير صالح" }, { status: 400 });
+    const isOwner = ownerKeyConfigured() && checkOwnerKey(String(body?.ownerKey ?? ""));
+    const done = await deleteMessage(id, String(body?.name ?? ""), isOwner);
+    if (!done) return NextResponse.json({ error: "لا يمكنك حذف هذه الرسالة" }, { status: 403 });
+    return NextResponse.json({ ok: true, deleted: id });
+  }
+
   // إرسال رسالة — تقييد ضد الإغراق
   const ok = await consumeRateLimit(`chat:${ip}`, 15, 60);
   if (!ok) return NextResponse.json({ error: "تمهّل قليلاً — رسائل كثيرة بسرعة" }, { status: 429 });
@@ -53,7 +63,6 @@ export async function POST(req: NextRequest) {
   try {
     const msg = await appendMessage(body?.name ?? "", text);
     if (!msg) return NextResponse.json({ error: "رسالة غير صالحة" }, { status: 400 });
-    void readChat; // (مُبقاة للتوافق)
     return NextResponse.json({ ok: true, message: msg });
   } catch (e) {
     return NextResponse.json(
