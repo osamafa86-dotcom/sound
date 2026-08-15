@@ -21,6 +21,7 @@ import {
   Sparkles,
   Wand2,
   Palette,
+  MessageCircle,
   Workflow,
   X,
   type LucideIcon,
@@ -51,6 +52,7 @@ const groups: { label: string | null; items: { href: string; label: string; icon
     items: [
       { href: "/voices", label: "معرض الأصوات", icon: AudioLines },
       { href: "/gallery", label: "معرض الإبداعات", icon: Images },
+      { href: "/chat", label: "غرفة الدردشة", icon: MessageCircle },
       { href: "/prompts", label: "وكيل البرومبتات", icon: Sparkles },
       { href: "/brain", label: "عقل المنصة", icon: Brain },
     ],
