@@ -1,6 +1,6 @@
 /**
  * تصنيع فيديو يوتيوب من الأغنية — في المتصفح بالكامل:
- * لوحة 1280×720 بهوية لحّن (غلاف الألبوم إن وُجد + العنوان + موجات متحركة
+ * لوحة Full HD 1920×1080 بهوية لحّن (غلاف الألبوم إن وُجد + العنوان + موجات متحركة
  * تتراقص مع الصوت عبر AnalyserNode)، تُسجَّل مع الصوت بMediaRecorder
  * إلى WebM جاهز للرفع. يوتيوب لا يقبل ملفات صوت — هذا هو الجسر.
  * التسجيل بزمن حقيقي (أغنية ٣ دقائق = ٣ دقائق تصنيع) والتقدم يُبلَّغ.
@@ -50,8 +50,8 @@ export async function renderSongVideo({
   }
 
   const canvas = document.createElement("canvas");
-  canvas.width = 1280;
-  canvas.height = 720;
+  canvas.width = 1920;
+  canvas.height = 1080; // Full HD 1080p
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("تعذّر تهيئة لوحة الرسم");
 
@@ -69,7 +69,7 @@ export async function renderSongVideo({
 
   const stream = canvas.captureStream(30);
   dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
-  const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 4_000_000 });
+  const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 10_000_000 });
   const chunks: Blob[] = [];
   recorder.ondataavailable = (e) => {
     if (e.data.size) chunks.push(e.data);
@@ -91,35 +91,35 @@ export async function renderSongVideo({
     ctx.fillRect(0, 0, w, h);
 
     // الغلاف في المنتصف الأعلى
-    const coverSize = 300;
+    const coverSize = 460;
     const coverX = (w - coverSize) / 2;
-    const coverY = 90;
+    const coverY = 130;
     if (cover) {
       ctx.save();
       ctx.beginPath();
-      ctx.roundRect(coverX, coverY, coverSize, coverSize, 24);
+      ctx.roundRect(coverX, coverY, coverSize, coverSize, 36);
       ctx.clip();
       ctx.drawImage(cover, coverX, coverY, coverSize, coverSize);
       ctx.restore();
       ctx.strokeStyle = "rgba(212,175,55,.7)";
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 5;
       ctx.beginPath();
-      ctx.roundRect(coverX, coverY, coverSize, coverSize, 24);
+      ctx.roundRect(coverX, coverY, coverSize, coverSize, 36);
       ctx.stroke();
     } else {
       // شعار لحّن: أعمدة نابضة داخل بطاقة
       ctx.fillStyle = "#c0453e";
       ctx.beginPath();
-      ctx.roundRect(coverX, coverY, coverSize, coverSize, 24);
+      ctx.roundRect(coverX, coverY, coverSize, coverSize, 36);
       ctx.fill();
       const t = performance.now() / 300;
       [0.35, 0.6, 0.42, 0.66].forEach((f, i) => {
         const bh = coverSize * f * (0.8 + 0.2 * Math.abs(Math.sin(t + i)));
-        const bw2 = 16;
-        const bx = coverX + coverSize / 2 - 2 * 28 + i * 28;
+        const bw2 = 26;
+        const bx = coverX + coverSize / 2 - 2 * 44 + i * 44;
         ctx.fillStyle = "#fff";
         ctx.beginPath();
-        ctx.roundRect(bx, coverY + (coverSize - bh) / 2, bw2, bh, 8);
+        ctx.roundRect(bx, coverY + (coverSize - bh) / 2, bw2, bh, 13);
         ctx.fill();
       });
     }
@@ -127,26 +127,26 @@ export async function renderSongVideo({
     // العنوان
     ctx.textAlign = "center";
     ctx.fillStyle = "#fdf6ee";
-    ctx.font = "bold 44px Cairo, Tajawal, sans-serif";
-    ctx.fillText(title.slice(0, 60), w / 2, coverY + coverSize + 70);
+    ctx.font = "bold 66px Cairo, Tajawal, sans-serif";
+    ctx.fillText(title.slice(0, 60), w / 2, coverY + coverSize + 105);
     if (subtitle) {
       ctx.fillStyle = "rgba(253,246,238,.75)";
-      ctx.font = "26px Cairo, Tajawal, sans-serif";
-      ctx.fillText(subtitle.slice(0, 80), w / 2, coverY + coverSize + 112);
+      ctx.font = "40px Cairo, Tajawal, sans-serif";
+      ctx.fillText(subtitle.slice(0, 80), w / 2, coverY + coverSize + 168);
     }
 
     // موجات تتراقص مع الصوت
     analyser.getByteFrequencyData(bars);
-    const n = 48;
-    const bw = 14;
-    const gap = (w - 160 - n * bw) / (n - 1);
+    const n = 56;
+    const bw = 20;
+    const gap = (w - 240 - n * bw) / (n - 1);
     for (let i = 0; i < n; i++) {
       const v = bars[Math.floor((i / n) * bars.length)] / 255;
-      const bh = 12 + v * 110;
-      const x = 80 + i * (bw + gap);
+      const bh = 18 + v * 170;
+      const x = 120 + i * (bw + gap);
       ctx.fillStyle = `rgba(212,175,55,${0.45 + v * 0.55})`;
       ctx.beginPath();
-      ctx.roundRect(x, h - 60 - bh, bw, bh, 7);
+      ctx.roundRect(x, h - 90 - bh, bw, bh, 10);
       ctx.fill();
     }
 
