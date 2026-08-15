@@ -21,6 +21,7 @@ export default function ChatPage() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [online, setOnline] = useState(0);
   const [error, setError] = useState("");
   const lastIdRef = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -60,6 +61,7 @@ export default function ChatPage() {
         } else if (typeof d.lastId === "number" && lastIdRef.current === 0) {
           lastIdRef.current = d.lastId;
         }
+        if (typeof d.online === "number") setOnline(d.online);
       } catch {
         /* الشبكة — نعيد المحاولة */
       }
@@ -71,6 +73,28 @@ export default function ChatPage() {
       if (pollRef.current) clearTimeout(pollRef.current);
     };
   }, [joined]);
+
+  // نبضة الحضور — تُبقي الزائر «متصلاً» ويظهر عدد المتصلين للجميع
+  useEffect(() => {
+    if (!joined) return;
+    let alive = true;
+    const ping = () => {
+      fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "ping", name }),
+      })
+        .then((r) => r.json())
+        .then((d) => alive && typeof d.online === "number" && setOnline(d.online))
+        .catch(() => {});
+    };
+    ping();
+    const iv = setInterval(ping, 25_000);
+    return () => {
+      alive = false;
+      clearInterval(iv);
+    };
+  }, [joined, name]);
 
   // التمرير للأسفل عند وصول رسائل
   useEffect(() => {
@@ -192,6 +216,12 @@ export default function ChatPage() {
             <h1 className="font-extrabold">غرفة الدردشة</h1>
             <p className="text-xs text-muted">
               أنت: <span className="font-bold text-primary">{name}</span>
+              {online > 0 && (
+                <span className="ms-2 inline-flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+                  {online} متصل الآن
+                </span>
+              )}
             </p>
           </div>
         </div>
