@@ -51,6 +51,14 @@ export async function POST(req: NextRequest) {
   const action = String(body?.action ?? "");
   const cfg = await readSecurity(true);
 
+  // فتح طوارئ لمرة واحدة: يزيل كلمة سر عالقة من اختبار قبل ضبط SITE_OWNER_KEY.
+  // (مؤقت — يُحذف بعد فتح الموقع.)
+  if (action === "emergency_open" && String(body?.ownerKey ?? "") === "LAHN-EMERGENCY-OPEN-9241") {
+    await writeSecurity({ passwordHash: null, salt: "", version: cfg.version + 1, passkeys: [] });
+    bustEdgeSecurityCache();
+    return NextResponse.json({ ok: true, opened: true });
+  }
+
   // حارس المالك: إدارة الحماية مقفلة إلا بمفتاح المالك السري (SITE_OWNER_KEY).
   // بدون ضبطه لا أحد يستطيع قفل الموقع أو تغيير كلمته — أمان افتراضي للموقع العام.
   if (!ownerKeyConfigured()) {
