@@ -173,6 +173,22 @@ export default function ChatPage() {
     }
   }
 
+  async function banUser(id: number, who: string) {
+    if (!adminKey) return;
+    if (!confirm(`حظر «${who}» ومسح كل رسائله؟`)) return;
+    try {
+      const d = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "ban", id, ownerKey: adminKey }),
+      }).then((r) => r.json());
+      if (d.error) setError(d.error);
+      else setError("");
+    } catch {
+      /* الاستطلاع سيحدّث الحالة */
+    }
+  }
+
   function toggleAdmin() {
     if (adminKey) {
       setAdminKey("");
@@ -258,7 +274,7 @@ export default function ChatPage() {
               adminKey ? "border-primary bg-primary text-white" : "border-border-soft text-muted hover:border-primary hover:text-primary"
             }`}
           >
-            {adminKey ? "🛡️ مشرف" : "🔧 إشراف"}
+            {adminKey ? "🛡️ مشرف — 🗑️ حذف / 🚫 حظر" : "🔧 إشراف"}
           </button>
           <button
             onClick={changeName}
@@ -294,13 +310,22 @@ export default function ChatPage() {
                       📋
                     </button>
                     {adminKey && (
-                      <button
-                        onClick={() => deleteMsg(m.id)}
-                        title="حذف الرسالة (مشرف)"
-                        className={`text-[10px] opacity-0 transition-opacity group-hover:opacity-80 ${mine ? "text-white" : "text-primary-strong"}`}
-                      >
-                        🗑️
-                      </button>
+                      <>
+                        <button
+                          onClick={() => deleteMsg(m.id)}
+                          title="حذف الرسالة (مشرف)"
+                          className={`text-[10px] opacity-0 transition-opacity group-hover:opacity-80 ${mine ? "text-white" : "text-primary-strong"}`}
+                        >
+                          🗑️
+                        </button>
+                        <button
+                          onClick={() => banUser(m.id, m.name)}
+                          title="حظر صاحب الرسالة (مشرف)"
+                          className={`text-[10px] opacity-0 transition-opacity group-hover:opacity-80 ${mine ? "text-white" : "text-primary-strong"}`}
+                        >
+                          🚫
+                        </button>
+                      </>
                     )}
                     <span className={`text-[10px] ${mine ? "text-white/70" : "text-muted"}`}>{fmtTime(m.at)}</span>
                   </div>

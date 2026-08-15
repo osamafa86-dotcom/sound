@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { appendMessage, chatSnapshot, clearChat, deleteMessage, heartbeat, MAX_TEXT_LEN } from "@/lib/chatStore";
+import {
+  appendMessage,
+  banByMessage,
+  chatSnapshot,
+  clearChat,
+  deleteMessage,
+  heartbeat,
+  isBanned,
+  unbanAll,
+  MAX_TEXT_LEN,
+} from "@/lib/chatStore";
 import { checkOwnerKey, ownerKeyConfigured } from "@/lib/security";
 import { consumeRateLimit, visitorIp } from "@/lib/rateLimit";
 
-/** جلب رسائل الغرفة + عدد المتصلين — منذ معرّف اختياري لتقليل النقل */
+/** جلب رسائل الغرفة + عدد المتصلين الحقيقيين */
 export async function GET(req: NextRequest) {
   const since = Number(req.nextUrl.searchParams.get("since") ?? 0);
   const snap = await chatSnapshot();
@@ -16,7 +26,11 @@ export async function GET(req: NextRequest) {
   );
 }
 
-/** إرسال رسالة / نبضة حضور / مسح الغرفة (للمالك) */
+function owner(body: { ownerKey?: string } | null): boolean {
+  return ownerKeyConfigured() && checkOwnerKey(String(body?.ownerKey ?? ""));
+}
+
+/** إرسال / حضور / حذف / حظر / مسح — الإدارة لصاحب الموقع فقط */
 export async function POST(req: NextRequest) {
   const ip = visitorIp(req);
   const body = (await req.json().catch(() => null)) as
@@ -24,38 +38,48 @@ export async function POST(req: NextRequest) {
     | null;
   const action = String(body?.action ?? "send");
 
-  // نبضة الحضور: خفيفة جداً، حد سخي
+  // نبضة الحضور بالجهاز (IP) — حضور حقيقي
   if (action === "ping") {
     const ok = await consumeRateLimit(`chatping:${ip}`, 60, 60);
     if (!ok) return NextResponse.json({ online: 0 });
-    const online = await heartbeat(body?.name ?? "زائر");
-    return NextResponse.json({ online });
+    return NextResponse.json({ online: await heartbeat(ip) });
   }
 
-  // مسح الغرفة — لصاحب الموقع فقط
-  if (action === "clear") {
-    if (!ownerKeyConfigured() || !checkOwnerKey(String(body?.ownerKey ?? ""))) {
-      return NextResponse.json({ error: "غير مصرّح" }, { status: 403 });
+  // ===== إجراءات المالك =====
+  if (action === "clear" || action === "delete" || action === "ban" || action === "unban") {
+    if (!owner(body)) {
+      return NextResponse.json({ error: "غير مصرّح — الإدارة لصاحب الموقع فقط" }, { status: 403 });
     }
-    await clearChat();
-    return NextResponse.json({ ok: true, cleared: true });
-  }
-
-  // حذف رسالة — لصاحب الموقع فقط عبر مفتاح المالك
-  if (action === "delete") {
-    if (!ownerKeyConfigured() || !checkOwnerKey(String(body?.ownerKey ?? ""))) {
-      return NextResponse.json({ error: "غير مصرّح — الحذف لصاحب الموقع فقط" }, { status: 403 });
+    if (action === "clear") {
+      await clearChat();
+      return NextResponse.json({ ok: true, cleared: true });
+    }
+    if (action === "unban") {
+      await unbanAll();
+      return NextResponse.json({ ok: true, unbanned: true });
     }
     const id = Number(body?.id ?? 0);
     if (!id) return NextResponse.json({ error: "معرّف غير صالح" }, { status: 400 });
-    const done = await deleteMessage(id);
-    if (!done) return NextResponse.json({ error: "الرسالة غير موجودة" }, { status: 404 });
-    return NextResponse.json({ ok: true, deleted: id });
+    if (action === "delete") {
+      const done = await deleteMessage(id);
+      return done
+        ? NextResponse.json({ ok: true, deleted: id })
+        : NextResponse.json({ error: "الرسالة غير موجودة" }, { status: 404 });
+    }
+    // ban
+    const name = await banByMessage(id);
+    return name
+      ? NextResponse.json({ ok: true, banned: name })
+      : NextResponse.json({ error: "تعذّر حظر صاحب هذه الرسالة" }, { status: 404 });
   }
 
-  // إرسال رسالة — تقييد ضد الإغراق
+  // ===== إرسال رسالة =====
   const ok = await consumeRateLimit(`chat:${ip}`, 15, 60);
   if (!ok) return NextResponse.json({ error: "تمهّل قليلاً — رسائل كثيرة بسرعة" }, { status: 429 });
+
+  if (await isBanned(ip)) {
+    return NextResponse.json({ error: "لا يمكنك الإرسال — تم حظرك من الغرفة" }, { status: 403 });
+  }
 
   const text = String(body?.text ?? "");
   if (!text.trim()) return NextResponse.json({ error: "اكتب رسالة أولاً" }, { status: 400 });
@@ -63,10 +87,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "الرسالة طويلة جداً" }, { status: 400 });
   }
   try {
-    const msg = await appendMessage(body?.name ?? "", text);
+    const msg = await appendMessage(body?.name ?? "", text, ip);
     if (!msg) return NextResponse.json({ error: "رسالة غير صالحة" }, { status: 400 });
     return NextResponse.json({ ok: true, message: msg });
   } catch (e) {
+    if (e instanceof Error && e.message === "BANNED") {
+      return NextResponse.json({ error: "لا يمكنك الإرسال — تم حظرك من الغرفة" }, { status: 403 });
+    }
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "تعذّر الإرسال" },
       { status: 500 }
