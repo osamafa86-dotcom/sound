@@ -9,6 +9,8 @@ import { useEffect, useState } from "react";
 
 export default function SecurityPage() {
   const [protectedSite, setProtectedSite] = useState<boolean | null>(null);
+  const [ownerKeyConfigured, setOwnerKeyConfigured] = useState<boolean | null>(null);
+  const [ownerKey, setOwnerKey] = useState("");
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [next2, setNext2] = useState("");
@@ -19,6 +21,7 @@ export default function SecurityPage() {
     try {
       const d = await fetch("/api/security").then((r) => r.json());
       setProtectedSite(!!d.protected);
+      setOwnerKeyConfigured(!!d.ownerKeyConfigured);
     } catch {
       setMsg({ ok: false, text: "تعذّر قراءة حالة الحماية" });
     }
@@ -36,7 +39,7 @@ export default function SecurityPage() {
       const d = await fetch("/api/security", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, ownerKey }),
       }).then((r) => r.json());
       if (d.error) throw new Error(d.error);
       setMsg({ ok: true, text: okText });
@@ -87,6 +90,30 @@ export default function SecurityPage() {
         </p>
       </div>
 
+      {ownerKeyConfigured === false && (
+        <p className="mt-6 rounded-xl border border-primary/40 bg-rose px-4 py-3 text-center text-sm font-bold text-primary-strong">
+          🔐 إدارة الحماية مقفلة. اضبط متغير <code>SITE_OWNER_KEY</code> في إعدادات Vercel
+          (Settings → Environment Variables) بقيمة سرية تعرفها أنت وحدك، ثم أعد النشر —
+          فلا يستطيع أي زائر قفل موقعك أو تغيير كلمته.
+        </p>
+      )}
+
+      {ownerKeyConfigured && (
+        <div className="mt-6 rounded-3xl border border-gold/40 bg-surface-card p-6">
+          <h2 className="font-extrabold">🗝️ مفتاح المالك</h2>
+          <p className="mt-1 text-sm text-muted">
+            أدخل مفتاحك السري (SITE_OWNER_KEY) للسماح بأي تعديل أدناه — الزوار لا يعرفونه.
+          </p>
+          <input
+            type="password"
+            placeholder="مفتاح المالك السري"
+            value={ownerKey}
+            onChange={(e) => setOwnerKey(e.target.value)}
+            className={`${inputCls} mt-3`}
+          />
+        </div>
+      )}
+
       {msg && (
         <p
           className={`mt-6 rounded-xl px-4 py-3 text-center text-sm font-bold ${
@@ -97,6 +124,7 @@ export default function SecurityPage() {
         </p>
       )}
 
+      {ownerKeyConfigured && (<>
       {/* كلمة السر */}
       <div className="mt-8 rounded-3xl border border-border-soft bg-surface-card p-6">
         <h2 className="font-extrabold">🔑 {protectedSite ? "تغيير كلمة السر" : "إضافة كلمة سر"}</h2>
@@ -126,7 +154,7 @@ export default function SecurityPage() {
           />
           <button
             onClick={setPassword}
-            disabled={!!busy}
+            disabled={!!busy || !ownerKey}
             className="rounded-xl bg-primary px-6 py-3 font-bold text-white transition-colors hover:bg-primary-strong disabled:opacity-50"
           >
             {busy === "set" ? "جارٍ الحفظ..." : protectedSite ? "🔄 غيّر كلمة السر" : "➕ فعّل الحماية"}
@@ -151,7 +179,7 @@ export default function SecurityPage() {
             />
             <button
               onClick={removePassword}
-              disabled={!!busy || !current}
+              disabled={!!busy || !current || !ownerKey}
               className="shrink-0 rounded-xl border border-primary px-6 py-3 font-bold text-primary transition-colors hover:bg-rose disabled:opacity-50"
             >
               {busy === "remove" ? "جارٍ الإزالة..." : "🗑️ أزل كلمة السر"}
@@ -159,6 +187,8 @@ export default function SecurityPage() {
           </div>
         </div>
       )}
+
+      </>)}
 
       <p className="mt-6 text-center text-xs leading-relaxed text-muted">
         الجلسة تدوم ٣٠ يوماً، وأي تغيير لكلمة السر يبطل كل الجلسات القديمة فوراً.

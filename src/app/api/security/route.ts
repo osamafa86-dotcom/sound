@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   GATE_COOKIE,
   GATE_TOKEN_TTL_SEC,
+  checkOwnerKey,
   checkPassword,
   createGateToken,
   hashPassword,
   newSalt,
+  ownerKeyConfigured,
   readSecurity,
   writeSecurity,
 } from "@/lib/security";
@@ -32,7 +34,10 @@ function setGateCookie(res: NextResponse, token: string) {
 /** حالة الحماية — تعرضها صفحة الإعدادات وصفحة الدخول */
 export async function GET() {
   const cfg = await readSecurity(true);
-  return NextResponse.json({ protected: !!cfg.passwordHash });
+  return NextResponse.json({
+    protected: !!cfg.passwordHash,
+    ownerKeyConfigured: ownerKeyConfigured(),
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -45,6 +50,19 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const action = String(body?.action ?? "");
   const cfg = await readSecurity(true);
+
+  // حارس المالك: إدارة الحماية مقفلة إلا بمفتاح المالك السري (SITE_OWNER_KEY).
+  // بدون ضبطه لا أحد يستطيع قفل الموقع أو تغيير كلمته — أمان افتراضي للموقع العام.
+  if (!ownerKeyConfigured()) {
+    return NextResponse.json(
+      { error: "إدارة الحماية مقفلة — اضبط SITE_OWNER_KEY في إعدادات Vercel أولاً" },
+      { status: 403 }
+    );
+  }
+  if (!checkOwnerKey(String(body?.ownerKey ?? ""))) {
+    await new Promise((r) => setTimeout(r, 300 + Math.random() * 300));
+    return NextResponse.json({ error: "مفتاح المالك غير صحيح" }, { status: 403 });
+  }
 
   switch (action) {
     // ---------- تعيين / تغيير كلمة السر ----------

@@ -79,6 +79,21 @@ export async function writeSecurity(cfg: SecurityConfig): Promise<void> {
   mem.__secCfg = { value: cfg, at: Date.now() };
 }
 
+// ===== مفتاح المالك: يحمي صفحة الحماية نفسها من الزوار =====
+/** هل ضُبط مفتاح المالك في البيئة؟ بدونه إدارة الحماية مقفلة للجميع */
+export function ownerKeyConfigured(): boolean {
+  return !!(process.env.SITE_OWNER_KEY && process.env.SITE_OWNER_KEY.length >= 4);
+}
+
+/** مقارنة بزمن ثابت لمفتاح المالك القادم من صفحة الحماية */
+export function checkOwnerKey(candidate: string): boolean {
+  const key = process.env.SITE_OWNER_KEY ?? "";
+  if (!key || key.length < 4) return false;
+  const a = Buffer.from(String(candidate));
+  const b = Buffer.from(key);
+  return a.length === b.length && tse(a, b);
+}
+
 // ===== كلمة السر =====
 export function hashPassword(password: string, salt: string): string {
   return pbkdf2Sync(password, salt, 100_000, 32, "sha256").toString("hex");
