@@ -41,13 +41,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, cleared: true });
   }
 
-  // حذف رسالة: صاحبها (بالاسم) أو المالك (بمفتاح المالك)
+  // حذف رسالة — لصاحب الموقع فقط عبر مفتاح المالك
   if (action === "delete") {
+    if (!ownerKeyConfigured() || !checkOwnerKey(String(body?.ownerKey ?? ""))) {
+      return NextResponse.json({ error: "غير مصرّح — الحذف لصاحب الموقع فقط" }, { status: 403 });
+    }
     const id = Number(body?.id ?? 0);
     if (!id) return NextResponse.json({ error: "معرّف غير صالح" }, { status: 400 });
-    const isOwner = ownerKeyConfigured() && checkOwnerKey(String(body?.ownerKey ?? ""));
-    const done = await deleteMessage(id, String(body?.name ?? ""), isOwner);
-    if (!done) return NextResponse.json({ error: "لا يمكنك حذف هذه الرسالة" }, { status: 403 });
+    const done = await deleteMessage(id);
+    if (!done) return NextResponse.json({ error: "الرسالة غير موجودة" }, { status: 404 });
     return NextResponse.json({ ok: true, deleted: id });
   }
 

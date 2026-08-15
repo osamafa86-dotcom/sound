@@ -22,6 +22,7 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [online, setOnline] = useState(0);
+  const [adminKey, setAdminKey] = useState("");
   const [error, setError] = useState("");
   const lastIdRef = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -158,18 +159,27 @@ export default function ChatPage() {
   }
 
   async function deleteMsg(id: number) {
-    // إزالة فورية متفائلة، ثم الخادم
+    if (!adminKey) return;
     setMessages((prev) => prev.filter((m) => m.id !== id));
     try {
       const d = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delete", id, name }),
+        body: JSON.stringify({ action: "delete", id, ownerKey: adminKey }),
       }).then((r) => r.json());
       if (d.error) setError(d.error);
     } catch {
       /* الاستطلاع سيعيد الرسالة إن فشل الحذف */
     }
+  }
+
+  function toggleAdmin() {
+    if (adminKey) {
+      setAdminKey("");
+      return;
+    }
+    const k = prompt("مفتاح المالك (SITE_OWNER_KEY) — للحذف والإشراف:");
+    if (k) setAdminKey(k.trim());
   }
 
   async function copyMsg(t: string) {
@@ -240,12 +250,23 @@ export default function ChatPage() {
             </p>
           </div>
         </div>
-        <button
-          onClick={changeName}
-          className="rounded-xl border border-border-soft px-3 py-1.5 text-xs font-bold text-muted transition-colors hover:border-primary hover:text-primary"
-        >
-          ✏️ غيّر اسمك
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={toggleAdmin}
+            title="وضع المشرف — حذف الرسائل بمفتاح المالك"
+            className={`rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors ${
+              adminKey ? "border-primary bg-primary text-white" : "border-border-soft text-muted hover:border-primary hover:text-primary"
+            }`}
+          >
+            {adminKey ? "🛡️ مشرف" : "🔧 إشراف"}
+          </button>
+          <button
+            onClick={changeName}
+            className="rounded-xl border border-border-soft px-3 py-1.5 text-xs font-bold text-muted transition-colors hover:border-primary hover:text-primary"
+          >
+            ✏️ غيّر اسمك
+          </button>
+        </div>
       </div>
 
       {/* الرسائل */}
@@ -272,11 +293,11 @@ export default function ChatPage() {
                     >
                       📋
                     </button>
-                    {mine && (
+                    {adminKey && (
                       <button
                         onClick={() => deleteMsg(m.id)}
-                        title="حذف رسالتي"
-                        className="text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-70"
+                        title="حذف الرسالة (مشرف)"
+                        className={`text-[10px] opacity-0 transition-opacity group-hover:opacity-80 ${mine ? "text-white" : "text-primary-strong"}`}
                       >
                         🗑️
                       </button>
