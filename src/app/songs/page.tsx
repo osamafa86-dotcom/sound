@@ -867,16 +867,57 @@ export default function SongsStudio() {
   const [coverUrl, setCoverUrl] = useState("");
   const [ytProgress, setYtProgress] = useState<number | null>(null);
 
-  /** نشر على يوتيوب: تصنيع فيديو (غلاف + موجات + صوت) ثم فتح صفحة الرفع */
+  /**
+   * نشر على يوتيوب — خط إنتاج كامل بضغطة واحدة:
+   * ١) ماستر صوتي تلقائي (جهارة قياسية كالأغاني التجارية، قص الصمت)
+   * ٢) توليد غلاف ألبوم تلقائياً إن لم يكن موجوداً
+   * ٣) تصنيع الفيديو (الغلاف + الموجات + الصوت الممستر) وفتح صفحة الرفع
+   */
+  const [ytStage, setYtStage] = useState("");
   async function publishToYouTube() {
     if (!result || ytProgress !== null) return;
     setYtProgress(0);
     try {
+      // ١) الماستر: صوت بجهارة يوتيوب القياسية — إن لم يُطبَّق سابقاً
+      let audioBlob = result.blob;
+      if (!result.mastered && !result.mock) {
+        setYtStage("🎚️ ماستر صوتي — جهارة الأغاني التجارية...");
+        try {
+          const { masterAudio } = await import("@/lib/audioMaster");
+          const m = await masterAudio(result.blob);
+          if (m.changed) audioBlob = m.blob;
+        } catch {
+          /* الماستر كمالي — نكمل بالأصل */
+        }
+      }
+      // ٢) الغلاف: يتولّد تلقائياً إن لم يطلبه المستخدم من قبل
+      let effectiveCover = coverUrl;
+      if (!effectiveCover && !result.mock) {
+        setYtStage("🎨 يرسم غلاف الألبوم...");
+        try {
+          const res = await fetch("/api/cover", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+            body: JSON.stringify({ title: result.title, maqamId, stylePrompt: result.prompt }),
+          });
+          if (res.ok) {
+            effectiveCover = URL.createObjectURL(await res.blob());
+            setCoverUrl((prev) => {
+              if (prev) URL.revokeObjectURL(prev);
+              return effectiveCover;
+            });
+          }
+        } catch {
+          /* الغلاف كمالي — الفيديو يرسم شعار لحّن بديلاً */
+        }
+      }
+      // ٣) الفيديو
+      setYtStage("");
       const video = await renderSongVideo({
-        audioBlob: result.blob,
+        audioBlob,
         title: result.title || "أغنية من لحّن",
         subtitle: "أُنتجت على منصة لحّن 🎵",
-        coverUrl: coverUrl || undefined,
+        coverUrl: effectiveCover || undefined,
         onProgress: (f) => setYtProgress(f),
       });
       const a = document.createElement("a");
@@ -2407,7 +2448,7 @@ export default function SongsStudio() {
                       className="rounded-xl bg-[#FF0000] px-5 py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
                     >
                       {ytProgress !== null
-                        ? `🎬 يصنع الفيديو ${Math.round(ytProgress * 100)}٪`
+                        ? ytStage || `🎬 يصنع الفيديو ${Math.round(ytProgress * 100)}٪`
                         : "▶️ نشر على يوتيوب"}
                     </button>
                   )}
