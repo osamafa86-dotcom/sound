@@ -2,7 +2,7 @@
 
 /**
  * شاشة الانتقال الاحتفالية — بطلب صاحب الموقع: كل تنقل بين الصفحات
- * يعرض شعار لحّن النابض ٥ ثوانٍ بالضبط مع شريط تقدم، ثم تنكشف الصفحة.
+ * يعرض شعار لحّن النابض ٥ ثوانٍ مرة واحدة لكل جلسة تصفح، ثم تنقّل حر.
  * (لا تظهر عند الفتح الأول للموقع — للتنقلات الداخلية فقط.)
  */
 import { useEffect, useRef, useState } from "react";
@@ -20,6 +20,14 @@ export default function TransitionSplash() {
     if (firstMount.current) {
       firstMount.current = false;
       return;
+    }
+    // للجمهور: الشاشة الاحتفالية مرة واحدة لكل جلسة — تكرارها مع كل تنقل
+    // يهرّب الزوار الجدد. (امسح sessionStorage لمعاينتها مجدداً)
+    try {
+      if (sessionStorage.getItem("lahn-splash-shown")) return;
+      sessionStorage.setItem("lahn-splash-shown", "1");
+    } catch {
+      /* تخزين معطل — نعرضها عادي */
     }
     setVisible(true);
     setFill(false);

@@ -30,8 +30,8 @@ export type LimitRule = {
 
 /** حدود كل مسار — الموسيقى والاستنساخ أغلى فحدودها أضيق */
 export const LIMITS = {
-  tts: { perVisitor: envInt("RATE_LIMIT_TTS", 20), global: envInt("GLOBAL_LIMIT_TTS", 3000), windowSec: 3600 },
-  songs: { perVisitor: envInt("RATE_LIMIT_SONGS", 6), global: envInt("GLOBAL_LIMIT_SONGS", 600), windowSec: 3600 },
+  tts: { perVisitor: envInt("RATE_LIMIT_TTS", 20), global: envInt("GLOBAL_LIMIT_TTS", 500), windowSec: 3600 },
+  songs: { perVisitor: envInt("RATE_LIMIT_SONGS", 6), global: envInt("GLOBAL_LIMIT_SONGS", 100), windowSec: 3600 },
   lyrics: { perVisitor: envInt("RATE_LIMIT_LYRICS", 30), global: 400, windowSec: 3600 },
   stt: { perVisitor: envInt("RATE_LIMIT_STT", 8), global: 120, windowSec: 3600 },
   sts: { perVisitor: envInt("RATE_LIMIT_STS", 6), global: 80, windowSec: 3600 },
@@ -55,8 +55,8 @@ export const LIMITS = {
   sample: { perVisitor: envInt("RATE_LIMIT_SAMPLE", 40), global: 300, windowSec: 3600 },
   // بطاقة «ذكاء مقام» في المساحة — الفيديو أغلى المسارات فحدوده الأضيق
   aiText: { perVisitor: envInt("RATE_LIMIT_AI_TEXT", 30), global: 400, windowSec: 3600 },
-  aiImage: { perVisitor: envInt("RATE_LIMIT_AI_IMAGE", 10), global: envInt("GLOBAL_LIMIT_AI_IMAGE", 1000), windowSec: 3600 },
-  aiVideo: { perVisitor: envInt("RATE_LIMIT_AI_VIDEO", 8), global: envInt("GLOBAL_LIMIT_AI_VIDEO", 400), windowSec: 3600 },
+  aiImage: { perVisitor: envInt("RATE_LIMIT_AI_IMAGE", 10), global: envInt("GLOBAL_LIMIT_AI_IMAGE", 250), windowSec: 3600 },
+  aiVideo: { perVisitor: envInt("RATE_LIMIT_AI_VIDEO", 3), global: envInt("GLOBAL_LIMIT_AI_VIDEO", 30), windowSec: 3600 },
   // المعاينة الحية للمقام (Lyria RealTime) — جلسات قصيرة بسقف زمني في الواجهة
   liveJam: { perVisitor: envInt("RATE_LIMIT_LIVE_JAM", 4), global: 60, windowSec: 3600 },
   // موجز اللحن المرجعي — تحليل نصي خفيف يسبق التلحين
@@ -183,10 +183,10 @@ export async function checkLimit(
     return { allowed: false, message: "المنصة تستقبل عدداً كبيراً من الطلبات الآن — جرّب بعد قليل" };
   }
 
-  // نسخة خاصة خلف كلمة سر واحدة: من دخل فهو صاحب الموقع — لا حدود فردية
-  // إطلاقاً. PER_VISITOR_LIMITS=1 يعيدها إن فُتح الموقع للعموم يوماً.
-  // يبقى السقف العام أعلاه صمّام أمان ضد تسريب كلمة السر أو حلقة جامحة فقط.
-  if (process.env.PER_VISITOR_LIMITS === "1") {
+  // الموقع مفتوح للجمهور: حدود سخية لكل زائر تحمي رصيد المزوّدين من
+  // الاستنزاف — كل زائر يجرب ويستمتع فعلاً، ولا أحد يحرق المحفظة.
+  // PER_VISITOR_LIMITS=0 يلغيها إن عاد الموقع خاصاً.
+  if (process.env.PER_VISITOR_LIMITS !== "0") {
     const ok = await consumeRateLimit(
       rateLimitKey(scope, userId, visitorIp(req)),
       rateLimitFor(scope, !!userId),
