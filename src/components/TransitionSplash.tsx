@@ -29,14 +29,18 @@ export default function TransitionSplash() {
     } catch {
       /* تخزين معطل — نعرضها عادي */
     }
-    setVisible(true);
-    setFill(false);
-    // إطلاق انتقال شريط التقدم بعد أول رسم
-    const raf = requestAnimationFrame(() => setFill(true));
-    const t = setTimeout(() => setVisible(false), SPLASH_MS);
+    let t: ReturnType<typeof setTimeout> | undefined;
+    let raf2 = 0;
+    const raf = requestAnimationFrame(() => {
+      setVisible(true);
+      setFill(false);
+      raf2 = requestAnimationFrame(() => setFill(true));
+      t = setTimeout(() => setVisible(false), SPLASH_MS);
+    });
     return () => {
       cancelAnimationFrame(raf);
-      clearTimeout(t);
+      cancelAnimationFrame(raf2);
+      if (t) clearTimeout(t);
     };
   }, [pathname]);
 
