@@ -229,6 +229,26 @@ export async function elevenLabsTTSStream(apiKey: string, req: TTSRequest): Prom
  */
 const scribeModel = () => process.env.ELEVEN_SCRIBE_MODEL ?? "scribe_v2";
 
+/**
+ * 🌩️ مؤثر صوتي من وصف نصي (Sound Effects v2) — مطر، باب يصرّ، جمهور
+ * يهتف... حتى ٣٠ ثانية، مع خيار حلقة متكررة سلسة للخلفيات الطويلة.
+ */
+export async function elevenLabsSoundEffect(
+  apiKey: string,
+  req: { prompt: string; durationSec?: number; loop?: boolean }
+): Promise<AudioResult> {
+  const audio = await apiCall("/sound-generation", apiKey, {
+    text: req.prompt,
+    ...(req.durationSec !== undefined && {
+      duration_seconds: Math.min(30, Math.max(0.5, req.durationSec)),
+    }),
+    ...(req.loop !== undefined && { loop: req.loop }),
+    // النموذج الافتراضي لدى المحرك هو الأحدث — متغير البيئة مهرب تثبيت فقط
+    ...(process.env.ELEVEN_SFX_MODEL && { model_id: process.env.ELEVEN_SFX_MODEL }),
+  });
+  return { audio, mimeType: "audio/mpeg", provider: "elevenlabs" };
+}
+
 /** تفريغ صوتي (Speech-to-Text) عبر نموذج Scribe */
 export async function elevenLabsTranscribe(apiKey: string, audio: Blob): Promise<string> {
   const form = new FormData();

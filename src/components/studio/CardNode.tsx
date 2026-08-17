@@ -412,6 +412,42 @@ export default function CardNode({ id, data }: NodeProps<CardNodeType>) {
           </p>
         )}
 
+        {data.kind === "sfx" && (
+          <div className="nodrag flex flex-col gap-1.5">
+            <textarea
+              value={data.config.prompt ?? ""}
+              onChange={(e) => setConfig("prompt", e.target.value)}
+              maxLength={450}
+              placeholder={"صف المؤثر... مثال: مطر غزير على نافذة زجاجية\nأو أوصل بطاقة نص بالوصف"}
+              className={`${inputClass} min-h-16 resize-y leading-relaxed`}
+            />
+            <div className="flex items-center gap-2 text-[10px] text-muted">
+              <label className="flex items-center gap-1">
+                المدة
+                <input
+                  type="number"
+                  min={0.5}
+                  max={30}
+                  step={0.5}
+                  value={data.config.durationSec ?? ""}
+                  onChange={(e) => setConfig("durationSec", e.target.value)}
+                  placeholder="آلي"
+                  className={`${inputClass} w-16`}
+                />
+                ث
+              </label>
+              <label className="flex cursor-pointer items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={data.config.loop === "true"}
+                  onChange={(e) => setConfig("loop", e.target.checked ? "true" : "")}
+                />
+                حلقة متكررة (خلفية مستمرة)
+              </label>
+            </div>
+          </div>
+        )}
+
         {data.kind === "enhance" && (
           <p className="text-[11px] leading-relaxed text-muted">
             تشكيل كامل + تحويل الأرقام والاختصارات لصيغتها المنطوقة — أكبر رافعة لجودة النطق.

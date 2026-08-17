@@ -26,6 +26,7 @@ export type NodeKind =
   | "tts"
   | "song"
   | "music"
+  | "sfx"
   | "split"
   | "isolate"
   | "stt"
@@ -164,6 +165,15 @@ export const NODE_DEFS: Record<NodeKind, NodeDef> = {
     inputs: [{ id: "melody", label: "لحن مرجعي", accepts: ["audio"], optional: true }],
     outputs: [{ id: "out", label: "لحن", type: "audio" }],
     cost: 25,
+  },
+  sfx: {
+    kind: "sfx",
+    name: "مؤثر صوتي",
+    icon: "🌩️",
+    desc: "وصف نصي يتحول مؤثراً صوتياً حقيقياً (مطر، باب يصرّ، جمهور...) حتى ٣٠ ثانية — وخيار حلقة متكررة للخلفيات",
+    inputs: [{ id: "in", label: "وصف المؤثر", accepts: ["text"], optional: true }],
+    outputs: [{ id: "out", label: "مؤثر", type: "audio" }],
+    cost: 2,
   },
   split: {
     kind: "split",

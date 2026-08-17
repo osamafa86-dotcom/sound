@@ -209,3 +209,16 @@ describe("«صوت من عندك» يتصل بكل مستهلكي الصوت", (
     expect(canConnect({ kind: "upload" }, { kind: "lyrics", handle: "in" })).toBe(false);
   });
 });
+
+describe("بطاقة «مؤثر صوتي» في المخطط", () => {
+  it("تقبل وصفاً نصياً وتطعم كل مستهلكي الصوت", () => {
+    expect(canConnect({ kind: "text" }, { kind: "sfx", handle: "in" })).toBe(true);
+    expect(canConnect({ kind: "sfx" }, { kind: "save", handle: "in" })).toBe(true);
+    expect(canConnect({ kind: "sfx" }, { kind: "isolate", handle: "in" })).toBe(true);
+    expect(canConnect({ kind: "sfx" }, { kind: "ai", handle: "ctx" })).toBe(true);
+  });
+
+  it("خرجها صوت لا نص — لا تُطعم بطاقات النص", () => {
+    expect(canConnect({ kind: "sfx" }, { kind: "enhance", handle: "in" })).toBe(false);
+  });
+});
