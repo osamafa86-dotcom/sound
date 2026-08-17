@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const BASE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sound-five-inky.vercel.app";
+const BASE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sound.feedsnews.net";
 
 /** الصفحات العامة القابلة للفهرسة — الرئيسية والاستوديوهات أولاً */
 const ROUTES: { path: string; priority: number }[] = [
