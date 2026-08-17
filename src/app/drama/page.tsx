@@ -32,6 +32,61 @@ export default function DramaStudio() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<{ url: string; duration: string; voices: string } | null>(null);
 
+  // 🌩️ مؤثرات المشهد: مقترحات ذكية تولَّد بضغطة وتُنزَّل للمونتاج
+  type SfxCue = { label: string; prompt: string; durationSec: number; loop: boolean };
+  const [cues, setCues] = useState<SfxCue[] | null>(null);
+  const [cuesBusy, setCuesBusy] = useState(false);
+  const [cueAudio, setCueAudio] = useState<Record<number, string>>({});
+  const [cueBusy, setCueBusy] = useState<number | null>(null);
+
+  async function suggestCues() {
+    if (!text.trim() || cuesBusy) return;
+    setError("");
+    setCuesBusy(true);
+    try {
+      const res = await fetch("/api/drama/sfx-cues", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "تعذّر اقتراح المؤثرات");
+      setCues(data.cues ?? []);
+      setCueAudio({});
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally {
+      setCuesBusy(false);
+    }
+  }
+
+  async function generateCue(i: number) {
+    const cue = cues?.[i];
+    if (!cue || cueBusy !== null) return;
+    setError("");
+    setCueBusy(i);
+    try {
+      const res = await fetch("/api/sfx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ prompt: cue.prompt, durationSec: cue.durationSec, loop: cue.loop }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? "تعذّر توليد المؤثر");
+      }
+      const url = URL.createObjectURL(await res.blob());
+      setCueAudio((prev) => {
+        if (prev[i]) URL.revokeObjectURL(prev[i]);
+        return { ...prev, [i]: url };
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "حدث خطأ غير متوقع");
+    } finally {
+      setCueBusy(null);
+    }
+  }
+
   async function analyze() {
     if (!text.trim()) return;
     setError("");
@@ -214,6 +269,68 @@ export default function DramaStudio() {
                 ))}
               </div>
             </div>
+          </div>
+
+          {/* 🌩️ مؤثرات المشهد — مقترحات ذكية تولَّد بضغطة وتُنزَّل للمونتاج */}
+          <div className="rounded-2xl border border-gold/40 bg-gold/5 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-bold">🌩️ مؤثرات المشهد</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted">
+                  يقرأ الذكاء مشهدك ويقترح مؤثرات حقيقية (مطر، باب، سوق...) — ولّد ما يعجبك
+                  ونزّله لمونتاجك.
+                </p>
+              </div>
+              <button
+                onClick={suggestCues}
+                disabled={cuesBusy || !text.trim()}
+                className="shrink-0 rounded-xl border border-gold/60 px-4 py-2 text-sm font-semibold text-gold transition-colors hover:bg-gold/10 disabled:opacity-50"
+              >
+                {cuesBusy ? "يقرأ المشهد..." : cues ? "🌩️ اقترح مجدداً" : "🌩️ اقترح المؤثرات"}
+              </button>
+            </div>
+            {cues && cues.length === 0 && (
+              <p className="mt-3 text-xs text-muted">لم يجد الذكاء مؤثرات تخدم هذا المشهد.</p>
+            )}
+            {cues && cues.length > 0 && (
+              <div className="mt-3 flex flex-col gap-2">
+                {cues.map((cue, i) => (
+                  <div
+                    key={i}
+                    className="flex flex-wrap items-center gap-3 rounded-xl bg-surface px-3 py-2"
+                  >
+                    <span className="text-sm font-semibold">
+                      {cue.loop ? "🔁" : "⚡"} {cue.label}
+                      <span className="ms-2 text-xs font-normal text-muted">
+                        ~{Math.round(cue.durationSec)}ث{cue.loop && " · خلفية حلقية"}
+                      </span>
+                    </span>
+                    <div className="ms-auto flex items-center gap-2">
+                      {cueAudio[i] ? (
+                        <>
+                          <audio controls src={cueAudio[i]} className="h-8 w-48" />
+                          <a
+                            href={cueAudio[i]}
+                            download={`${cue.label}.mp3`}
+                            className="rounded-lg border border-border-soft px-2.5 py-1.5 text-xs text-muted transition-colors hover:text-body"
+                          >
+                            ⬇
+                          </a>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => generateCue(i)}
+                          disabled={cueBusy !== null}
+                          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary-strong disabled:opacity-50"
+                        >
+                          {cueBusy === i ? "يولّد..." : "🎧 ولّد المؤثر"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <button

@@ -59,6 +59,8 @@ export const LIMITS = {
   aiVideo: { perVisitor: envInt("RATE_LIMIT_AI_VIDEO", 4), global: 30, windowSec: 3600 },
   // المعاينة الحية للمقام (Lyria RealTime) — جلسات قصيرة بسقف زمني في الواجهة
   liveJam: { perVisitor: envInt("RATE_LIMIT_LIVE_JAM", 4), global: 60, windowSec: 3600 },
+  // المؤثرات الصوتية — نص يتحول مؤثراً حتى ٣٠ ثانية
+  sfx: { perVisitor: envInt("RATE_LIMIT_SFX", 10), global: 120, windowSec: 3600 },
   // موجز اللحن المرجعي — تحليل نصي خفيف يسبق التلحين
   melodyBrief: { perVisitor: envInt("RATE_LIMIT_MELODY_BRIEF", 10), global: 120, windowSec: 3600 },
 } satisfies Record<string, LimitRule>;
@@ -135,6 +137,7 @@ export type LimitVerdict = { allowed: boolean; message: string; status?: number 
 export const MEMBER_ONLY_SCOPES: ReadonlySet<LimitScope> = new Set<LimitScope>([
   "tts",
   "songs",
+  "sfx",
   "stt",
   "sts",
   "isolate",

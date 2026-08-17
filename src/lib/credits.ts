@@ -39,6 +39,8 @@ export const CREDIT_COSTS: Partial<Record<LimitScope, number>> = {
   aiVideo: 20,
   // جلسة معاينة مقام حية (Lyria RealTime) — بث قصير مقيد زمنياً
   liveJam: 3,
+  // مؤثر صوتي — توليدة قصيرة من محرك المؤثرات
+  sfx: 2,
 };
 
 export type CreditVerdict = {

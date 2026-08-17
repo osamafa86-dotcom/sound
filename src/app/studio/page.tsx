@@ -364,6 +364,30 @@ export default function StudioSpace() {
       return out({ blob: await res.blob() }, note);
     }
 
+    if (kind === "sfx") {
+      // الوصف من بطاقة نص موصولة، أو من حقل البطاقة نفسها
+      const prompt = (first("in")?.text ?? cfg.prompt ?? "").trim();
+      if (!prompt) throw new Error("صف المؤثر في البطاقة أو أوصل بطاقة نص بالوصف");
+      const durationSec = Number(cfg.durationSec);
+      const res = await fetch("/api/sfx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({
+          prompt: prompt.slice(0, 450),
+          ...(Number.isFinite(durationSec) && durationSec > 0 && { durationSec }),
+          loop: cfg.loop === "true",
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? "تعذّر توليد المؤثر");
+      }
+      return out(
+        { blob: await res.blob() },
+        cfg.loop === "true" ? "🔁 مؤثر حلقي — يصلح خلفية مستمرة" : undefined
+      );
+    }
+
     if (kind === "song") {
       const lyrics = first("in")?.text?.trim();
       if (!lyrics) throw new Error("أوصل بطاقة كلمات أولاً");
