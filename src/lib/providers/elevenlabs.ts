@@ -77,6 +77,15 @@ async function apiCallMultipart(path: string, apiKey: string, form: FormData): P
   return res;
 }
 
+async function apiGet(path: string, apiKey: string): Promise<Response> {
+  const res = await fetch(`${API_BASE}${path}`, { headers: { "xi-api-key": apiKey } });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new ElevenLabsError(`ElevenLabs ${res.status}: ${detail.slice(0, 300)}`, res.status);
+  }
+  return res;
+}
+
 export function elevenLabsTTS(apiKey: string): TTSProvider {
   return {
     id: "elevenlabs",
@@ -336,6 +345,77 @@ export async function elevenLabsCloneVoice(
     throw new ElevenLabsError("لم يُعد ElevenLabs معرّف الصوت المستنسخ", 502);
   }
   return data.voice_id;
+}
+
+/**
+ * 🌍 بدء مشروع دبلجة آلي — يرفع الملف إلى ElevenLabs وتجري الدبلجة
+ * لديهم بشكل غير متزامن: يعود معرّف المشروع فوراً ويستطلع العميل
+ * الحالة دورياً ثم ينزّل الناتج، فلا يصطدم بمهلة الدوال الخادمية.
+ */
+export async function elevenLabsDubStart(
+  apiKey: string,
+  req: {
+    file: Blob;
+    fileName: string;
+    targetLang: string;
+    sourceLang?: string;
+    numSpeakers?: number;
+    dropBackground?: boolean;
+    name?: string;
+  }
+): Promise<{ dubbingId: string; expectedSec?: number }> {
+  const form = new FormData();
+  form.append("file", req.file, req.fileName);
+  form.append("target_lang", req.targetLang);
+  // «auto» هو سلوك المحرك الافتراضي عند غياب الحقل — لا يُرسَل
+  if (req.sourceLang && req.sourceLang !== "auto") form.append("source_lang", req.sourceLang);
+  if (req.numSpeakers && req.numSpeakers > 0) form.append("num_speakers", String(req.numSpeakers));
+  if (req.dropBackground) form.append("drop_background_audio", "true");
+  if (req.name) form.append("name", req.name);
+
+  const res = await apiCallMultipart("/dubbing", apiKey, form);
+  const data = (await res.json()) as { dubbing_id?: string; expected_duration_sec?: number };
+  if (!data.dubbing_id) {
+    throw new ElevenLabsError("لم يُعد المحرك معرّف مشروع الدبلجة", 502);
+  }
+  return {
+    dubbingId: data.dubbing_id,
+    ...(Number.isFinite(data.expected_duration_sec) && {
+      expectedSec: data.expected_duration_sec,
+    }),
+  };
+}
+
+/** حالة مشروع دبلجة: dubbing (جارية) | dubbed (جاهزة) | failed (متعثرة) */
+export async function elevenLabsDubStatus(
+  apiKey: string,
+  dubbingId: string
+): Promise<{ status: string; error?: string; targetLanguages: string[] }> {
+  const res = await apiGet(`/dubbing/${dubbingId}`, apiKey);
+  const data = (await res.json()) as {
+    status?: string;
+    error?: string | null;
+    target_languages?: string[];
+  };
+  return {
+    status: data.status ?? "dubbing",
+    ...(data.error && { error: data.error }),
+    targetLanguages: data.target_languages ?? [],
+  };
+}
+
+/** تنزيل ناتج الدبلجة للغة — mp3 لمصدر صوتي وmp4 لمصدر فيديو */
+export async function elevenLabsDubAudio(
+  apiKey: string,
+  dubbingId: string,
+  lang: string
+): Promise<AudioResult> {
+  const res = await apiGet(`/dubbing/${dubbingId}/audio/${lang}`, apiKey);
+  return {
+    audio: Buffer.from(await res.arrayBuffer()),
+    mimeType: res.headers.get("Content-Type")?.split(";")[0] || "audio/mpeg",
+    provider: "elevenlabs-dub",
+  };
 }
 
 /** نداء توليد موسيقى مع التقاط معرّف الأغنية من الترويسات — يفتح إعادة التوليد الجزئي */
