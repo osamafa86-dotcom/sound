@@ -41,6 +41,8 @@ export const CREDIT_COSTS: Partial<Record<LimitScope, number>> = {
   liveJam: 3,
   // مؤثر صوتي — توليدة قصيرة من محرك المؤثرات
   sfx: 2,
+  // الدبلجة — أثقل العمليات لدى المزوّد (تُحاسَب بدقائق المصدر)
+  dub: 30,
 };
 
 export type CreditVerdict = {
