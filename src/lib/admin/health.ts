@@ -45,7 +45,7 @@ export function integrations(): IntegrationStatus[] {
       powers: ["توليد الأغاني (Lyria 3 Pro)", "مساعد الكلمات البديل", "الموسيقى من صورة", "سيناريو البودكاست", "تحليل الدراما"],
       configured: has("GEMINI_API_KEY"),
       envVars: ["GEMINI_API_KEY"],
-      model: `${process.env.GEMINI_MODEL ?? "gemini-3.6-flash"} + ${process.env.LYRIA_MODEL ?? "lyria-3-pro-preview"}`,
+      model: `${process.env.GEMINI_MODEL ?? "gemini-3.6-flash"} + ${process.env.LYRIA_MODEL ?? "lyria-3.5,lyria-3-pro-preview"}`,
       critical: true,
     },
     {
