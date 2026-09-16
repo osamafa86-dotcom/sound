@@ -4,11 +4,12 @@ import type { AudioResult, MusicProvider, MusicRequest } from "./types";
 
 /**
  * سلسلة نماذج التوليد المرشحة (بفواصل في LYRIA_MODEL): يُجرَّب الأول،
- * فإن لم يكن موجوداً لدى الـAPI بعد (404 — طرح تدريجي كما مع Lyria 3.5
- * المعلن في Flow قبل وصوله للمطورين) انتقل للتالي تلقائياً — فيمكن ضبط
- * "lyria-3-5-pro-preview,lyria-3-pro-preview" يوم الإعلان بلا أي مخاطرة.
+ * فإن لم يكن متاحاً لدى الـAPI في هذه البيئة (404 — الطرح التدريجي)
+ * انتقل للتالي تلقائياً. الافتراضي منذ أيلول 2026: Lyria 3.5 —
+ * أغانٍ كاملة أغنى توزيعاً وأكثر تعبيراً بنفس السعر — والجيل السابق
+ * خلفه ملاذاً، وLYRIA_MODEL يبقى مفتاح تثبيت أو تجربة بلا نشر جديد.
  */
-const MODELS = (process.env.LYRIA_MODEL ?? "lyria-3-pro-preview")
+const MODELS = (process.env.LYRIA_MODEL ?? "lyria-3.5,lyria-3-pro-preview")
   .split(",")
   .map((m) => m.trim())
   .filter(Boolean);
