@@ -4,15 +4,22 @@ import type { AudioResult, MusicProvider, MusicRequest } from "./types";
 
 /**
  * سلسلة نماذج التوليد المرشحة (بفواصل في LYRIA_MODEL): يُجرَّب الأول،
- * فإن لم يكن متاحاً لدى الـAPI في هذه البيئة (404 — الطرح التدريجي)
- * انتقل للتالي تلقائياً. الافتراضي منذ أيلول 2026: Lyria 3.5 —
- * أغانٍ كاملة أغنى توزيعاً وأكثر تعبيراً بنفس السعر — والجيل السابق
- * خلفه ملاذاً، وLYRIA_MODEL يبقى مفتاح تثبيت أو تجربة بلا نشر جديد.
+ * وأي فشل تقني فيه — 404 لم يصل البيئة، 400 اختلاف عقد الطلب،
+ * 5xx أو استجابة بلا صوت — ينقل تلقائياً للمرشح التالي ويريح النموذج
+ * المتعثر عشر دقائق (ذاكرة النسخة) كي لا تدفع كل توليدة ثمن إعادة
+ * اكتشاف العطل. رفض مرشّح المحتوى وأعطال الفوترة تُرمى فوراً — ليست
+ * أعطال نموذج بل قرارات حساب تنطبق على السلسلة كلها.
+ * الافتراضي منذ أيلول 2026: Lyria 3.5 أولاً والجيل السابق ملاذاً،
+ * وLYRIA_MODEL يبقى مفتاح تثبيت أو تجربة بلا نشر جديد.
  */
 const MODELS = (process.env.LYRIA_MODEL ?? "lyria-3.5,lyria-3-pro-preview")
   .split(",")
   .map((m) => m.trim())
   .filter(Boolean);
+
+/** راحة النموذج المتعثر قبل إعادة تجربته — لكل نسخة Serverless ذاكرتها */
+const BROKEN_COOLDOWN_MS = 10 * 60_000;
+const brokenUntil = new Map<string, number>();
 
 export class LyriaError extends Error {
   constructor(
@@ -47,7 +54,11 @@ function safetySettings(): { category: string; threshold: string }[] | null {
   return SAFETY_CATEGORIES.map((category) => ({ category, threshold }));
 }
 
-type Part = { inlineData?: { mimeType?: string; data?: string }; text?: string };
+type Part = {
+  inlineData?: { mimeType?: string; data?: string };
+  fileData?: { mimeType?: string; fileUri?: string };
+  text?: string;
+};
 
 /** استخراج أول جزء صوتي من استجابة Gemini وتحويله لصيغة قابلة للتشغيل */
 function extractAudio(parts: Part[]): { audio: Buffer; mimeType: string } | null {
@@ -65,6 +76,33 @@ function extractAudio(parts: Part[]): { audio: Buffer; mimeType: string } | null
       return { audio: pcm16ToWav(raw, rate, channels), mimeType: "audio/wav" };
     }
     return { audio: raw, mimeType: mime.split(";")[0] };
+  }
+  return null;
+}
+
+/**
+ * الأجيال الأحدث قد تعيد الصوت مرجعاً ملفياً (fileData) بدل التضمين —
+ * تنزيله بنفس مفتاح الـAPI يعيد المسار إلى بايتات قابلة للتشغيل.
+ */
+async function fetchFileAudio(
+  parts: Part[],
+  apiKey: string
+): Promise<{ audio: Buffer; mimeType: string } | null> {
+  for (const part of parts) {
+    const mime = part.fileData?.mimeType ?? "";
+    const uri = part.fileData?.fileUri;
+    if (!uri || (mime && !mime.startsWith("audio/"))) continue;
+    try {
+      const res = await fetch(uri, { headers: { "x-goog-api-key": apiKey } });
+      if (!res.ok) continue;
+      const headerMime = res.headers.get("Content-Type")?.split(";")[0] ?? "";
+      return {
+        audio: Buffer.from(await res.arrayBuffer()),
+        mimeType: (mime || headerMime || "audio/mpeg").split(";")[0],
+      };
+    } catch {
+      continue;
+    }
   }
   return null;
 }
@@ -125,10 +163,11 @@ export function lyriaMusic(apiKey: string): MusicProvider {
               .join("\n"),
       ].join("\n");
 
-      // النموذج يعيد 503 عند الازدحام المؤقت — نعيد المحاولة قبل الرجوع للمزوّد البديل
-      // وعبر سلسلة المرشحين: 404 (النموذج لم يصل الـAPI بعد) ينتقل للمرشح التالي
-      let res: Response | null = null;
-      for (const model of MODELS) {
+      // محاولة نموذج واحد كاملة: النداء (بإعادة محاولة عند الازدحام)
+      // وفحص المرشّحات واستخراج الصوت — أي إخفاق يُرمى خطأً مصنّفاً
+      // ليقرر سلّم السلسلة أدناه مصيره
+      const tryModel = async (model: string): Promise<AudioResult> => {
+        let res: Response | null = null;
         for (let attempt = 0; attempt < 3; attempt++) {
           res = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
@@ -145,49 +184,71 @@ export function lyriaMusic(apiKey: string): MusicProvider {
           if (res.status !== 503) break;
           if (attempt < 2) await new Promise((r) => setTimeout(r, 4000 * (attempt + 1)));
         }
-        if (!(res && res.status === 404 && MODELS.length > 1)) break;
+
+        if (!res || !res.ok) {
+          const status = res?.status ?? 0;
+          const detail = res ? await res.text().catch(() => "") : "";
+          // الطبقة المجانية تعطي حصة صفرية لـ Lyria — نميّزها لعرض رسالة مفهومة للمستخدم
+          const needsBilling = status === 429 && /limit:\s*0/.test(detail);
+          throw new LyriaError(
+            needsBilling
+              ? "توليد الموسيقى بـ Lyria يتطلب تفعيل الفوترة في Google Cloud (غير متاح على الطبقة المجانية)"
+              : status === 503
+                ? "محرك Lyria مزدحم حالياً — جرّب بعد قليل"
+                : `Lyria ${status}: ${detail.slice(0, 300)}`,
+            status,
+            needsBilling
+          );
+        }
+
+        const json = await res.json();
+
+        // Lyria يعيد 200 بلا مرشّحين عندما يحجب مرشّح المحتوى الطلب
+        const blockReason = json?.promptFeedback?.blockReason;
+        if (blockReason) {
+          throw new LyriaError(
+            `رفض مرشّح المحتوى في Lyria هذه الكلمات (${blockReason})`,
+            400,
+            false,
+            true
+          );
+        }
+
+        const candidate = json?.candidates?.[0];
+        if (candidate?.finishReason === "SAFETY" || candidate?.finishReason === "PROHIBITED_CONTENT") {
+          throw new LyriaError("رفض مرشّح Lyria توليد هذا المقطع", 400, false, true);
+        }
+
+        const parts: Part[] = candidate?.content?.parts ?? [];
+        const found = extractAudio(parts) ?? (await fetchFileAudio(parts, apiKey));
+        if (!found) {
+          throw new LyriaError("لم تتضمن استجابة Lyria أي مقطع صوتي", 502);
+        }
+        return { audio: found.audio, mimeType: found.mimeType, provider: "lyria" };
+      };
+
+      // سلّم السلسلة: النموذج المتعثر تقنياً (404/400/5xx/بلا صوت) يُتجاوز
+      // للمرشح التالي ويُراح عشر دقائق، أما رفض المحتوى وأعطال الفوترة
+      // فقرارات حساب تُرمى فوراً — تجربة نموذج آخر بها هدر لا أمل فيه.
+      // ولو تعثرت السلسلة كلها للتو يبقى الملاذ الأخير مطروقاً لا مقفلاً.
+      const now = Date.now();
+      const usable = MODELS.filter((m) => (brokenUntil.get(m) ?? 0) <= now);
+      const candidates = usable.length ? usable : MODELS.slice(-1);
+      let lastError: unknown;
+      for (const model of candidates) {
+        try {
+          return await tryModel(model);
+        } catch (e) {
+          lastError = e;
+          if (e instanceof LyriaError && (e.contentRejected || e.needsBilling)) throw e;
+          brokenUntil.set(model, Date.now() + BROKEN_COOLDOWN_MS);
+          console.error(
+            `Lyria model ${model} failed${e instanceof LyriaError ? ` (${e.status})` : ""}:`,
+            e instanceof Error ? e.message : e
+          );
+        }
       }
-
-      if (!res || !res.ok) {
-        const status = res?.status ?? 0;
-        const detail = res ? await res.text().catch(() => "") : "";
-        // الطبقة المجانية تعطي حصة صفرية لـ Lyria — نميّزها لعرض رسالة مفهومة للمستخدم
-        const needsBilling = status === 429 && /limit:\s*0/.test(detail);
-        throw new LyriaError(
-          needsBilling
-            ? "توليد الموسيقى بـ Lyria يتطلب تفعيل الفوترة في Google Cloud (غير متاح على الطبقة المجانية)"
-            : status === 503
-              ? "محرك Lyria مزدحم حالياً — جرّب بعد قليل"
-              : `Lyria ${status}: ${detail.slice(0, 300)}`,
-          status,
-          needsBilling
-        );
-      }
-
-      const json = await res.json();
-
-      // Lyria يعيد 200 بلا مرشّحين عندما يحجب مرشّح المحتوى الطلب
-      const blockReason = json?.promptFeedback?.blockReason;
-      if (blockReason) {
-        throw new LyriaError(
-          `رفض مرشّح المحتوى في Lyria هذه الكلمات (${blockReason})`,
-          400,
-          false,
-          true
-        );
-      }
-
-      const candidate = json?.candidates?.[0];
-      if (candidate?.finishReason === "SAFETY" || candidate?.finishReason === "PROHIBITED_CONTENT") {
-        throw new LyriaError("رفض مرشّح Lyria توليد هذا المقطع", 400, false, true);
-      }
-
-      const found = extractAudio(candidate?.content?.parts ?? []);
-      if (!found) {
-        throw new LyriaError("لم تتضمن استجابة Lyria أي مقطع صوتي", 502);
-      }
-
-      return { audio: found.audio, mimeType: found.mimeType, provider: "lyria" };
+      throw lastError;
     },
   };
 }
