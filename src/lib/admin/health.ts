@@ -45,7 +45,7 @@ export function integrations(): IntegrationStatus[] {
       powers: ["توليد الأغاني (Lyria 3 Pro)", "مساعد الكلمات البديل", "الموسيقى من صورة", "سيناريو البودكاست", "تحليل الدراما"],
       configured: has("GEMINI_API_KEY"),
       envVars: ["GEMINI_API_KEY"],
-      model: `${process.env.GEMINI_MODEL ?? "gemini-3.6-flash"} + ${process.env.LYRIA_MODEL ?? "lyria-3.5,lyria-3-pro-preview"}`,
+      model: `${process.env.GEMINI_MODEL ?? "gemini-3.8-flash"} + ${process.env.LYRIA_MODEL ?? "lyria-3.5,lyria-3-pro-preview"}`,
       critical: true,
     },
     {
@@ -111,7 +111,7 @@ export function features(forceMock = false): FeatureStatus[] {
     { id: "voice", name: "معمل الصوت (تفريغ/تحويل/استنساخ)", path: "/voice", state: state(eleven, false), note: eleven ? "Scribe + Speech-to-Speech" : "معطّل بلا ELEVENLABS_API_KEY" },
     { id: "drama", name: "الاستوديو الدرامي", path: "/drama", state: state(gemini && eleven, false), note: gemini && eleven ? "تحليل بـ Gemini وإلقاء بـ ElevenLabs" : "يحتاج مفتاحي Gemini وElevenLabs" },
     { id: "podcast", name: "البودكاست الذكي", path: "/podcast", state: state(gemini && eleven, false), note: gemini && eleven ? "سيناريو وإلقاء متعدد الأصوات" : "يحتاج مفتاحي Gemini وElevenLabs" },
-    { id: "cover", name: "أغلفة الألبومات", path: "/songs", state: state(gemini, false), note: gemini ? (process.env.GEMINI_IMAGE_MODEL ?? "gemini-3.1-flash-image") : "يحتاج GEMINI_API_KEY" },
+    { id: "cover", name: "أغلفة الألبومات", path: "/songs", state: state(gemini, false), note: gemini ? (process.env.GEMINI_IMAGE_MODEL ?? "gemini-nano-banana-2.1") : "يحتاج GEMINI_API_KEY" },
     { id: "karaoke", name: "الكاريوكي (توقيت الكلمات)", path: "/songs", state: state(eleven, false), note: eleven ? "توقيت الكلمات عبر Scribe" : "يحتاج ELEVENLABS_API_KEY" },
     { id: "brain", name: "عقل المنصة (حلقات التعلم)", path: "/brain", state: process.env.BRAIN_DISABLED === "1" ? "off" : service ? "live" : "mock", note: process.env.BRAIN_DISABLED === "1" ? "مُطفأ بـ BRAIN_DISABLED" : service ? "حواس ونقد ذاتي وشخصنة" : "يحتاج مفتاح الخدمة ليتراكم التعلم" },
     { id: "library", name: "المكتبة السحابية والحسابات", path: "/library", state: supabase ? "live" : "off", note: supabase ? "Supabase Auth + Storage" : "مكتبة محلية في المتصفح فقط" },

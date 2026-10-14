@@ -9,7 +9,7 @@ import { sanitizeSections, type SongSection } from "./songSections";
  * يشكّل كل كلمة كما تُنطق باللهجة، ويحافظ على المعنى والوزن والبنية حرفياً.
  */
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
 
 const ARABIC_MARKS = /[ً-ْٰ]/g;
 const ARABIC_LETTERS = /[ء-ي]/g;

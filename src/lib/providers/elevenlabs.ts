@@ -13,14 +13,52 @@ const API_BASE = "https://api.elevenlabs.io/v1";
 
 /** نموذج التوليد المتوازن — multilingual_v2 مستقر وممتاز مع العربية */
 const MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? "eleven_multilingual_v2";
-/** المحرك التعبيري — الجيل الثالث بوسوم المشاعر والأفعال داخل النص */
-const V3_MODEL_ID = process.env.ELEVENLABS_V3_MODEL ?? "eleven_v3";
+/**
+ * المحرك التعبيري — الافتراضي الجيل الرابع (أيلول 2026): الأول عالمياً
+ * في تقييم Artificial Analysis بـ94 لغة بينها العربية، ويقبل طيف
+ * الإعدادات الكامل (ثُبت عملياً). متغير البيئة (باسمه التاريخي) يثبّت
+ * eleven_v3 لمن أراد الرجوع لسلوك الجيل الثالث.
+ */
+const V3_MODEL_ID = process.env.ELEVENLABS_V3_MODEL ?? "eleven_v4";
 
 /** الجيل الثالث يقبل ثلاث درجات ثبات فقط: 0 مبدع | 0.5 طبيعي | 1 رصين */
 export function snapStabilityV3(value: number): 0 | 0.5 | 1 {
   if (value < 0.25) return 0;
   if (value < 0.75) return 0.5;
   return 1;
+}
+
+type VoiceSettings = {
+  stability: number;
+  similarity_boost: number;
+  speed?: number;
+  style?: number;
+  use_speaker_boost: boolean;
+};
+
+/**
+ * إعدادات الصوت حسب الجيل: الثالث يقبل ثلاث درجات ثبات بلا سرعة/حيوية،
+ * والثاني والرابع يدعمان الطيف الكامل — ثبات متصل وسرعة وقوة تعبير
+ * (style) وتعزيز حضور.
+ */
+export function voiceSettingsFor(modelId: string, req: TTSRequest): VoiceSettings {
+  if (modelId.startsWith("eleven_v3")) {
+    return {
+      stability: snapStabilityV3(req.stability ?? 0.5),
+      similarity_boost: 0.75,
+      use_speaker_boost: true,
+    };
+  }
+  return {
+    stability: req.stability ?? 0.5,
+    similarity_boost: 0.75,
+    // النطاق المدعوم للسرعة في ElevenLabs هو 0.7–1.2
+    speed: Math.min(1.2, Math.max(0.7, req.speed ?? 1)),
+    ...(req.liveliness !== undefined && {
+      style: Math.min(1, Math.max(0, req.liveliness)),
+    }),
+    use_speaker_boost: req.speakerBoost ?? true,
+  };
 }
 
 export class ElevenLabsError extends Error {
@@ -112,24 +150,7 @@ export function elevenLabsTTS(apiKey: string): TTSProvider {
       // (تتكفل به قواعد الاستبدال النصية المطبقة في المسار قبل الوصول هنا)
       const dict = expressive ? null : await findDictionary(apiKey).catch(() => null);
 
-      // إعدادات الصوت حسب الجيل: الثالث يقبل ثلاث درجات ثبات بلا سرعة/حيوية،
-      // والثاني يدعم السرعة وقوة التعبير (style) وتعزيز الحضور
-      const voiceSettings = expressive
-        ? {
-            stability: snapStabilityV3(req.stability ?? 0.5),
-            similarity_boost: 0.75,
-            use_speaker_boost: true,
-          }
-        : {
-            stability: req.stability ?? 0.5,
-            similarity_boost: 0.75,
-            // النطاق المدعوم للسرعة في ElevenLabs هو 0.7–1.2
-            speed: Math.min(1.2, Math.max(0.7, req.speed ?? 1)),
-            ...(req.liveliness !== undefined && {
-              style: Math.min(1, Math.max(0, req.liveliness)),
-            }),
-            use_speaker_boost: req.speakerBoost ?? true,
-          };
+      const voiceSettings = voiceSettingsFor(expressive ? V3_MODEL_ID : MODEL_ID, req);
 
       // النصوص الطويلة تُقسَّم عند حدود الجمل وتُدمج مخرجاتها (mp3 مباشرة، وwav عبر PCM خام)
       // بادئة الأسلوب تُحقن في كل جزء كي يبقى الأداء موحداً عبر الأجزاء
@@ -188,21 +209,7 @@ export async function elevenLabsTTSStream(apiKey: string, req: TTSRequest): Prom
 
   const expressive = !!req.expressive;
   const dict = expressive ? null : await findDictionary(apiKey).catch(() => null);
-  const voiceSettings = expressive
-    ? {
-        stability: snapStabilityV3(req.stability ?? 0.5),
-        similarity_boost: 0.75,
-        use_speaker_boost: true,
-      }
-    : {
-        stability: req.stability ?? 0.5,
-        similarity_boost: 0.75,
-        speed: Math.min(1.2, Math.max(0.7, req.speed ?? 1)),
-        ...(req.liveliness !== undefined && {
-          style: Math.min(1, Math.max(0, req.liveliness)),
-        }),
-        use_speaker_boost: req.speakerBoost ?? true,
-      };
+  const voiceSettings = voiceSettingsFor(expressive ? V3_MODEL_ID : MODEL_ID, req);
 
   const mp3Quality = process.env.ELEVENLABS_MP3_QUALITY ?? "mp3_44100_192";
   const res = await fetch(

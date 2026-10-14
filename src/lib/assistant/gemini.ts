@@ -5,7 +5,7 @@ import { PLAN_PROMPT_LINE, planSchemaProps, sanitizePlan, verbatimSections } fro
 import type { AssistRequest, AssistResult, LyricsAssistant } from "./types";
 
 /** النموذج الافتراضي — سريع وممتاز مع العربية؛ قابل للتبديل عبر متغير البيئة */
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
 
 /** مخطط JSON يُلزم Gemini بإرجاع النتيجة كاملة البنية عبر responseSchema — مع حقل الخطة في الوضع الذكي */
 function resultSchema(wantPlan: boolean) {

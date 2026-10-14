@@ -20,7 +20,7 @@ import { consumeRateLimit } from "@/lib/rateLimit";
 
 export const maxDuration = 180;
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
 
 const NEW_VARIANT_SCHEMA = {
   type: "object",

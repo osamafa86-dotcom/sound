@@ -8,7 +8,7 @@ import { MAQAMAT } from "@/lib/maqamat";
  * ووصف عربي لما استُلهم منها، وبرومبت إنجليزي احترافي لمحرك التوليد.
  */
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
 
 export type ImageBrief = {
   /** عنوان مقترح للمقطوعة بالعربية */

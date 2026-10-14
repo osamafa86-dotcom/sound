@@ -167,6 +167,21 @@ export function lyriaMusic(apiKey: string): MusicProvider {
       // وفحص المرشّحات واستخراج الصوت — أي إخفاق يُرمى خطأً مصنّفاً
       // ليقرر سلّم السلسلة أدناه مصيره
       const tryModel = async (model: string): Promise<AudioResult> => {
+        // عقد الجيل 3.5 كما يوثّقه Google رسمياً: AUDIO+TEXT معاً
+        // (النص يعيد الكلمات) وmp3 افتراضياً وبلا عتبات أمان في الطلب —
+        // والجيل السابق يبقى على عقده المجرّب حياً (AUDIO وحده + العتبات)
+        const newContract = /^lyria-3\.5/.test(model);
+        const body = newContract
+          ? {
+              contents: [{ role: "user", parts: [{ text: prompt }] }],
+              generationConfig: { responseModalities: ["AUDIO", "TEXT"] },
+            }
+          : {
+              contents: [{ role: "user", parts: [{ text: prompt }] }],
+              generationConfig: { responseModalities: ["AUDIO"] },
+              ...(safetySettings() && { safetySettings: safetySettings() }),
+            };
+
         let res: Response | null = null;
         for (let attempt = 0; attempt < 3; attempt++) {
           res = await fetch(
@@ -174,11 +189,7 @@ export function lyriaMusic(apiKey: string): MusicProvider {
             {
               method: "POST",
               headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-              body: JSON.stringify({
-                contents: [{ role: "user", parts: [{ text: prompt }] }],
-                generationConfig: { responseModalities: ["AUDIO"] },
-                ...(safetySettings() && { safetySettings: safetySettings() }),
-              }),
+              body: JSON.stringify(body),
             }
           );
           if (res.status !== 503) break;

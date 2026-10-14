@@ -6,7 +6,7 @@
  * فيخرج برومبت جاهز للصق في المنصة المستهدفة — لا نصائح عامة.
  */
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
 
 export type PromptType = {
   id: string;
