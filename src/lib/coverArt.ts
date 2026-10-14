@@ -10,8 +10,8 @@
  */
 const MODELS = [
   ...new Set([
-    process.env.GEMINI_IMAGE_MODEL ?? "gemini-3.1-flash-image",
-    "gemini-3.1-flash-image",
+    process.env.GEMINI_IMAGE_MODEL ?? "gemini-nano-banana-2.1",
+    "gemini-nano-banana-2.1",
     "gemini-2.5-flash-image",
   ]),
 ];

@@ -4,7 +4,7 @@ import { getUserFromRequest } from "@/lib/serverAuth";
 
 export const maxDuration = 60;
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
 
 const SCHEMA = {
   type: "object",

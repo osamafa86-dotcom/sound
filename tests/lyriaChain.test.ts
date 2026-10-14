@@ -112,6 +112,29 @@ describe("سلّم سلسلة نماذج Lyria", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("عقد 3.5 الموثق: AUDIO+TEXT بلا عتبات — والجيل السابق على عقده المجرب", async () => {
+    const { lyriaMusic } = await freshLyria("lyria-3.5,lyria-3-pro-preview");
+    const bodies: Record<string, { generationConfig?: { responseModalities?: string[] }; safetySettings?: unknown }> = {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body));
+        if (String(url).includes("lyria-3.5")) {
+          bodies.v35 = body;
+          return new Response("{}", { status: 400 }); // نُفشّله ليُجرَّب التالي
+        }
+        bodies.v3pro = body;
+        return audioOk("mp3");
+      })
+    );
+
+    await lyriaMusic("key").generate(REQ);
+    expect(bodies.v35.generationConfig?.responseModalities).toEqual(["AUDIO", "TEXT"]);
+    expect(bodies.v35.safetySettings).toBeUndefined();
+    expect(bodies.v3pro.generationConfig?.responseModalities).toEqual(["AUDIO"]);
+    expect(bodies.v3pro.safetySettings).toBeDefined();
+  });
+
   it("الصوت المرجعي (fileData) يُنزَّل عند غياب التضمين", async () => {
     const { lyriaMusic } = await freshLyria("model-a");
     vi.stubGlobal(

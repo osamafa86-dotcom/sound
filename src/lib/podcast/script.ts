@@ -10,7 +10,7 @@ import type { DramaScript } from "@/lib/drama/types";
  * كل سطر بصوت مقدّمه وانفعاله. الفرق في التأليف لا في الإنتاج.
  */
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
 
 export const PODCAST_LIMITS = {
   maxTopicChars: 500,

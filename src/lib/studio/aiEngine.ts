@@ -9,12 +9,12 @@
  */
 
 const BASE = "https://generativelanguage.googleapis.com/v1beta";
-const TEXT_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
+const TEXT_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
 // سلسلة كاملة بالأحدثية — رفع GEMINI_IMAGE_MODEL لا يُفقد وسائط الرجوع
 const IMAGE_MODELS = [
   ...new Set([
-    process.env.GEMINI_IMAGE_MODEL ?? "gemini-3.1-flash-image",
-    "gemini-3.1-flash-image",
+    process.env.GEMINI_IMAGE_MODEL ?? "gemini-nano-banana-2.1",
+    "gemini-nano-banana-2.1",
     "gemini-2.5-flash-image",
   ]),
 ];
