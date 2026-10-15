@@ -404,7 +404,7 @@ export function styleTagPrefix(style: PerformanceStyle): string {
   return style.tags.map((t) => `[${t}]`).join(" ");
 }
 
-const CLASSIFY_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
+const CLASSIFY_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
 /** «الاختيار التلقائي»: تحليل النص واختيار الأسلوب الأنسب — يعيد null عند التعذر */
 export async function classifyStyle(apiKey: string, text: string): Promise<string | null> {

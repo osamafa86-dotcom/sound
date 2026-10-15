@@ -6,7 +6,7 @@ import { generateImageRaw } from "./coverArt";
  * الأصلي ويسمّي الفجوات — فيتحسن البرومبت مما رأى لا مما ظن.
  */
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
 export type ImageTestResult = {
   imageBase64: string;
