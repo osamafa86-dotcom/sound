@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DIALECTS, SONG_STYLES } from "@/lib/maqamat";
 import { LYRIC_FORMS } from "@/lib/heritage/palestinian";
-import { getLyricsAssistant, mockAssistant } from "@/lib/assistant";
+import { getLyricsAssistants, mockAssistant } from "@/lib/assistant";
 import { getPromptExemplars } from "@/lib/brain";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
@@ -47,22 +47,33 @@ export async function POST(req: NextRequest) {
     exemplars: await getPromptExemplars().catch(() => []),
   };
 
-  const assistant = getLyricsAssistant();
-  let result: AssistResult;
+  // سلسلة المساعدين: تعثُّر محرك ينتقل للتالي، والتجريبي ملاذ أخير فقط
+  const assistants = getLyricsAssistants();
+  let result: AssistResult | null = null;
   let fallbackReason = "";
 
-  try {
-    result = await assistant.assist(request);
-    if (assistant.id !== "mock") await logUsage("lyrics", user?.id ?? null);
-  } catch (e) {
-    // المحرك الفعلي غير متاح (شبكة/مفتاح/رفض) — نرجع للاقتراح التجريبي
-    if (assistant.id === "mock") {
+  for (const assistant of assistants) {
+    try {
+      result = await assistant.assist(request);
+      await logUsage("lyrics", user?.id ?? null);
+      fallbackReason = "";
+      break;
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : "unknown";
+      console.error(`Lyrics assistant ${assistant.id} failed:`, reason);
+      fallbackReason = fallbackReason
+        ? `${fallbackReason} | ${assistant.id}: ${reason}`
+        : `${assistant.id}: ${reason}`;
+    }
+  }
+
+  if (!result) {
+    try {
+      result = await mockAssistant.assist(request);
+    } catch (e) {
       const message = e instanceof Error ? e.message : "حدث خطأ غير متوقع";
       return NextResponse.json({ error: message }, { status: 500 });
     }
-    fallbackReason = e instanceof Error ? e.message : "unknown";
-    console.error("Lyrics assistant failed, falling back to mock:", fallbackReason);
-    result = await mockAssistant.assist(request);
   }
 
   return NextResponse.json({
