@@ -62,7 +62,7 @@ export async function autoEvalTTS(opts: {
   }
 }
 
-const JUDGE_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
+const JUDGE_MODEL = (process.env.GEMINI_MODEL ?? "gemini-3.6-flash").split(",")[0].trim();
 
 const JUDGE_SCHEMA = {
   type: "object",

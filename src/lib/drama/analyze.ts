@@ -3,7 +3,7 @@ import { VOICES } from "@/lib/voices";
 import { dialectInstruction, voiceCatalogText, voicesForDialect } from "@/lib/dialects";
 import { DRAMA_LIMITS, type DramaScript } from "./types";
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
+const MODEL = (process.env.GEMINI_MODEL ?? "gemini-3.6-flash").split(",")[0].trim();
 
 function buildSchema(dialect?: string) {
   const allowedVoices = voicesForDialect(dialect).map((v) => v.id);
