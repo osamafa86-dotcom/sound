@@ -1,12 +1,9 @@
 import { DIALECTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
 import { heritageAssistBlock } from "@/lib/heritage/palestinian";
-import { fetchWithRetry } from "@/lib/retryFetch";
+import { geminiGenerate, geminiTextModels } from "@/lib/retryFetch";
 import { parseSections, sanitizeSections } from "@/lib/songSections";
 import { PLAN_PROMPT_LINE, planSchemaProps, sanitizePlan, verbatimSections } from "./plan";
 import type { AssistRequest, AssistResult, LyricsAssistant } from "./types";
-
-/** النموذج الافتراضي — سريع وممتاز مع العربية؛ قابل للتبديل عبر متغير البيئة */
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
 /** مخطط JSON يُلزم Gemini بإرجاع النتيجة كاملة البنية عبر responseSchema — مع حقل الخطة في الوضع الذكي */
 function resultSchema(wantPlan: boolean) {
@@ -127,27 +124,25 @@ export function geminiAssistant(apiKey: string): LyricsAssistant {
   return {
     id: "gemini",
     async assist(req: AssistRequest): Promise<AssistResult> {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
       const wantPlan = req.auto === true || req.mode === "plan";
 
-      const res = await fetchWithRetry(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: buildSystemPrompt(req.exemplars, wantPlan) }] },
-          contents: [{ role: "user", parts: [{ text: buildUserPrompt(req) }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: resultSchema(wantPlan),
-            temperature: 0.9,
-            maxOutputTokens: 8192,
-          },
-        }),
+      // سلسلة النماذج النصية: الازدحام المستمر على نموذج ينتقل للتالي
+      const res = await geminiGenerate(apiKey, {
+        systemInstruction: { parts: [{ text: buildSystemPrompt(req.exemplars, wantPlan) }] },
+        contents: [{ role: "user", parts: [{ text: buildUserPrompt(req) }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: resultSchema(wantPlan),
+          temperature: 0.9,
+          maxOutputTokens: 8192,
+        },
       });
 
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
-        throw new Error(`Gemini ${res.status}: ${detail.slice(0, 300)}`);
+        throw new Error(
+          `Gemini ${res.status} (جُرّبت: ${geminiTextModels().join("، ")}): ${detail.slice(0, 300)}`
+        );
       }
 
       const json = await res.json();

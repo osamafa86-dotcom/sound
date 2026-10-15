@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
+const MODEL = (process.env.GEMINI_MODEL ?? "gemini-3.6-flash").split(",")[0].trim();
 
 /**
  * تحليل تسجيل صوتي لاستخراج النطق الصحيح لكلمة عربية.

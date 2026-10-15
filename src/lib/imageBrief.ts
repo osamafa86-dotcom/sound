@@ -1,5 +1,5 @@
 import { MAQAMAT } from "@/lib/maqamat";
-import { fetchWithRetry } from "@/lib/retryFetch";
+import { geminiGenerate } from "@/lib/retryFetch";
 
 /**
  * من صورة إلى موسيقى — عين المنصة.
@@ -8,8 +8,6 @@ import { fetchWithRetry } from "@/lib/retryFetch";
  * ويحوّل مزاجها وقصتها إلى موجز موسيقي: المقام الأنسب لطابعها،
  * ووصف عربي لما استُلهم منها، وبرومبت إنجليزي احترافي لمحرك التوليد.
  */
-
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
 export type ImageBrief = {
   /** عنوان مقترح للمقطوعة بالعربية */
@@ -63,30 +61,24 @@ export async function imageToMusicBrief(
   imageBase64: string,
   mimeType: string
 ): Promise<ImageBrief> {
-  const res = await fetchWithRetry(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { inlineData: { mimeType, data: imageBase64 } },
-              { text: buildPrompt() },
-            ],
-          },
+  // سلسلة النماذج النصية: الازدحام المستمر على نموذج ينتقل للتالي
+  const res = await geminiGenerate(apiKey, {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { inlineData: { mimeType, data: imageBase64 } },
+          { text: buildPrompt() },
         ],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: SCHEMA,
-          temperature: 0.8,
-          maxOutputTokens: 2048,
-        },
-      }),
-    }
-  );
+      },
+    ],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: SCHEMA,
+      temperature: 0.8,
+      maxOutputTokens: 2048,
+    },
+  });
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "");

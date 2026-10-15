@@ -16,3 +16,35 @@ export async function fetchWithRetry(
   }
   return res as Response;
 }
+
+/**
+ * سلسلة نماذج Gemini النصية — الدرس نفسه من سلسلة ليرا: الازدحام
+ * المستمر (503 رغم إعادة المحاولة) أو أي فشل نموذج ينتقل للمرشح
+ * التالي بدل إسقاط الميزة للوضع التجريبي. GEMINI_MODEL يقبل قائمة
+ * بفواصل، وتُقرأ عند كل نداء (لا تجميد عند الإقلاع).
+ */
+export function geminiTextModels(): string[] {
+  return (process.env.GEMINI_MODEL ?? "gemini-3.6-flash,gemini-3.8-flash")
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean);
+}
+
+/** نداء generateContent عبر السلسلة — يعيد أول استجابة ناجحة أو آخر فاشلة */
+export async function geminiGenerate(apiKey: string, body: unknown): Promise<Response> {
+  let last: Response | null = null;
+  for (const model of geminiTextModels()) {
+    const res = await fetchWithRetry(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify(body),
+      }
+    );
+    if (res.ok) return res;
+    console.error(`Gemini text model ${model} failed: ${res.status}`);
+    last = res;
+  }
+  return last as Response;
+}

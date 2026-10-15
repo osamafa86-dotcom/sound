@@ -1,3 +1,4 @@
+import { geminiGenerate } from "@/lib/retryFetch";
 import { DIALECTS } from "./maqamat";
 import { PALESTINIAN_PRONUNCIATION_GUIDE } from "./heritage/palestinian";
 import { sanitizeSections, type SongSection } from "./songSections";
@@ -9,7 +10,6 @@ import { sanitizeSections, type SongSection } from "./songSections";
  * يشكّل كل كلمة كما تُنطق باللهجة، ويحافظ على المعنى والوزن والبنية حرفياً.
  */
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
 const ARABIC_MARKS = /[ً-ْٰ]/g;
 const ARABIC_LETTERS = /[ء-ي]/g;
@@ -189,22 +189,16 @@ export async function proofreadLyrics(
   sections: SongSection[],
   dialectId: string
 ): Promise<ProofreadResult> {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: buildPrompt(sections, dialectId) }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: SCHEMA,
-          temperature: 0.1,
-          maxOutputTokens: 8192,
-        },
-      }),
-    }
-  );
+  // سلسلة النماذج النصية: الازدحام المستمر على نموذج ينتقل للتالي
+  const res = await geminiGenerate(apiKey, {
+    contents: [{ role: "user", parts: [{ text: buildPrompt(sections, dialectId) }] }],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: SCHEMA,
+      temperature: 0.1,
+      maxOutputTokens: 8192,
+    },
+  });
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "");

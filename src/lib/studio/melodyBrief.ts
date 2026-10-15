@@ -9,7 +9,7 @@ import { MAQAMAT } from "@/lib/maqamat";
  * بالروح نفسها — استلهاماً لا نسخاً، كي لا يستفز مرشّح إعادة الإنتاج.
  */
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
+const MODEL = (process.env.GEMINI_MODEL ?? "gemini-3.6-flash").split(",")[0].trim();
 
 export type MelodyBrief = {
   /** وصف عربي لما سُمع وكيف تُرجم موسيقياً */

@@ -9,7 +9,7 @@ import { PROMPT_TYPES, type CraftedPrompt } from "./promptSmith";
  * فتظهر الجولات حية في الواجهة — شفافية تعلّم هندسة البرومبتات.
  */
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
+const MODEL = (process.env.GEMINI_MODEL ?? "gemini-3.6-flash").split(",")[0].trim();
 
 /** عتبة القبول (من 100) وحد الجولات — توازن جودة/كلفة */
 export const PASS_SCORE = 85;
