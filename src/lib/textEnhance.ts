@@ -9,7 +9,7 @@ import { VOICES } from "@/lib/voices";
  * إلى صيغتها المنطوقة، ويقترح الصوت والإعدادات الأنسب لنوع المحتوى.
  */
 
-const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
+const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
 export type EnhanceResult = {
   /** النص بعد التشكيل الكامل وتطبيع الأرقام والاختصارات */

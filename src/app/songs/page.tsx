@@ -1368,6 +1368,15 @@ export default function SongsStudio() {
                   </span>
                 </div>
                 <p className="mt-3 text-sm leading-relaxed">{assist.maqamReason}</p>
+                {assist.mock && (
+                  <p className="mt-2 text-xs text-muted">
+                    {assist.fellBack
+                      ? /429|quota|depleted|exceeded/i.test(assist.fellBack)
+                        ? "نفد رصيد مزوّد الذكاء الاصطناعي لدى المنصة مؤقتاً، فعُرضت خطة تجريبية مبسّطة — أبلغ إدارة المنصة."
+                        : `تعذّر الوصول لمحرك الذكاء الاصطناعي فعُرضت خطة تجريبية مبسّطة. (السبب التقني: ${assist.fellBack.slice(0, 120)})`
+                      : "خطة من الوضع التجريبي — يُفعَّل التأليف والتحليل الفعليان عند ربط مفاتيح الذكاء الاصطناعي."}
+                  </p>
+                )}
                 {assist.plan.reason && (
                   <p className="mt-1 text-sm leading-relaxed text-muted">{assist.plan.reason}</p>
                 )}
@@ -1467,7 +1476,7 @@ export default function SongsStudio() {
                       {assist.fellBack
                         ? /429|quota|depleted|exceeded/i.test(assist.fellBack)
                           ? "نفد رصيد مزوّد الذكاء الاصطناعي لدى المنصة مؤقتاً، فعُرض اقتراح تجريبي مبسّط — أبلغ إدارة المنصة."
-                          : "تعذّر الوصول لمحرك الذكاء الاصطناعي، فعُرض اقتراح تجريبي مبسّط بدلاً منه."
+                          : `تعذّر الوصول لمحرك الذكاء الاصطناعي، فعُرض اقتراح تجريبي مبسّط بدلاً منه. (السبب التقني: ${assist.fellBack.slice(0, 120)})`
                         : "اقتراح من الوضع التجريبي — يُفعَّل التأليف والتحليل الفعليان عند ربط مفاتيح الذكاء الاصطناعي."}
                     </p>
                   )}
