@@ -1,4 +1,5 @@
 import { MAQAMAT } from "@/lib/maqamat";
+import { fetchWithRetry } from "@/lib/retryFetch";
 
 /**
  * من صورة إلى موسيقى — عين المنصة.
@@ -62,7 +63,7 @@ export async function imageToMusicBrief(
   imageBase64: string,
   mimeType: string
 ): Promise<ImageBrief> {
-  const res = await fetch(
+  const res = await fetchWithRetry(
     `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
     {
       method: "POST",

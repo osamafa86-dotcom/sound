@@ -1,5 +1,6 @@
 import { DIALECTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
 import { heritageAssistBlock } from "@/lib/heritage/palestinian";
+import { fetchWithRetry } from "@/lib/retryFetch";
 import { parseSections, sanitizeSections } from "@/lib/songSections";
 import { PLAN_PROMPT_LINE, planSchemaProps, sanitizePlan, verbatimSections } from "./plan";
 import type { AssistRequest, AssistResult, LyricsAssistant } from "./types";
@@ -129,7 +130,7 @@ export function geminiAssistant(apiKey: string): LyricsAssistant {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
       const wantPlan = req.auto === true || req.mode === "plan";
 
-      const res = await fetch(url, {
+      const res = await fetchWithRetry(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
