@@ -15,6 +15,19 @@ const OUTPUT_FORMAT = process.env.ELEVENLABS_MP3_QUALITY ?? "mp3_44100_192";
 const BYTES_PER_SEC = 192_000 / 8;
 /** سقف الوقفة الواحدة — ما فوقه يقطع إيقاع المشهد */
 const MAX_PAUSE_MS = 3000;
+/**
+ * أرضية الثبات لجيل الوسوم: تحتها يتجاوز الجيل الرابع التشكيل في الأسطر
+ * الانفعالية (قيس على «مَعْرَكَةُ أُحُد»: ثبات 0.3 مع وسم ← «أُحَد»، و0.65 ← صحيح).
+ */
+export const TAGGED_MIN_STABILITY = 0.5;
+
+/**
+ * نموذج الإنتاج الدرامي: الكلاسيكي الملتزم بالتشكيل (multilingual_v2) افتراضياً،
+ * وELEVENLABS_DRAMA_MODEL يجرّب جيل الوسوم للدراما والبودكاست وحدهما بلا نشر.
+ */
+export function dramaModel(): string {
+  return process.env.ELEVENLABS_DRAMA_MODEL?.trim() || elevenTTSModel(false);
+}
 
 type Dictionary = { id: string; versionId: string } | null;
 
@@ -23,8 +36,7 @@ export async function renderDrama(
   script: DramaScript,
   onProgress?: (done: number, total: number) => void
 ): Promise<{ audio: Buffer; durationSec: number }> {
-  // الدراما والبودكاست أداء انفعالي — المحرك التعبيري (الجيل الرابع افتراضياً)
-  const model = elevenTTSModel(true);
+  const model = dramaModel();
   const tagged = isTagGeneration(model);
 
   // ذاكرة النطق: نصاً لجيل الوسوم (لا يدعم القواميس)، وقاموساً للجيل الثاني
@@ -90,10 +102,12 @@ export function performLine(
   rules: PronunciationRule[]
 ): { text: string; stability: number } {
   const spoken = rules.length ? applyPronunciationRules(line.text, rules) : line.text;
-  const tag = tagged ? cleanDeliveryTag(line.deliveryTag) : undefined;
-  if (!tag) return { text: spoken, stability: line.stability };
+  if (!tagged) return { text: spoken, stability: line.stability };
+  const stability = Math.max(TAGGED_MIN_STABILITY, line.stability);
+  const tag = cleanDeliveryTag(line.deliveryTag);
+  if (!tag) return { text: spoken, stability };
   // الثبات «الرصين» يتجاهل الوسوم — كما في استوديو النطق يُسقف عند «طبيعي»
-  return { text: `${tag} ${spoken}`, stability: line.stability >= 0.75 ? 0.5 : line.stability };
+  return { text: `${tag} ${spoken}`, stability: stability >= 0.75 ? 0.5 : stability };
 }
 
 /** وقفة بعد السطر: صمت حقيقي بإطارات السطر نفسه (لا شيء إن لم يُفهم الإطار) */

@@ -12,11 +12,13 @@ import type { AudioResult, MusicProvider, MusicRequest, TTSProvider, TTSRequest 
 const API_BASE = "https://api.elevenlabs.io/v1";
 
 /**
- * نموذج النطق الكلاسيكي (بلا وسوم) — الجيل الرابع أيضاً منذ تشرين الأول 2026
- * ليعمل كل قسم صوتي على أحدث محرك: النطق والدراما والبودكاست.
- * ELEVENLABS_MODEL_ID=eleven_multilingual_v2 مفتاح رجوع للجيل الثاني.
+ * نموذج النطق الكلاسيكي (بلا وسوم) — الجيل الثاني multilingual_v2 عمداً:
+ * يلتزم بالتشكيل حرفياً ويدعم قاموس النطق، والتشكيل وعد المنصة («عَلَم/عِلْم»).
+ * قياس تشرين الأول 2026 على «أُحُد»: الجيل الرابع يلتزم بالحركات عند الثبات
+ * المتوسط، ويتجاوزها مع الثبات المنخفض ووسوم الأداء فيقرأ «أُحَد» — فبقي
+ * التعبيري وحده على الرابع. ELEVENLABS_MODEL_ID مفتاح تجربة بلا نشر.
  */
-const MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? "eleven_v4";
+const MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? "eleven_multilingual_v2";
 /**
  * المحرك التعبيري — الافتراضي الجيل الرابع (أيلول 2026): الأول عالمياً
  * في تقييم Artificial Analysis بـ94 لغة بينها العربية، ويقبل طيف
