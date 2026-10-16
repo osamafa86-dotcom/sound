@@ -3,6 +3,7 @@ import { getCustomVoice } from "@/lib/customVoices";
 import { applyPronunciationRules, listRules } from "@/lib/pronunciation";
 import { classifyStyle, getStyle, layerTagPrefix, styleTagPrefix } from "@/lib/performance/styles";
 import { hasAudioTags, stripAudioTags, stripBidiMarks } from "@/lib/performance/tags";
+import { elevenTTSModel, isTagGeneration } from "@/lib/providers/elevenlabs";
 import type { TTSRequest } from "@/lib/providers/types";
 
 /** فشل تحضيري — يُعاد للعميل بنصه ورمز حالته كما هو */
@@ -77,9 +78,10 @@ export async function prepareTTSRequest(
     text = stripAudioTags(text);
   }
 
-  // الجيل الثالث لا يدعم قواميس النطق — ذاكرة النطق تُطبَّق نصياً قبل التوليد
+  // جيل الوسوم (الثالث فالرابع) لا يدعم قواميس النطق — ذاكرة النطق تُطبَّق
+  // نصياً قبل التوليد، وهو اليوم محرك المسارين التعبيري والكلاسيكي معاً
   const elevenKey = process.env.ELEVENLABS_API_KEY;
-  if (expressive && elevenKey) {
+  if (elevenKey && isTagGeneration(elevenTTSModel(expressive))) {
     const rules = await listRules(elevenKey).catch(() => []);
     if (rules.length) text = applyPronunciationRules(text, rules);
   }

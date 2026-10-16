@@ -2114,7 +2114,7 @@ export default function SongsStudio() {
                     </p>
                     <p className="mt-1 text-xs leading-relaxed text-muted">
                       الافتراضي نسخة واحدة بأقوى سلسلة: Lyria 3 Pro (محرك Google Flow
-                      Music) مع رجوع تلقائي إلى Eleven Music v2 عند تعذّره. فعّل المقارنة
+                      Music) مع رجوع تلقائي إلى Eleven Music v2.5 عند تعذّره. فعّل المقارنة
                       عندما تريد الحكم بنفسك: نسختان متوازيتان من المحركين، وتُحسبان
                       توليدَين من حدك.
                     </p>

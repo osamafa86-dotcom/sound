@@ -6,6 +6,12 @@ import { getUserFromRequest } from "@/lib/serverAuth";
 
 const API_BASE = "https://api.elevenlabs.io/v1";
 
+/**
+ * نموذج تصميم الأصوات: الجيل الثالث (eleven_ttv_v3) — أصواته مصممة لمحركات
+ * الوسوم التي ينطق بها الموقع. ELEVEN_TTV_MODEL=eleven_multilingual_ttv_v2 مفتاح رجوع.
+ */
+const TTV_MODEL = process.env.ELEVEN_TTV_MODEL ?? "eleven_ttv_v3";
+
 /** نص المعاينة الافتراضي — عربي شامي حتى تُسمع اللهجة في المعاينة نفسها */
 const DEFAULT_PREVIEW_TEXT =
   "أهلاً وسهلاً فيكم، هلّق رح نجرّب هالصوت ونشوف كيف بيطلع. الحكي العربي إلو نكهة تانية لما يكون طبيعي وقريب من القلب، وهيك منقدر نحكم عليه منيح.";
@@ -38,7 +44,7 @@ export async function POST(req: NextRequest) {
     body: JSON.stringify({
       voice_description: description.slice(0, 1000),
       text: previewText.slice(0, 1000),
-      model_id: "eleven_multilingual_ttv_v2",
+      model_id: TTV_MODEL,
     }),
   });
 

@@ -24,6 +24,8 @@ export type DramaLine = {
   text: string;
   /** الحالة الشعورية بالعربية: هادئ، غاضب، متحسّر، متشوّق... */
   emotion: string;
+  /** وسم أداء إنجليزي من DELIVERY_TAGS يجسّد الانفعال صوتياً — غيابه سرد محايد */
+  deliveryTag?: string;
   /** 0..1 — ينخفض في لحظات الانفعال ويرتفع في السرد المتزن */
   stability: number;
   /** 0.7..1.2 */
@@ -54,3 +56,43 @@ export const DRAMA_LIMITS = {
   /** عدد طلبات التوليد المتوازية إلى محرك النطق */
   concurrency: 4,
 } as const;
+
+/**
+ * وسوم الأداء المسموحة لأسطر السيناريو — من قائمة الجيل الرابع الموثقة
+ * لدى ElevenLabs (انفعال، طريقة إلقاء، خامة صوت، أصوات غير لفظية).
+ * قائمة مغلقة كي لا يخترع المحلل وسماً يُقرأ كلمات أو يتجاهله المحرك.
+ */
+export const DELIVERY_TAGS = [
+  "[happy]",
+  "[sad]",
+  "[angry]",
+  "[excited]",
+  "[nervous]",
+  "[curious]",
+  "[sarcastic]",
+  "[surprised]",
+  "[tired]",
+  "[warmly]",
+  "[whispers]",
+  "[shouting]",
+  "[softly]",
+  "[dramatically]",
+  "[cautiously]",
+  "[slowly]",
+  "[trembling voice]",
+  "[breathless]",
+  "[laughs]",
+  "[chuckles]",
+  "[sighs]",
+  "[gasps]",
+  "[crying]",
+  "[clears throat]",
+] as const;
+
+/** قيمة «بلا وسم» في مخطط المحلل — السرد المتزن لا يحتاج توجيهاً */
+export const NO_DELIVERY_TAG = "none";
+
+/** وسم صالح من القائمة أو لا شيء — تطهير ناتج المحلل وما يعدّله المستخدم */
+export function cleanDeliveryTag(tag: unknown): string | undefined {
+  return typeof tag === "string" && (DELIVERY_TAGS as readonly string[]).includes(tag) ? tag : undefined;
+}

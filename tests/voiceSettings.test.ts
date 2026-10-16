@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { snapStabilityV3, voiceSettingsFor } from "@/lib/providers/elevenlabs";
+import { describe, expect, it, vi } from "vitest";
+import {
+  elevenMusicModel,
+  isTagGeneration,
+  snapStabilityV3,
+  voiceSettingsFor,
+} from "@/lib/providers/elevenlabs";
 import type { TTSRequest } from "@/lib/providers/types";
 
 /**
@@ -38,5 +43,35 @@ describe("إعدادات الصوت حسب الجيل", () => {
     expect(snapStabilityV3(0.1)).toBe(0);
     expect(snapStabilityV3(0.6)).toBe(0.5);
     expect(snapStabilityV3(0.9)).toBe(1);
+  });
+});
+
+describe("نموذج النطق لكل مسار", () => {
+  it("المساران الكلاسيكي والتعبيري على الجيل الرابع افتراضياً", async () => {
+    vi.resetModules();
+    const { elevenTTSModel } = await import("@/lib/providers/elevenlabs");
+    expect(elevenTTSModel(false)).toBe("eleven_v4");
+    expect(elevenTTSModel(true)).toBe("eleven_v4");
+  });
+
+  it("ELEVENLABS_MODEL_ID يعيد الكلاسيكي وحده للجيل الثاني", async () => {
+    vi.resetModules();
+    vi.stubEnv("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2");
+    const { elevenTTSModel } = await import("@/lib/providers/elevenlabs");
+    expect(elevenTTSModel(false)).toBe("eleven_multilingual_v2");
+    expect(elevenTTSModel(true)).toBe("eleven_v4");
+    vi.unstubAllEnvs();
+  });
+
+  it("جيل الوسوم: الثالث فما بعده، لا الثاني ولا flash", () => {
+    expect(isTagGeneration("eleven_v4")).toBe(true);
+    expect(isTagGeneration("eleven_v4_turbo")).toBe(true);
+    expect(isTagGeneration("eleven_v3")).toBe(true);
+    expect(isTagGeneration("eleven_multilingual_v2")).toBe(false);
+    expect(isTagGeneration("eleven_flash_v2_5")).toBe(false);
+  });
+
+  it("موسيقى Eleven على music_v2_5 الأحدث افتراضياً", () => {
+    expect(elevenMusicModel()).toBe("music_v2_5");
   });
 });
