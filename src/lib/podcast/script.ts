@@ -2,9 +2,11 @@ import { MAQAMAT } from "@/lib/maqamat";
 import { VOICES } from "@/lib/voices";
 import { dialectInstruction, voiceCatalogText, voicesForDialect } from "@/lib/dialects";
 import { geminiStructured } from "@/lib/retryFetch";
+import { CRITICAL_WORDS_RULE, keepPresent } from "@/lib/tts/criticalWords";
 import {
   cleanDeliveryTag,
   DELIVERY_TAGS,
+  MAX_CRITICAL_PER_LINE,
   NO_DELIVERY_TAG,
   type DramaScript,
 } from "@/lib/drama/types";
@@ -79,12 +81,17 @@ function buildSchema(dialect: string) {
           text: { type: "string", description: "نص الحوار مشكّلاً تشكيلاً كاملاً" },
           emotion: { type: "string", description: "الحالة الشعورية بالعربية في كلمة أو كلمتين" },
           deliveryTag: { type: "string", enum: [NO_DELIVERY_TAG, ...DELIVERY_TAGS] },
+          criticalWords: {
+            type: "array",
+            items: { type: "string" },
+            description: "كلمات السطر الحساسة للنطق كما وردت فيه حرفياً بتشكيلها — أو قائمة فارغة",
+          },
           stability: { type: "number" },
           speed: { type: "number" },
           pauseAfterMs: { type: "number" },
         },
-        required: ["characterId", "text", "emotion", "deliveryTag", "stability", "speed", "pauseAfterMs"],
-        propertyOrdering: ["characterId", "text", "emotion", "deliveryTag", "stability", "speed", "pauseAfterMs"],
+        required: ["characterId", "text", "emotion", "deliveryTag", "criticalWords", "stability", "speed", "pauseAfterMs"],
+        propertyOrdering: ["characterId", "text", "emotion", "deliveryTag", "criticalWords", "stability", "speed", "pauseAfterMs"],
       },
     },
   },
@@ -141,6 +148,7 @@ ${catalog}
 - اكتب كل سطر **مشكّلاً تشكيلاً كاملاً**، وحوّل الأرقام والاختصارات إلى صيغتها المنطوقة.
 - ${dialectInstruction(dialect)}
 - اجعل الحوار طبيعياً كما يُنطق فعلاً: جمل قصيرة، عبارات وصل («طيب»، «بالضبط»، «خلينا نوضّح»)، لا لغة مكتوبة جامدة.
+- لكل سطر: criticalWords — ${CRITICAL_WORDS_RULE}
 - لكل سطر: وسم أداء (deliveryTag) من القائمة المسموحة حين يتلوّن الإلقاء فعلاً — ضحكة خفيفة، حماس، فضول، دهشة — أو ${NO_DELIVERY_TAG} للشرح المتزن؛ باعتدال يحفظ طبيعية الحوار.
 - لكل سطر: انفعاله، وstability بين 0.35 و0.75 (أقل في الحماس والضحك، أعلى في الشرح الرصين)، وspeed بين 0.9 و1.1، وpauseAfterMs بين 120 و600 (وقفات قصيرة داخل الحوار حتى لا يبدو متقطعاً).
 - لا تتجاوز ${PODCAST_LIMITS.maxLines} سطراً.
@@ -215,6 +223,7 @@ function sanitize(script: DramaScript, dialect: string): DramaScript {
       text: l.text.trim().slice(0, 600),
       emotion: l.emotion || "ودّي",
       deliveryTag: cleanDeliveryTag(l.deliveryTag),
+      criticalWords: keepPresent(l.criticalWords, l.text, MAX_CRITICAL_PER_LINE),
       stability: clamp(Number(l.stability), 0, 1, 0.5),
       speed: clamp(Number(l.speed), 0.7, 1.2, 1),
       pauseAfterMs: Math.round(clamp(Number(l.pauseAfterMs), 0, 1500, 250)),

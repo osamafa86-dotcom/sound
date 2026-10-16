@@ -2,10 +2,12 @@ import { MAQAMAT } from "@/lib/maqamat";
 import { VOICES } from "@/lib/voices";
 import { dialectInstruction, voiceCatalogText, voicesForDialect } from "@/lib/dialects";
 import { geminiStructured } from "@/lib/retryFetch";
+import { CRITICAL_WORDS_RULE, keepPresent } from "@/lib/tts/criticalWords";
 import {
   cleanDeliveryTag,
   DELIVERY_TAGS,
   DRAMA_LIMITS,
+  MAX_CRITICAL_PER_LINE,
   NO_DELIVERY_TAG,
   type DramaScript,
 } from "./types";
@@ -48,12 +50,17 @@ function buildSchema(dialect?: string) {
           text: { type: "string", description: "النص مشكّلاً تشكيلاً كاملاً" },
           emotion: { type: "string", description: "الحالة الشعورية بالعربية في كلمة أو كلمتين" },
           deliveryTag: { type: "string", enum: [NO_DELIVERY_TAG, ...DELIVERY_TAGS] },
+          criticalWords: {
+            type: "array",
+            items: { type: "string" },
+            description: "كلمات السطر الحساسة للنطق كما وردت فيه حرفياً بتشكيلها — أو قائمة فارغة",
+          },
           stability: { type: "number" },
           speed: { type: "number" },
           pauseAfterMs: { type: "number" },
         },
-        required: ["characterId", "text", "emotion", "deliveryTag", "stability", "speed", "pauseAfterMs"],
-        propertyOrdering: ["characterId", "text", "emotion", "deliveryTag", "stability", "speed", "pauseAfterMs"],
+        required: ["characterId", "text", "emotion", "deliveryTag", "criticalWords", "stability", "speed", "pauseAfterMs"],
+        propertyOrdering: ["characterId", "text", "emotion", "deliveryTag", "criticalWords", "stability", "speed", "pauseAfterMs"],
       },
     },
   },
@@ -85,6 +92,7 @@ ${catalog}
 **٤. قسّم النص إلى أسطر** (بحد أقصى ${DRAMA_LIMITS.maxLines} سطراً):
 - كل سطر: من يقوله (characterId)، ونصه **مشكّلاً تشكيلاً كاملاً** ومطبّعاً (الأرقام والاختصارات إلى صيغتها المنطوقة).
 - احذف علامات الحوار مثل «قال فلان:» من نص السطر إن كان الصوت وحده يكفي للتمييز، وأبقِها في سطر الراوي إن كانت جزءاً من السرد.
+- لكل سطر: criticalWords — ${CRITICAL_WORDS_RULE}
 - لكل سطر: وسم أداء (deliveryTag) من القائمة المسموحة يجسّد انفعاله صوتياً — همس، صراخ، بكاء، ضحكة، تنهيدة... — أو ${NO_DELIVERY_TAG} للسرد المتزن والكلام المحايد؛ ضعه حيث يتغير الأداء فعلاً لا على كل سطر.
 - لكل سطر: الحالة الشعورية، وقيمة stability بين 0 و1 (اخفضها إلى 0.25–0.4 في الانفعال والصراخ والبكاء، وارفعها إلى 0.6–0.8 في السرد المتزن)، وقيمة speed بين 0.85 و1.15، وpauseAfterMs بين 150 و1200 حسب إيقاع المشهد (وقفة أطول بين المشاهد وبعد الجُمل المؤثرة).
 
@@ -160,6 +168,7 @@ function sanitize(script: DramaScript, dialect?: string): DramaScript {
       text: l.text.trim().slice(0, DRAMA_LIMITS.maxLineChars),
       emotion: l.emotion || "هادئ",
       deliveryTag: cleanDeliveryTag(l.deliveryTag),
+      criticalWords: keepPresent(l.criticalWords, l.text, MAX_CRITICAL_PER_LINE),
       stability: clamp(Number(l.stability), 0, 1, 0.5),
       speed: clamp(Number(l.speed), 0.7, 1.2, 1),
       pauseAfterMs: Math.round(clamp(Number(l.pauseAfterMs), 0, 2000, 300)),

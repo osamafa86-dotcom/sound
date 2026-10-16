@@ -2,7 +2,15 @@ import { VOICES } from "@/lib/voices";
 import { applyPronunciationRules, findDictionary, listRules, type PronunciationRule } from "@/lib/pronunciation";
 import { elevenTTSModel, isTagGeneration, voiceSettingsFor } from "@/lib/providers/elevenlabs";
 import { firstMp3Frame, mp3Silence } from "@/lib/mp3Silence";
-import { cleanDeliveryTag, DRAMA_LIMITS, type DramaLine, type DramaScript } from "./types";
+import { applyIpa } from "@/lib/arabic/ipa";
+import { keepPresent } from "@/lib/tts/criticalWords";
+import {
+  cleanDeliveryTag,
+  DRAMA_LIMITS,
+  MAX_CRITICAL_PER_LINE,
+  type DramaLine,
+  type DramaScript,
+} from "./types";
 
 const API_BASE = "https://api.elevenlabs.io/v1";
 
@@ -16,14 +24,16 @@ const BYTES_PER_SEC = 192_000 / 8;
 /** سقف الوقفة الواحدة — ما فوقه يقطع إيقاع المشهد */
 const MAX_PAUSE_MS = 3000;
 /**
- * أرضية الثبات لجيل الوسوم: تحتها يتجاوز الجيل الرابع التشكيل في الأسطر
- * الانفعالية (قيس على «مَعْرَكَةُ أُحُد»: ثبات 0.3 مع وسم ← «أُحَد»، و0.65 ← صحيح).
+ * أرضية الثبات لجيل الوسوم: الثبات المنخفض يجعل الجيل الرابع يعود لأشهر قراءة
+ * للرسم (قيس على «مَعْرَكَةُ أُحُد»: 0.3 مع وسم ← خطأ 3 من 4). الضمان الحقيقي
+ * الكتابة الصوتية للكلمات الحساسة (صحيحة 4 من 4 حتى عند 0.3)، والأرضية
+ * حماية إضافية لما لم يُعلَّم منها.
  */
 export const TAGGED_MIN_STABILITY = 0.5;
 
 /**
- * نموذج الإنتاج الدرامي: الكلاسيكي الملتزم بالتشكيل (multilingual_v2) افتراضياً،
- * وELEVENLABS_DRAMA_MODEL يجرّب جيل الوسوم للدراما والبودكاست وحدهما بلا نشر.
+ * نموذج الإنتاج الدرامي: نموذج النطق الكلاسيكي (الجيل الرابع افتراضياً)،
+ * وELEVENLABS_DRAMA_MODEL يغيّره للدراما والبودكاست وحدهما بلا نشر.
  */
 export function dramaModel(): string {
   return process.env.ELEVENLABS_DRAMA_MODEL?.trim() || elevenTTSModel(false);
@@ -97,12 +107,21 @@ export async function renderDrama(
  * لأن السيناريو يصل من المتصفح بعد تعديل المستخدم.
  */
 export function performLine(
-  line: Pick<DramaLine, "text" | "deliveryTag" | "stability">,
+  line: Pick<DramaLine, "text" | "deliveryTag" | "stability" | "criticalWords">,
   tagged: boolean,
   rules: PronunciationRule[]
 ): { text: string; stability: number } {
-  const spoken = rules.length ? applyPronunciationRules(line.text, rules) : line.text;
-  if (!tagged) return { text: spoken, stability: line.stability };
+  const remembered = rules.length ? applyPronunciationRules(line.text, rules) : line.text;
+  if (!tagged) return { text: remembered, stability: line.stability };
+
+  // النطق المضمون: كلمات الكاتب الحساسة وكلمات ذاكرة النطق بكتابتها الصوتية
+  // (تُطهَّر ثانيةً لأن السيناريو يصل من المتصفح بعد تعديل المستخدم)
+  const forced = [
+    ...keepPresent(line.criticalWords, line.text, MAX_CRITICAL_PER_LINE),
+    ...rules.map((r) => r.alias).filter((alias) => remembered.includes(alias)),
+  ];
+  const spoken = applyIpa(remembered, forced);
+
   const stability = Math.max(TAGGED_MIN_STABILITY, line.stability);
   const tag = cleanDeliveryTag(line.deliveryTag);
   if (!tag) return { text: spoken, stability };

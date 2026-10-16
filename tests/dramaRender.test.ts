@@ -2,16 +2,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DramaScript } from "@/lib/drama/types";
 
 /**
- * إنتاج الدراما والبودكاست: الكلاسيكي الملتزم بالتشكيل افتراضياً (قاموس النطق
- * بلا وسوم)، والوقفة صمت حقيقي لا وسم <break> — وتجربة جيل الوسوم عبر
- * ELEVENLABS_DRAMA_MODEL تضع الوسم في الرأس والنطق نصاً بأرضية ثبات تحمي التشكيل.
+ * إنتاج الدراما والبودكاست على الجيل الرابع بنطق مضمون: الكلمات الحساسة
+ * وكلمات ذاكرة النطق بكتابتها الصوتية، ووسم الأداء في الرأس، وأرضية ثبات،
+ * والوقفة صمت حقيقي لا وسم <break> — ومفتاح الرجوع للجيل الثاني يعيد القاموس.
  */
 
 vi.mock("@/lib/pronunciation", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/pronunciation")>();
   return {
     ...real,
-    listRules: vi.fn(async () => [{ word: "الحاج", alias: "الحاجّ" }]),
+    listRules: vi.fn(async () => [{ word: "الحاج", alias: "الحَاجُّ" }]),
     findDictionary: vi.fn(async () => ({ id: "dict1", versionId: "ver1" })),
   };
 });
@@ -35,9 +35,10 @@ const SCRIPT: DramaScript = {
   lines: [
     {
       characterId: "narrator",
-      text: "عاد الحاج إلى البيت",
+      text: "عاد الحاج إلى جَبَلِ أُحُد",
       emotion: "حزين",
       deliveryTag: "[sad]",
+      criticalWords: ["أُحُد", "كلمة ليست في السطر"],
       stability: 0.8,
       speed: 1,
       pauseAfterMs: 800,
@@ -76,16 +77,19 @@ afterEach(() => {
 });
 
 describe("محرك الإنتاج الدرامي", () => {
-  it("الكلاسيكي افتراضياً: قاموس النطق، ولا وسوم ولا <break>، والثبات كما كتبه المحلل", async () => {
+  it("الجيل الرابع افتراضياً: الحساسة وذاكرة النطق صوتياً، والوسم في الرأس، ولا قاموس", async () => {
     const { bodies } = await render();
     expect(bodies).toHaveLength(2);
-    expect(bodies[0].model_id).toBe("eleven_multilingual_v2");
-    expect(bodies[0].text).toBe("عاد الحاج إلى البيت");
-    expect((bodies[0].voice_settings as { stability: number }).stability).toBe(0.8);
-    expect(bodies[0].pronunciation_dictionary_locators).toEqual([
-      { pronunciation_dictionary_id: "dict1", version_id: "ver1" },
-    ]);
-    for (const b of bodies) expect(String(b.text)).not.toMatch(/<break|\[/);
+    expect(bodies[0].model_id).toBe("eleven_v4");
+    expect(bodies[0].text).toBe("[sad] عاد /alħaːddʒu/ إلى جَبَلِ /ʔuħud/");
+    // الثبات الرصين يتجاهل الوسوم فيُسقف عند «طبيعي»
+    expect((bodies[0].voice_settings as { stability: number }).stability).toBe(0.5);
+    // وسم خارج القائمة المسموحة لا يصل المحرك
+    expect(bodies[1].text).toBe("وأغلق الباب");
+    for (const b of bodies) {
+      expect(String(b.text)).not.toContain("<break");
+      expect(b.pronunciation_dictionary_locators).toBeUndefined();
+    }
   });
 
   it("الوقفة صمت مُلصق بعد السطر بطولها الحقيقي", async () => {
@@ -95,15 +99,14 @@ describe("محرك الإنتاج الدرامي", () => {
     expect(result.durationSec).toBeCloseTo((37 * 626) / 24_000, 3);
   });
 
-  it("ELEVENLABS_DRAMA_MODEL=eleven_v4: الوسم في الرأس، والنطق نصاً، ولا قاموس", async () => {
-    const { bodies } = await render({ ELEVENLABS_DRAMA_MODEL: "eleven_v4" });
-    expect(bodies[0].model_id).toBe("eleven_v4");
-    expect(bodies[0].text).toBe("[sad] عاد الحاجّ إلى البيت");
-    // الثبات الرصين يتجاهل الوسوم فيُسقف عند «طبيعي»
-    expect((bodies[0].voice_settings as { stability: number }).stability).toBe(0.5);
-    // وسم خارج القائمة المسموحة لا يصل المحرك
-    expect(bodies[1].text).toBe("وأغلق الباب");
-    for (const b of bodies) expect(b.pronunciation_dictionary_locators).toBeUndefined();
+  it("مفتاح الرجوع للجيل الثاني: القاموس يعود، ولا وسوم ولا كتابة صوتية", async () => {
+    const { bodies } = await render({ ELEVENLABS_DRAMA_MODEL: "eleven_multilingual_v2" });
+    expect(bodies[0].model_id).toBe("eleven_multilingual_v2");
+    expect(bodies[0].text).toBe("عاد الحاج إلى جَبَلِ أُحُد");
+    expect((bodies[0].voice_settings as { stability: number }).stability).toBe(0.8);
+    expect(bodies[0].pronunciation_dictionary_locators).toEqual([
+      { pronunciation_dictionary_id: "dict1", version_id: "ver1" },
+    ]);
   });
 });
 

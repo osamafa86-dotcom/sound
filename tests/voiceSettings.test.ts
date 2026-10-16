@@ -47,20 +47,27 @@ describe("إعدادات الصوت حسب الجيل", () => {
 });
 
 describe("نموذج النطق لكل مسار", () => {
-  it("الكلاسيكي على multilingual_v2 الملتزم بالتشكيل، والتعبيري على الجيل الرابع", async () => {
+  it("المساران الكلاسيكي والتعبيري على الجيل الرابع افتراضياً", async () => {
     vi.resetModules();
-    const { elevenTTSModel } = await import("@/lib/providers/elevenlabs");
-    expect(elevenTTSModel(false)).toBe("eleven_multilingual_v2");
-    expect(elevenTTSModel(true)).toBe("eleven_v4");
-  });
-
-  it("ELEVENLABS_MODEL_ID يغيّر الكلاسيكي وحده", async () => {
-    vi.resetModules();
-    vi.stubEnv("ELEVENLABS_MODEL_ID", "eleven_v4");
     const { elevenTTSModel } = await import("@/lib/providers/elevenlabs");
     expect(elevenTTSModel(false)).toBe("eleven_v4");
     expect(elevenTTSModel(true)).toBe("eleven_v4");
+  });
+
+  it("ELEVENLABS_MODEL_ID يعيد الكلاسيكي وحده للجيل الثاني", async () => {
+    vi.resetModules();
+    vi.stubEnv("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2");
+    const { elevenTTSModel } = await import("@/lib/providers/elevenlabs");
+    expect(elevenTTSModel(false)).toBe("eleven_multilingual_v2");
+    expect(elevenTTSModel(true)).toBe("eleven_v4");
     vi.unstubAllEnvs();
+  });
+
+  it("الكتابة الصوتية لجيل الوسوم وحده — الجيل الثاني يلتزم بالحركات أصلاً", async () => {
+    const { spokenText } = await import("@/lib/providers/elevenlabs");
+    expect(spokenText("eleven_v4", "مَعْرَكَةُ أُحُد", ["أُحُد"])).toBe("مَعْرَكَةُ /ʔuħud/");
+    expect(spokenText("eleven_multilingual_v2", "مَعْرَكَةُ أُحُد", ["أُحُد"])).toBe("مَعْرَكَةُ أُحُد");
+    expect(spokenText("eleven_v4", "مَعْرَكَةُ أُحُد")).toBe("مَعْرَكَةُ أُحُد");
   });
 
   it("جيل الوسوم: الثالث فما بعده، لا الثاني ولا flash", () => {

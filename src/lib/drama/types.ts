@@ -26,6 +26,8 @@ export type DramaLine = {
   emotion: string;
   /** وسم أداء إنجليزي من DELIVERY_TAGS يجسّد الانفعال صوتياً — غيابه سرد محايد */
   deliveryTag?: string;
+  /** كلمات السطر الحساسة للنطق (أعلام، كلمات تتغير بحركاتها) — تُفرض صوتياً */
+  criticalWords?: string[];
   /** 0..1 — ينخفض في لحظات الانفعال ويرتفع في السرد المتزن */
   stability: number;
   /** 0.7..1.2 */
@@ -96,3 +98,6 @@ export const NO_DELIVERY_TAG = "none";
 export function cleanDeliveryTag(tag: unknown): string | undefined {
   return typeof tag === "string" && (DELIVERY_TAGS as readonly string[]).includes(tag) ? tag : undefined;
 }
+
+/** سقف الكلمات الحساسة للسطر الواحد — ما زاد يجعل السطر كتابةً صوتية لا عربية */
+export const MAX_CRITICAL_PER_LINE = 6;

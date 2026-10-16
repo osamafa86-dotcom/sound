@@ -23,6 +23,8 @@ export type TTSRequest = {
   liveliness?: number;
   /** تعزيز حضور الصوت وقربه */
   speakerBoost?: boolean;
+  /** كلمات حساسة للنطق تُفرض بالكتابة الصوتية على محركات جيل الوسوم */
+  criticalWords?: string[];
 };
 
 export type MusicRequest = {

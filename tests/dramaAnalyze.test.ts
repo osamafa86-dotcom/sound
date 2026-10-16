@@ -13,7 +13,7 @@ const SCRIPT = {
   musicPromptEn: "soft oud",
   characters: [{ id: "narrator", name: "الراوي", description: "", voiceId: "v-pal-m1", voiceReason: "" }],
   lines: [
-    { characterId: "narrator", text: "سطر أول", emotion: "حزين", deliveryTag: "[sad]", stability: 0.4, speed: 1, pauseAfterMs: 400 },
+    { characterId: "narrator", text: "عِنْدَ جَبَلِ أُحُد", emotion: "حزين", deliveryTag: "[sad]", criticalWords: ["أُحُد", "بَدْر"], stability: 0.4, speed: 1, pauseAfterMs: 400 },
     { characterId: "narrator", text: "سطر ثانٍ", emotion: "هادئ", deliveryTag: "none", stability: 0.7, speed: 1, pauseAfterMs: 300 },
     { characterId: "narrator", text: "سطر ثالث", emotion: "غاضب", deliveryTag: "[furious yelling]", stability: 0.3, speed: 1, pauseAfterMs: 300 },
   ],
@@ -54,6 +54,9 @@ describe("كاتب السيناريو", () => {
     expect(lineSchema.properties.deliveryTag.enum).toContain("[whispers]");
 
     expect(script.lines.map((l) => l.deliveryTag)).toEqual(["[sad]", undefined, undefined]);
+    // الكلمات الحساسة: مطلوبة في المخطط، ولا يبقى منها إلا ما ورد في السطر
+    expect(lineSchema.required).toContain("criticalWords");
+    expect(script.lines.map((l) => l.criticalWords)).toEqual([["أُحُد"], [], []]);
   });
 
   it("البودكاست: السلسلة نفسها والتطهير نفسه", async () => {
