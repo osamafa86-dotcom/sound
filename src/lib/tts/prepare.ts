@@ -5,6 +5,8 @@ import { classifyStyle, getStyle, layerTagPrefix, styleTagPrefix } from "@/lib/p
 import { hasAudioTags, stripAudioTags, stripBidiMarks } from "@/lib/performance/tags";
 import { elevenTTSModel, isTagGeneration } from "@/lib/providers/elevenlabs";
 import type { TTSRequest } from "@/lib/providers/types";
+import { findCriticalWords } from "@/lib/tts/criticalWords";
+import { VOICES } from "@/lib/voices";
 
 /** فشل تحضيري — يُعاد للعميل بنصه ورمز حالته كما هو */
 export type TTSPrepareError = { error: string; status: number };
@@ -17,7 +19,9 @@ export type TTSPrepareError = { error: string; status: number };
  */
 export async function prepareTTSRequest(
   body: unknown,
-  userId: string | null
+  userId: string | null,
+  /** البث المتدفق يتخطى تحليل الكلمات الحساسة كي لا يتأخر أول صوت */
+  opts: { detectCritical?: boolean } = {}
 ): Promise<{ request: TTSRequest } | TTSPrepareError> {
   const raw = (body ?? {}) as Record<string, unknown>;
 
@@ -79,11 +83,30 @@ export async function prepareTTSRequest(
   }
 
   // جيل الوسوم (الثالث فالرابع) لا يدعم قواميس النطق — ذاكرة النطق تُطبَّق
-  // نصياً قبل التوليد، وهو اليوم محرك المسارين التعبيري والكلاسيكي معاً
+  // نصياً قبل التوليد، وكلماتها تُفرض بعدها بالكتابة الصوتية مع الحساسة
   const elevenKey = process.env.ELEVENLABS_API_KEY;
-  if (elevenKey && isTagGeneration(elevenTTSModel(expressive))) {
+  const tagModel = isTagGeneration(elevenTTSModel(expressive));
+  let memoryWords: string[] = [];
+  if (elevenKey && tagModel) {
     const rules = await listRules(elevenKey).catch(() => []);
-    if (rules.length) text = applyPronunciationRules(text, rules);
+    if (rules.length) {
+      text = applyPronunciationRules(text, rules);
+      memoryWords = rules.map((r) => r.alias).filter((alias) => text.includes(alias));
+    }
+  }
+
+  // النطق المضمون: الكلمات الحساسة (أعلام، كلمات تتغير بحركاتها...) تُفرض
+  // بالكتابة الصوتية على جيل الوسوم — لأصوات ElevenLabs وحدها
+  const elevenVoice =
+    !!elevenVoiceId ||
+    voiceId.startsWith("custom:") ||
+    VOICES.find((v) => v.id === voiceId)?.provider === "elevenlabs";
+  let criticalWords: string[] | undefined;
+  if (tagModel && elevenVoice) {
+    const detected =
+      opts.detectCritical !== false && geminiKey ? await findCriticalWords(geminiKey, text) : [];
+    const all = [...new Set([...detected, ...memoryWords])];
+    if (all.length) criticalWords = all;
   }
 
   const request: TTSRequest = {
@@ -102,6 +125,7 @@ export async function prepareTTSRequest(
         .join(" ") || undefined,
     liveliness: typeof raw.liveliness === "number" ? raw.liveliness : undefined,
     speakerBoost: raw.speakerBoost !== false,
+    criticalWords,
   };
 
   // الثبات «الرصين» يتجاهل الوسوم رسمياً — وجودها في النص يسقف الثبات عند «طبيعي»

@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   const verdict = await checkLimit(req, "tts", user?.id ?? null);
   if (!verdict.allowed) return limitResponse(verdict);
 
-  const prepared = await prepareTTSRequest(body, user?.id ?? null);
+  const prepared = await prepareTTSRequest(body, user?.id ?? null, { detectCritical: false });
   if ("error" in prepared) {
     return NextResponse.json({ error: prepared.error }, { status: prepared.status });
   }

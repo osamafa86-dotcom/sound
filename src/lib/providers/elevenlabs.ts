@@ -2,6 +2,7 @@ import { VOICES } from "@/lib/voices";
 import { pcm16ToWav } from "@/lib/mockAudio";
 import { findDictionary } from "@/lib/pronunciation";
 import { splitTextForTTS } from "@/lib/tts/split";
+import { applyIpa } from "@/lib/arabic/ipa";
 import {
   buildCompositionPlan,
   buildElevenMusicPrompt,
@@ -12,13 +13,13 @@ import type { AudioResult, MusicProvider, MusicRequest, TTSProvider, TTSRequest 
 const API_BASE = "https://api.elevenlabs.io/v1";
 
 /**
- * نموذج النطق الكلاسيكي (بلا وسوم) — الجيل الثاني multilingual_v2 عمداً:
- * يلتزم بالتشكيل حرفياً ويدعم قاموس النطق، والتشكيل وعد المنصة («عَلَم/عِلْم»).
- * قياس تشرين الأول 2026 على «أُحُد»: الجيل الرابع يلتزم بالحركات عند الثبات
- * المتوسط، ويتجاوزها مع الثبات المنخفض ووسوم الأداء فيقرأ «أُحَد» — فبقي
- * التعبيري وحده على الرابع. ELEVENLABS_MODEL_ID مفتاح تجربة بلا نشر.
+ * نموذج النطق الكلاسيكي (بلا وسوم) — الجيل الرابع، بنطق مضمون:
+ * الجيل الرابع يقرأ الحركات عادةً لكنه قد يعود لأشهر قراءة للرسم مع الثبات
+ * المنخفض ووسوم الأداء (قيس: «أُحُد» ← «أُحَد»). فالكلمات الحساسة تُفرض
+ * بالكتابة الصوتية (/ʔuħud/: صحيحة 4 من 4 في أسوأ الإعدادات) — انظر
+ * lib/arabic/ipa. ELEVENLABS_MODEL_ID=eleven_multilingual_v2 مفتاح رجوع.
  */
-const MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? "eleven_multilingual_v2";
+const MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? "eleven_v4";
 /**
  * المحرك التعبيري — الافتراضي الجيل الرابع (أيلول 2026): الأول عالمياً
  * في تقييم Artificial Analysis بـ94 لغة بينها العربية، ويقبل طيف
@@ -30,6 +31,14 @@ const V3_MODEL_ID = process.env.ELEVENLABS_V3_MODEL ?? "eleven_v4";
 /** نموذج النطق الفعلي لطلب ما — التعبيري للوسوم والأساليب، والكلاسيكي لما عداه */
 export function elevenTTSModel(expressive: boolean): string {
   return expressive ? V3_MODEL_ID : MODEL_ID;
+}
+
+/**
+ * النص كما يصل المحرك: الكلمات الحساسة بكتابتها الصوتية على جيل الوسوم
+ * (الصيغة الموثقة لضبط النطق فيه)، وكما هو للجيل الثاني الملتزم بالحركات.
+ */
+export function spokenText(modelId: string, text: string, criticalWords?: readonly string[]): string {
+  return criticalWords?.length && isTagGeneration(modelId) ? applyIpa(text, criticalWords) : text;
 }
 
 /**
@@ -177,7 +186,7 @@ export function elevenLabsTTS(apiKey: string): TTSProvider {
 
       // النصوص الطويلة تُقسَّم عند حدود الجمل وتُدمج مخرجاتها (mp3 مباشرة، وwav عبر PCM خام)
       // بادئة الأسلوب تُحقن في كل جزء كي يبقى الأداء موحداً عبر الأجزاء
-      const chunks = splitTextForTTS(req.text);
+      const chunks = splitTextForTTS(spokenText(model, req.text, req.criticalWords));
       const buffers: Buffer[] = [];
       for (const chunk of chunks) {
         buffers.push(
@@ -241,7 +250,7 @@ export async function elevenLabsTTSStream(apiKey: string, req: TTSRequest): Prom
       method: "POST",
       headers: { "xi-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({
-        text: req.stylePrefix ? `${req.stylePrefix} ${req.text}` : req.text,
+        text: [req.stylePrefix, spokenText(model, req.text, req.criticalWords)].filter(Boolean).join(" "),
         model_id: model,
         voice_settings: voiceSettings,
         ...(dict?.id && {
