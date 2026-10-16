@@ -13,6 +13,7 @@ import {
   STYLE_LAYERS,
 } from "@/lib/performance/styles";
 import { LRI, PDI, SPOKEN_CUES, TAG_GROUPS, insertTagAt, stutterize } from "@/lib/performance/tags";
+import { CRITICAL_HEADER, arabicToIpa, decodeCriticalHeader, tokenizeArabic } from "@/lib/arabic/ipa";
 import { authHeaders } from "@/lib/supabase";
 
 type CustomVoice = { id: string; name: string };
@@ -419,6 +420,71 @@ export default function TTSStudio() {
   // الشخصنة: الافتراضات من ذوق المستخدم المتعلم لا من ترتيب القائمة
   const [personalized, setPersonalized] = useState("");
 
+  /**
+   * 🎯 النطق المضمون: الكلمات المُبرزة تُرسل لمحرك الجيل الرابع بكتابتها
+   * الصوتية فلا يخطئ حركاتها. null = تلقائي (يكتشفها الخادم عند التوليد)،
+   * وقائمة = اختيار المستخدم الصريح (اكتشاف مُراجَع أو نقرات على الكلمات).
+   */
+  const [guarded, setGuarded] = useState<string[] | null>(null);
+  /** ما فرضه الخادم فعلاً في آخر توليد — يُبرز في الوضع التلقائي */
+  const [enforced, setEnforced] = useState<string[]>([]);
+  const [guardOpen, setGuardOpen] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [guardMsg, setGuardMsg] = useState("");
+
+  const guardTokens = useMemo(
+    () =>
+      guardOpen
+        ? tokenizeArabic(text).map((t) => ({ ...t, ipa: t.word ? arabicToIpa(t.text) : null }))
+        : [],
+    [guardOpen, text]
+  );
+  /** الكلمات المُبرزة الحاضرة في النص الحالي */
+  const shownGuard = useMemo(
+    () => [...new Set(guarded ?? enforced)].filter((w) => text.includes(w)),
+    [guarded, enforced, text]
+  );
+
+  /** الفرض الصوتي لأصوات ElevenLabs وحدها (محرك الجيل الرابع) */
+  const guardApplies =
+    voiceId.startsWith("custom:") ||
+    voiceId.startsWith("clone-") ||
+    voices.find((v) => v.id === voiceId)?.provider === "elevenlabs";
+
+  async function detectCritical() {
+    if (!text.trim()) return;
+    setGuardMsg("");
+    setDetecting(true);
+    try {
+      const res = await fetch("/api/tts/critical", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "تعذّر الاكتشاف");
+      const words: string[] = (data.words ?? []).map((w: { word: string }) => w.word);
+      setGuarded(words);
+      setGuardOpen(true);
+      setGuardMsg(
+        data.hint ??
+          (words.length
+            ? `وُجدت ${words.length} كلمة حساسة — راجعها وانقر أي كلمة لإضافتها أو إلغائها`
+            : "لم يجد المحلل كلمات حساسة — انقر أي كلمة مشكولة لتفرض نطقها يدوياً")
+      );
+    } catch (e) {
+      setGuardMsg(e instanceof Error ? e.message : "تعذّر الاكتشاف");
+    } finally {
+      setDetecting(false);
+    }
+  }
+
+  /** نقرة على كلمة: تفرض نطقها أو تلغيه — وتنقل المحرر إلى الاختيار اليدوي */
+  function toggleGuard(word: string) {
+    const base = guarded ?? enforced;
+    setGuarded(base.includes(word) ? base.filter((w) => w !== word) : [...base, word]);
+  }
+
   // كتالوج المنصة الفعلي من الخادم — الأصوات المتاحة حسب المفاتيح المضبوطة (ElevenLabs / Azure)
   useEffect(() => {
     let cancelled = false;
@@ -548,12 +614,14 @@ export default function TTSStudio() {
           layerIds: expressive ? layers : [],
           directorNote: expressive ? directorNote.trim() : "",
           liveliness,
+          criticalWords: guarded ?? undefined,
         }),
       });
     } catch {
       return false;
     }
     if (!res.ok || !res.body) return false;
+    setEnforced(decodeCriticalHeader(res.headers.get(CRITICAL_HEADER)));
 
     const ms = new MediaSource();
     const msUrl = URL.createObjectURL(ms);
@@ -646,6 +714,7 @@ export default function TTSStudio() {
           directorNote: expressive ? directorNote.trim() : "",
           liveliness,
           takes,
+          criticalWords: guarded ?? undefined,
         }),
       });
       if (!res.ok) {
@@ -670,11 +739,13 @@ export default function TTSStudio() {
         );
         setTakesMock(!!data.mock);
         setTakesResults(items);
+        setEnforced(Array.isArray(data.criticalWords) ? data.criticalWords : []);
         return;
       }
 
       const mock = res.headers.get("X-Mock") === "1";
       const fellBack = res.headers.has("X-Fallback");
+      setEnforced(decodeCriticalHeader(res.headers.get(CRITICAL_HEADER)));
       const blob = await res.blob();
       const ext = blob.type === "audio/mpeg" ? "mp3" : "wav";
       setResult({ url: URL.createObjectURL(blob), blob, mock, ext, fellBack });
@@ -765,6 +836,98 @@ export default function TTSStudio() {
             placeholder={"اكتب النص هنا...\nمثال: أهلاً بكم في منصة مقام، حيث تتحول الكلمات إلى صوتٍ نابضٍ بالحياة."}
             className="min-h-72 w-full resize-y rounded-2xl border border-border-soft bg-surface-card p-5 leading-relaxed outline-none transition-colors focus:border-primary"
           />
+          {/* 🎯 النطق المضمون — الكلمات المُبرزة تُنطق بكتابتها الصوتية فلا تُخطأ حركاتها */}
+          <div className="rounded-2xl border border-border-soft bg-surface-card p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-bold">
+                  🎯 النطق المضمون
+                  <span className="mx-2 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                    {guarded === null
+                      ? enforced.length
+                        ? `فُرضت ${shownGuard.length} كلمة تلقائياً`
+                        : "تلقائي"
+                      : `${shownGuard.length} كلمة باختيارك`}
+                  </span>
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-muted">
+                  الكلمات المُبرزة تصل المحرك بكتابتها الصوتية فلا يخطئ حركاتها — الأعلام
+                  (أُحُد) والكلمات التي يتغير معناها بحركاتها (عِلْم/عَلَم). انقر أي كلمة مشكولة
+                  لتفرض نطقها أو تلغيه.
+                  {!guardApplies && " يعمل مع أصوات ElevenLabs وحدها."}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={detectCritical}
+                  disabled={detecting || !text.trim()}
+                  className="rounded-lg border border-border-soft px-2.5 py-1.5 text-xs text-muted transition-colors hover:border-primary/50 hover:text-body disabled:opacity-50"
+                >
+                  {detecting ? "جارٍ الاكتشاف..." : "🔍 اكتشف الكلمات الحساسة"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGuardOpen((o) => !o)}
+                  aria-expanded={guardOpen}
+                  className="rounded-lg border border-border-soft px-2.5 py-1.5 text-xs text-muted transition-colors hover:border-primary/50 hover:text-body"
+                >
+                  {guardOpen ? "إخفاء المعاينة" : "عرض المعاينة"}
+                </button>
+                {guarded !== null && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGuarded(null);
+                      setGuardMsg("عاد الاكتشاف تلقائياً عند كل توليد");
+                    }}
+                    className="rounded-lg border border-border-soft px-2.5 py-1.5 text-xs text-muted transition-colors hover:border-primary/50 hover:text-body"
+                    title="يتخلى عن اختيارك ويترك الخادم يكتشف الكلمات الحساسة عند كل توليد"
+                  >
+                    ↺ تلقائي
+                  </button>
+                )}
+              </div>
+            </div>
+            {guardMsg && <p className="mt-2 text-xs text-muted">{guardMsg}</p>}
+            {guardOpen && (
+              <div
+                dir="rtl"
+                className="mt-3 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-xl border border-border-soft p-3 leading-loose"
+              >
+                {!text.trim() ? (
+                  <span className="text-xs text-muted">اكتب النص أولاً</span>
+                ) : (
+                  guardTokens.map((t, i) => {
+                    if (!t.ipa) return <span key={i}>{t.text}</span>;
+                    const on = shownGuard.includes(t.text);
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => toggleGuard(t.text)}
+                        aria-pressed={on}
+                        title={on ? `يُنطق /${t.ipa}/ — انقر للإلغاء` : `انقر لفرض النطق /${t.ipa}/`}
+                        className={`rounded px-0.5 transition-colors ${
+                          on
+                            ? "bg-primary/25 font-semibold text-primary"
+                            : "underline decoration-dotted decoration-1 underline-offset-4 hover:bg-primary/10"
+                        }`}
+                      >
+                        {t.text}
+                      </button>
+                    );
+                  })
+                )}
+                {text.trim() && !guardTokens.some((t) => t.ipa) && (
+                  <p className="mt-2 text-xs text-muted">
+                    لا كلمات مشكولة كاملاً بعد — شغّل «المستشار الصوتي» ليشكّل النص، أو شكّل الكلمة
+                    التي تريد فرض نطقها.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
           {/* المخرج الصوتي — المحرك التعبيري (الجيل الثالث) */}
           <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">

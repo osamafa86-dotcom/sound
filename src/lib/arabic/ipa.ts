@@ -240,3 +240,41 @@ export function applyIpa(text: string, words: readonly string[]): string {
   }
   return out;
 }
+
+/** الكلمات التي تُفرض فعلاً: ما تحسمه حركاته وحده (غيرها يبقى عربياً) */
+export function enforceableWords(words: readonly string[]): string[] {
+  return [...new Set(words)].filter((w) => arabicToIpa(w) !== null);
+}
+
+/**
+ * تقطيع النص كلماتٍ عربية وما بينها كما هو — لمعاينة المحرر التي تُبرز
+ * الكلمات المفروضة وتجعل كل كلمة مشكولة قابلة للنقر.
+ */
+export function tokenizeArabic(text: string): { text: string; word: boolean }[] {
+  const out: { text: string; word: boolean }[] = [];
+  const re = new RegExp(`[${WORD_CHAR}]+`, "g");
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    const at = m.index ?? 0;
+    if (at > last) out.push({ text: text.slice(last, at), word: false });
+    out.push({ text: m[0], word: true });
+    last = at + m[0].length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last), word: false });
+  return out;
+}
+
+/** ترويسة الكلمات المفروضة في استجابة الصوت (ASCII آمن) — وقراءتها في المتصفح */
+export const CRITICAL_HEADER = "X-Critical-Words";
+export function encodeCriticalHeader(words: readonly string[]): string {
+  return encodeURIComponent(JSON.stringify(words));
+}
+export function decodeCriticalHeader(value: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(decodeURIComponent(value));
+    return Array.isArray(parsed) ? parsed.filter((w): w is string => typeof w === "string") : [];
+  } catch {
+    return [];
+  }
+}

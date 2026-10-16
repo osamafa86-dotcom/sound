@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ElevenLabsError, elevenLabsTTSStream } from "@/lib/providers/elevenlabs";
 import { splitTextForTTS } from "@/lib/tts/split";
 import { prepareTTSRequest } from "@/lib/tts/prepare";
+import { CRITICAL_HEADER, encodeCriticalHeader } from "@/lib/arabic/ipa";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
 import { logUsage } from "@/lib/usage";
@@ -51,6 +52,9 @@ export async function POST(req: NextRequest) {
         "Cache-Control": "no-store",
         // منع أي وسيط من تجميع البث قبل تمريره
         "X-Accel-Buffering": "no",
+        ...(prepared.request.criticalWords?.length && {
+          [CRITICAL_HEADER]: encodeCriticalHeader(prepared.request.criticalWords),
+        }),
       },
     });
   } catch (e) {
