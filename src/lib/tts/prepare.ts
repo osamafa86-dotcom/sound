@@ -5,7 +5,8 @@ import { classifyStyle, getStyle, layerTagPrefix, styleTagPrefix } from "@/lib/p
 import { hasAudioTags, stripAudioTags, stripBidiMarks } from "@/lib/performance/tags";
 import { elevenTTSModel, isTagGeneration } from "@/lib/providers/elevenlabs";
 import type { TTSRequest } from "@/lib/providers/types";
-import { findCriticalWords } from "@/lib/tts/criticalWords";
+import { enforceableWords } from "@/lib/arabic/ipa";
+import { findCriticalWords, keepPresent } from "@/lib/tts/criticalWords";
 import { VOICES } from "@/lib/voices";
 
 /** فشل تحضيري — يُعاد للعميل بنصه ورمز حالته كما هو */
@@ -103,9 +104,12 @@ export async function prepareTTSRequest(
     VOICES.find((v) => v.id === voiceId)?.provider === "elevenlabs";
   let criticalWords: string[] | undefined;
   if (tagModel && elevenVoice) {
+    // قائمة المحرر الصريحة (راجعها المستخدم أو علّمها بنقرة) تتقدم على الاكتشاف الآلي
+    const chosen = Array.isArray(raw.criticalWords) ? keepPresent(raw.criticalWords, text) : null;
     const detected =
-      opts.detectCritical !== false && geminiKey ? await findCriticalWords(geminiKey, text) : [];
-    const all = [...new Set([...detected, ...memoryWords])];
+      chosen ??
+      (opts.detectCritical !== false && geminiKey ? await findCriticalWords(geminiKey, text) : []);
+    const all = enforceableWords([...detected, ...memoryWords]);
     if (all.length) criticalWords = all;
   }
 

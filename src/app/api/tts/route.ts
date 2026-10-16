@@ -4,6 +4,7 @@ import { TTS_SAMPLE_ONE_IN, autoEvalTTS, sampleOneIn } from "@/lib/autoEval";
 import { elevenLabsTranscribe } from "@/lib/providers/elevenlabs";
 import { pronunciationAccuracy } from "@/lib/textCompare";
 import { prepareTTSRequest } from "@/lib/tts/prepare";
+import { CRITICAL_HEADER, encodeCriticalHeader } from "@/lib/arabic/ipa";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
 import { getUserFromRequest } from "@/lib/serverAuth";
 import { logUsage } from "@/lib/usage";
@@ -79,6 +80,10 @@ export async function POST(req: NextRequest) {
         "X-Provider": result.provider,
         "X-Mock": result.mock ? "1" : "0",
         ...(fallbackReason && { "X-Fallback": encodeURIComponent(fallbackReason.slice(0, 200)) }),
+        // الكلمات التي فُرض نطقها صوتياً — يُبرزها المحرر
+        ...(request.criticalWords?.length && {
+          [CRITICAL_HEADER]: encodeCriticalHeader(request.criticalWords),
+        }),
       },
     });
   }
@@ -120,6 +125,7 @@ export async function POST(req: NextRequest) {
       takes: takesPayload,
       provider: results[0].provider,
       mock: !!results[0].mock,
+      criticalWords: request.criticalWords ?? [],
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "تعذّر التوليد";

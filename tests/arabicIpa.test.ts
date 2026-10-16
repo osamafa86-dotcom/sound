@@ -81,3 +81,26 @@ describe("استبدال الكلمات الحساسة في النص", () => {
     expect(stripDiacritics("مَعْرَكَةُ أُحُدٍ")).toBe("معركة أحد");
   });
 });
+
+describe("أدوات المحرر", () => {
+  it("tokenizeArabic يقطّع الكلمات ويُبقي ما بينها كما هو", async () => {
+    const { tokenizeArabic } = await import("@/lib/arabic/ipa");
+    const tokens = tokenizeArabic("مَعْرَكَةُ أُحُد، [sad] تمّت.");
+    expect(tokens.map((t) => t.text).join("")).toBe("مَعْرَكَةُ أُحُد، [sad] تمّت.");
+    expect(tokens.filter((t) => t.word).map((t) => t.text)).toEqual(["مَعْرَكَةُ", "أُحُد", "sad", "تمّت"]);
+  });
+
+  it("enforceableWords يُبقي ما تحسمه حركاته وحده", async () => {
+    const { enforceableWords } = await import("@/lib/arabic/ipa");
+    expect(enforceableWords(["أُحُد", "أحد", "أُحُد", "مَعركة"])).toEqual(["أُحُد"]);
+  });
+
+  it("ترويسة الكلمات المفروضة: ترميز آمن ذهاباً وإياباً، وأي تلف يعود فارغاً", async () => {
+    const { encodeCriticalHeader, decodeCriticalHeader } = await import("@/lib/arabic/ipa");
+    const encoded = encodeCriticalHeader(["أُحُد", "عِلْمٌ"]);
+    expect(/^[\x20-\x7e]+$/.test(encoded)).toBe(true);
+    expect(decodeCriticalHeader(encoded)).toEqual(["أُحُد", "عِلْمٌ"]);
+    expect(decodeCriticalHeader(null)).toEqual([]);
+    expect(decodeCriticalHeader("%E0%A4%A")).toEqual([]);
+  });
+});
