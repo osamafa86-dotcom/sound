@@ -47,18 +47,18 @@ describe("إعدادات الصوت حسب الجيل", () => {
 });
 
 describe("نموذج النطق لكل مسار", () => {
-  it("المساران الكلاسيكي والتعبيري على الجيل الرابع افتراضياً", async () => {
+  it("الكلاسيكي على multilingual_v2 الملتزم بالتشكيل، والتعبيري على الجيل الرابع", async () => {
     vi.resetModules();
     const { elevenTTSModel } = await import("@/lib/providers/elevenlabs");
-    expect(elevenTTSModel(false)).toBe("eleven_v4");
+    expect(elevenTTSModel(false)).toBe("eleven_multilingual_v2");
     expect(elevenTTSModel(true)).toBe("eleven_v4");
   });
 
-  it("ELEVENLABS_MODEL_ID يعيد الكلاسيكي وحده للجيل الثاني", async () => {
+  it("ELEVENLABS_MODEL_ID يغيّر الكلاسيكي وحده", async () => {
     vi.resetModules();
-    vi.stubEnv("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2");
+    vi.stubEnv("ELEVENLABS_MODEL_ID", "eleven_v4");
     const { elevenTTSModel } = await import("@/lib/providers/elevenlabs");
-    expect(elevenTTSModel(false)).toBe("eleven_multilingual_v2");
+    expect(elevenTTSModel(false)).toBe("eleven_v4");
     expect(elevenTTSModel(true)).toBe("eleven_v4");
     vi.unstubAllEnvs();
   });

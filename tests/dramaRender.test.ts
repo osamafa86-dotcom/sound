@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DramaScript } from "@/lib/drama/types";
 
 /**
- * إنتاج الدراما والبودكاست على الجيل الرابع: وسم الأداء في رأس السطر،
- * ذاكرة النطق نصاً لا قاموساً، والوقفة صمت حقيقي لا وسم <break> —
- * ومفتاح الرجوع للجيل الثاني يعيد القاموس ويُسقط الوسوم.
+ * إنتاج الدراما والبودكاست: الكلاسيكي الملتزم بالتشكيل افتراضياً (قاموس النطق
+ * بلا وسوم)، والوقفة صمت حقيقي لا وسم <break> — وتجربة جيل الوسوم عبر
+ * ELEVENLABS_DRAMA_MODEL تضع الوسم في الرأس والنطق نصاً بأرضية ثبات تحمي التشكيل.
  */
 
 vi.mock("@/lib/pronunciation", async (importOriginal) => {
@@ -76,19 +76,16 @@ afterEach(() => {
 });
 
 describe("محرك الإنتاج الدرامي", () => {
-  it("الجيل الرابع افتراضياً: وسم الأداء في الرأس، والنطق نصاً، ولا <break> ولا قاموس", async () => {
+  it("الكلاسيكي افتراضياً: قاموس النطق، ولا وسوم ولا <break>، والثبات كما كتبه المحلل", async () => {
     const { bodies } = await render();
     expect(bodies).toHaveLength(2);
-    expect(bodies[0].model_id).toBe("eleven_v4");
-    expect(bodies[0].text).toBe("[sad] عاد الحاجّ إلى البيت");
-    // الثبات الرصين يتجاهل الوسوم فيُسقف عند «طبيعي»
-    expect((bodies[0].voice_settings as { stability: number }).stability).toBe(0.5);
-    // وسم خارج القائمة المسموحة لا يصل المحرك
-    expect(bodies[1].text).toBe("وأغلق الباب");
-    for (const b of bodies) {
-      expect(String(b.text)).not.toContain("<break");
-      expect(b.pronunciation_dictionary_locators).toBeUndefined();
-    }
+    expect(bodies[0].model_id).toBe("eleven_multilingual_v2");
+    expect(bodies[0].text).toBe("عاد الحاج إلى البيت");
+    expect((bodies[0].voice_settings as { stability: number }).stability).toBe(0.8);
+    expect(bodies[0].pronunciation_dictionary_locators).toEqual([
+      { pronunciation_dictionary_id: "dict1", version_id: "ver1" },
+    ]);
+    for (const b of bodies) expect(String(b.text)).not.toMatch(/<break|\[/);
   });
 
   it("الوقفة صمت مُلصق بعد السطر بطولها الحقيقي", async () => {
@@ -98,13 +95,15 @@ describe("محرك الإنتاج الدرامي", () => {
     expect(result.durationSec).toBeCloseTo((37 * 626) / 24_000, 3);
   });
 
-  it("مفتاح الرجوع للجيل الثاني: القاموس يعود والوسوم تُسقط", async () => {
-    const { bodies } = await render({ ELEVENLABS_V3_MODEL: "eleven_multilingual_v2" });
-    expect(bodies[0].model_id).toBe("eleven_multilingual_v2");
-    expect(bodies[0].text).toBe("عاد الحاج إلى البيت");
-    expect(bodies[0].pronunciation_dictionary_locators).toEqual([
-      { pronunciation_dictionary_id: "dict1", version_id: "ver1" },
-    ]);
+  it("ELEVENLABS_DRAMA_MODEL=eleven_v4: الوسم في الرأس، والنطق نصاً، ولا قاموس", async () => {
+    const { bodies } = await render({ ELEVENLABS_DRAMA_MODEL: "eleven_v4" });
+    expect(bodies[0].model_id).toBe("eleven_v4");
+    expect(bodies[0].text).toBe("[sad] عاد الحاجّ إلى البيت");
+    // الثبات الرصين يتجاهل الوسوم فيُسقف عند «طبيعي»
+    expect((bodies[0].voice_settings as { stability: number }).stability).toBe(0.5);
+    // وسم خارج القائمة المسموحة لا يصل المحرك
+    expect(bodies[1].text).toBe("وأغلق الباب");
+    for (const b of bodies) expect(b.pronunciation_dictionary_locators).toBeUndefined();
   });
 });
 
@@ -112,6 +111,15 @@ describe("أداء السطر", () => {
   it("بلا وسم يبقى النص والثبات كما هما", async () => {
     const { performLine } = await import("@/lib/drama/render");
     expect(performLine({ text: "سلام", stability: 0.8 }, true, [])).toEqual({ text: "سلام", stability: 0.8 });
+  });
+
+  it("جيل الوسوم: أرضية ثبات 0.5 تحمي التشكيل في الأسطر الانفعالية", async () => {
+    const { performLine } = await import("@/lib/drama/render");
+    const line = { text: "هٰذِهِ مَعْرَكَةُ أُحُد", stability: 0.3 };
+    expect(performLine({ ...line, deliveryTag: "[dramatically]" }, true, []).stability).toBe(0.5);
+    expect(performLine(line, true, []).stability).toBe(0.5);
+    // الكلاسيكي يلتزم بالتشكيل في كل ثبات فيبقى الأداء الانفعالي كما كُتب
+    expect(performLine(line, false, []).stability).toBe(0.3);
   });
 
   it("الوقفة على مقطع غير مفهوم لا تفسده", async () => {
