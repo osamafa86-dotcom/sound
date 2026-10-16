@@ -1,24 +1,36 @@
 import { VOICES } from "@/lib/voices";
-import { findDictionary } from "@/lib/pronunciation";
-import { DRAMA_LIMITS, type DramaScript } from "./types";
+import { applyPronunciationRules, findDictionary, listRules, type PronunciationRule } from "@/lib/pronunciation";
+import { elevenTTSModel, isTagGeneration, voiceSettingsFor } from "@/lib/providers/elevenlabs";
+import { firstMp3Frame, mp3Silence } from "@/lib/mp3Silence";
+import { cleanDeliveryTag, DRAMA_LIMITS, type DramaLine, type DramaScript } from "./types";
 
 const API_BASE = "https://api.elevenlabs.io/v1";
-const MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? "eleven_multilingual_v2";
 
 /**
  * صيغة الإخراج: MP3 لأن PCM الخام محجوز لباقة Pro لدى ElevenLabs.
- * الأسطر تُدمج بترتيبها، والوقفات تُطلب داخل النص عبر وسم break
- * فتُنتَج ضمن الصوت نفسه — أدق من محاولة حقن صمت في تيار MP3 مضغوط.
+ * الأسطر تُدمج بترتيبها، والوقفة بعد كل سطر صمت MP3 حقيقي بإطارات السطر
+ * نفسه — جيل الوسوم لا يقبل وسم <break>، والصمت المُلصق أدق منه أصلاً.
  */
 const OUTPUT_FORMAT = process.env.ELEVENLABS_MP3_QUALITY ?? "mp3_44100_192";
 const BYTES_PER_SEC = 192_000 / 8;
+/** سقف الوقفة الواحدة — ما فوقه يقطع إيقاع المشهد */
+const MAX_PAUSE_MS = 3000;
+
+type Dictionary = { id: string; versionId: string } | null;
 
 export async function renderDrama(
   apiKey: string,
   script: DramaScript,
   onProgress?: (done: number, total: number) => void
 ): Promise<{ audio: Buffer; durationSec: number }> {
-  const dict = await findDictionary(apiKey).catch(() => null);
+  // الدراما والبودكاست أداء انفعالي — المحرك التعبيري (الجيل الرابع افتراضياً)
+  const model = elevenTTSModel(true);
+  const tagged = isTagGeneration(model);
+
+  // ذاكرة النطق: نصاً لجيل الوسوم (لا يدعم القواميس)، وقاموساً للجيل الثاني
+  const rules: PronunciationRule[] = tagged ? await listRules(apiKey).catch(() => []) : [];
+  const dict: Dictionary = tagged ? null : await findDictionary(apiKey).catch(() => null);
+
   const voiceOf = new Map(script.characters.map((c) => [c.id, c.voiceId]));
 
   const total = script.lines.length;
@@ -30,7 +42,7 @@ export async function renderDrama(
    * (409 already_running). فنجمع أسطر كل صوت في مسار يُنفَّذ بالتسلسل،
    * والمسارات المختلفة تعمل معاً — يبقى الزمن قصيراً بلا تعارض.
    */
-  const byVoice = new Map<string, { line: (typeof script.lines)[number]; index: number }[]>();
+  const byVoice = new Map<string, { line: DramaLine; index: number }[]>();
   script.lines.forEach((line, index) => {
     const catalogVoice = VOICES.find((v) => v.id === voiceOf.get(line.characterId));
     const elevenVoiceId = catalogVoice?.elevenVoiceId ?? VOICES[0].elevenVoiceId!;
@@ -44,14 +56,18 @@ export async function renderDrama(
     await Promise.all(
       voiceTracks.slice(i, i + DRAMA_LIMITS.concurrency).map(async ([elevenVoiceId, items]) => {
         for (const { line, index } of items) {
-          segments[index] = await synthesizeLine(
-            apiKey,
-            elevenVoiceId,
-            withPause(line.text, line.pauseAfterMs),
-            line.stability,
-            line.speed,
-            dict
-          );
+          const { text, stability } = performLine(line, tagged, rules);
+          const speech = await synthesizeLine(apiKey, elevenVoiceId, {
+            text,
+            model_id: model,
+            voice_settings: voiceSettingsFor(model, { stability, speed: line.speed }),
+            ...(dict?.id && {
+              pronunciation_dictionary_locators: [
+                { pronunciation_dictionary_id: dict.id, ...(dict.versionId && { version_id: dict.versionId }) },
+              ],
+            }),
+          });
+          segments[index] = withPause(speech, line.pauseAfterMs);
           done++;
           onProgress?.(done, total);
         }
@@ -63,20 +79,34 @@ export async function renderDrama(
   return { audio, durationSec: audio.length / BYTES_PER_SEC };
 }
 
-/** وقفة بعد السطر تُطلب من المحرك نفسه — يدعمها نموذج multilingual */
-function withPause(text: string, pauseMs: number): string {
-  const seconds = Math.min(3, Math.max(0, pauseMs / 1000));
-  if (seconds < 0.15) return text;
-  return `${text} <break time="${seconds.toFixed(1)}s" />`;
+/**
+ * نص السطر كما يُرسل للمحرك: ذاكرة النطق مطبّقة، ووسم الأداء في رأسه لجيل
+ * الوسوم (الجيل الثاني يقرأ الوسوم كلمات فلا يصله). الوسم يُطهَّر هنا ثانيةً
+ * لأن السيناريو يصل من المتصفح بعد تعديل المستخدم.
+ */
+export function performLine(
+  line: Pick<DramaLine, "text" | "deliveryTag" | "stability">,
+  tagged: boolean,
+  rules: PronunciationRule[]
+): { text: string; stability: number } {
+  const spoken = rules.length ? applyPronunciationRules(line.text, rules) : line.text;
+  const tag = tagged ? cleanDeliveryTag(line.deliveryTag) : undefined;
+  if (!tag) return { text: spoken, stability: line.stability };
+  // الثبات «الرصين» يتجاهل الوسوم — كما في استوديو النطق يُسقف عند «طبيعي»
+  return { text: `${tag} ${spoken}`, stability: line.stability >= 0.75 ? 0.5 : line.stability };
+}
+
+/** وقفة بعد السطر: صمت حقيقي بإطارات السطر نفسه (لا شيء إن لم يُفهم الإطار) */
+export function withPause(speech: Buffer, pauseMs: number): Buffer {
+  const ms = Math.min(MAX_PAUSE_MS, Math.max(0, pauseMs));
+  const frame = ms > 0 ? firstMp3Frame(speech) : null;
+  return frame ? Buffer.concat([speech, mp3Silence(ms, frame)]) : speech;
 }
 
 async function synthesizeLine(
   apiKey: string,
   elevenVoiceId: string,
-  text: string,
-  stability: number,
-  speed: number,
-  dict: { id: string; versionId: string } | null,
+  body: Record<string, unknown>,
   attempt = 0
 ): Promise<Buffer> {
   const res = await fetch(
@@ -84,20 +114,7 @@ async function synthesizeLine(
     {
       method: "POST",
       headers: { "xi-api-key": apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text,
-        model_id: MODEL_ID,
-        voice_settings: {
-          stability,
-          similarity_boost: 0.75,
-          speed: Math.min(1.2, Math.max(0.7, speed)),
-        },
-        ...(dict?.id && {
-          pronunciation_dictionary_locators: [
-            { pronunciation_dictionary_id: dict.id, ...(dict.versionId && { version_id: dict.versionId }) },
-          ],
-        }),
-      }),
+      body: JSON.stringify(body),
     }
   );
 
@@ -106,7 +123,7 @@ async function synthesizeLine(
     // تعارض أو ازدحام لحظي: مهلة قصيرة ثم محاولة أخيرة قبل إفشال الإنتاج كله
     if ((res.status === 409 || res.status === 429) && attempt < 2) {
       await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
-      return synthesizeLine(apiKey, elevenVoiceId, text, stability, speed, dict, attempt + 1);
+      return synthesizeLine(apiKey, elevenVoiceId, body, attempt + 1);
     }
     throw new Error(`ElevenLabs ${res.status}: ${detail.slice(0, 200)}`);
   }

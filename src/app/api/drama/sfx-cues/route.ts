@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkLimit, limitResponse } from "@/lib/rateLimit";
+import { geminiStructured } from "@/lib/retryFetch";
 import { getUserFromRequest } from "@/lib/serverAuth";
 
 export const maxDuration = 60;
-
-const MODEL = (process.env.GEMINI_MODEL ?? "gemini-3.6-flash").split(",")[0].trim();
 
 const SCHEMA = {
   type: "object",
@@ -55,54 +54,50 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
+    const cues = await geminiStructured(
+      apiKey,
       {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                {
-                  text: `أنت مهندس صوت درامي. اقرأ المشهد التالي واقترح حتى 5 مؤثرات صوتية تخدمه فعلاً (لا حشو): لحظية (باب، خطوات، رعد) وخلفيات حلقية (مطر مستمر، سوق، ليل صيفي). لكل مؤثر: اسم عربي موجز، ووصف توليد إنجليزي محسوس مادي الدقة، ومدة واقعية، وهل هو حلقة خلفية.\n\nالمشهد:\n${text}`,
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: SCHEMA,
-            temperature: 0.4,
-            maxOutputTokens: 2048,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: `أنت مهندس صوت درامي. اقرأ المشهد التالي واقترح حتى 5 مؤثرات صوتية تخدمه فعلاً (لا حشو): لحظية (باب، خطوات، رعد) وخلفيات حلقية (مطر مستمر، سوق، ليل صيفي). لكل مؤثر: اسم عربي موجز، ووصف توليد إنجليزي محسوس مادي الدقة، ومدة واقعية، وهل هو حلقة خلفية.\n\nالمشهد:\n${text}`,
+              },
+            ],
           },
-        }),
-      }
+        ],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: SCHEMA,
+          temperature: 0.4,
+          maxOutputTokens: 2048,
+        },
+      },
+      readCues
     );
-    if (!res.ok) {
-      const detail = await res.text().catch(() => "");
-      throw new Error(`Gemini ${res.status}: ${detail.slice(0, 200)}`);
-    }
-    const json = await res.json();
-    const textOut = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!textOut) throw new Error("استجابة فارغة");
-    const data = JSON.parse(textOut) as {
-      cues?: { label?: unknown; prompt?: unknown; durationSec?: unknown; loop?: unknown }[];
-    };
-    const cues = (Array.isArray(data.cues) ? data.cues : [])
-      .filter((c) => typeof c.label === "string" && typeof c.prompt === "string")
-      .slice(0, 5)
-      .map((c) => ({
-        label: (c.label as string).slice(0, 60),
-        prompt: (c.prompt as string).slice(0, 450),
-        durationSec:
-          typeof c.durationSec === "number" ? Math.min(30, Math.max(1, c.durationSec)) : 6,
-        loop: c.loop === true,
-      }));
     return NextResponse.json({ cues });
   } catch (e) {
     console.error("SFX cues suggestion failed:", e);
     return NextResponse.json({ error: "تعذّر اقتراح المؤثرات — جرّب مجدداً" }, { status: 502 });
   }
+}
+
+/** قراءة المقترح — أي فشل هنا ينقل السلسلة للنموذج التالي */
+function readCues(json: unknown) {
+  const textOut = (json as { candidates?: { content?: { parts?: { text?: string }[] } }[] })
+    ?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!textOut) throw new Error("استجابة فارغة");
+  const data = JSON.parse(textOut) as {
+    cues?: { label?: unknown; prompt?: unknown; durationSec?: unknown; loop?: unknown }[];
+  };
+  return (Array.isArray(data.cues) ? data.cues : [])
+    .filter((c) => typeof c.label === "string" && typeof c.prompt === "string")
+    .slice(0, 5)
+    .map((c) => ({
+      label: (c.label as string).slice(0, 60),
+      prompt: (c.prompt as string).slice(0, 450),
+      durationSec: typeof c.durationSec === "number" ? Math.min(30, Math.max(1, c.durationSec)) : 6,
+      loop: c.loop === true,
+    }));
 }

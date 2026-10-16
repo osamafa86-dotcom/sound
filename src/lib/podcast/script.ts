@@ -1,7 +1,13 @@
 import { MAQAMAT } from "@/lib/maqamat";
 import { VOICES } from "@/lib/voices";
 import { dialectInstruction, voiceCatalogText, voicesForDialect } from "@/lib/dialects";
-import type { DramaScript } from "@/lib/drama/types";
+import { geminiStructured } from "@/lib/retryFetch";
+import {
+  cleanDeliveryTag,
+  DELIVERY_TAGS,
+  NO_DELIVERY_TAG,
+  type DramaScript,
+} from "@/lib/drama/types";
 
 /**
  * البودكاست الذكي — موضوع واحد يتحوّل إلى حلقة حوارية كاملة.
@@ -9,8 +15,6 @@ import type { DramaScript } from "@/lib/drama/types";
  * الناتج سيناريو بالبنية الدرامية نفسها، فيمرّ على محرك الإنتاج ذاته:
  * كل سطر بصوت مقدّمه وانفعاله. الفرق في التأليف لا في الإنتاج.
  */
-
-const MODEL = (process.env.GEMINI_MODEL ?? "gemini-3.6-flash").split(",")[0].trim();
 
 export const PODCAST_LIMITS = {
   maxTopicChars: 500,
@@ -74,12 +78,13 @@ function buildSchema(dialect: string) {
           characterId: { type: "string" },
           text: { type: "string", description: "نص الحوار مشكّلاً تشكيلاً كاملاً" },
           emotion: { type: "string", description: "الحالة الشعورية بالعربية في كلمة أو كلمتين" },
+          deliveryTag: { type: "string", enum: [NO_DELIVERY_TAG, ...DELIVERY_TAGS] },
           stability: { type: "number" },
           speed: { type: "number" },
           pauseAfterMs: { type: "number" },
         },
-        required: ["characterId", "text", "emotion", "stability", "speed", "pauseAfterMs"],
-        propertyOrdering: ["characterId", "text", "emotion", "stability", "speed", "pauseAfterMs"],
+        required: ["characterId", "text", "emotion", "deliveryTag", "stability", "speed", "pauseAfterMs"],
+        propertyOrdering: ["characterId", "text", "emotion", "deliveryTag", "stability", "speed", "pauseAfterMs"],
       },
     },
   },
@@ -136,6 +141,7 @@ ${catalog}
 - اكتب كل سطر **مشكّلاً تشكيلاً كاملاً**، وحوّل الأرقام والاختصارات إلى صيغتها المنطوقة.
 - ${dialectInstruction(dialect)}
 - اجعل الحوار طبيعياً كما يُنطق فعلاً: جمل قصيرة، عبارات وصل («طيب»، «بالضبط»، «خلينا نوضّح»)، لا لغة مكتوبة جامدة.
+- لكل سطر: وسم أداء (deliveryTag) من القائمة المسموحة حين يتلوّن الإلقاء فعلاً — ضحكة خفيفة، حماس، فضول، دهشة — أو ${NO_DELIVERY_TAG} للشرح المتزن؛ باعتدال يحفظ طبيعية الحوار.
 - لكل سطر: انفعاله، وstability بين 0.35 و0.75 (أقل في الحماس والضحك، أعلى في الشرح الرصين)، وspeed بين 0.9 و1.1، وpauseAfterMs بين 120 و600 (وقفات قصيرة داخل الحوار حتى لا يبدو متقطعاً).
 - لا تتجاوز ${PODCAST_LIMITS.maxLines} سطراً.
 
@@ -152,32 +158,26 @@ export async function generatePodcast(
   dialect: string,
   sourceText?: string
 ): Promise<DramaScript> {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
+  return geminiStructured(
+    apiKey,
     {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({
-        contents: [
-          { role: "user", parts: [{ text: buildPrompt(topic, length, tone, dialect, sourceText) }] },
-        ],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: buildSchema(dialect),
-          temperature: 0.85,
-          maxOutputTokens: 40000,
-        },
-      }),
-    }
+      contents: [
+        { role: "user", parts: [{ text: buildPrompt(topic, length, tone, dialect, sourceText) }] },
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: buildSchema(dialect),
+        temperature: 0.85,
+        maxOutputTokens: 40000,
+      },
+    },
+    (json) => readEpisode(json, dialect)
   );
+}
 
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`Gemini ${res.status}: ${detail.slice(0, 200)}`);
-  }
-
-  const json = await res.json();
-  const candidate = json?.candidates?.[0];
+/** قراءة استجابة المعدّ — أي فشل هنا ينقل السلسلة للنموذج التالي */
+function readEpisode(json: unknown, dialect: string): DramaScript {
+  const candidate = (json as { candidates?: GeminiCandidate[] })?.candidates?.[0];
   if (candidate?.finishReason === "MAX_TOKENS") {
     throw new Error("الحلقة أطول من المتاح — جرّب طولاً أقصر");
   }
@@ -190,6 +190,8 @@ export async function generatePodcast(
 
   return sanitize(JSON.parse(out) as DramaScript, dialect);
 }
+
+type GeminiCandidate = { finishReason?: string; content?: { parts?: { text?: string }[] } };
 
 /** تطهير مماثل للسيناريو الدرامي — أصوات صالحة وأسطر مربوطة بمقدّم موجود */
 function sanitize(script: DramaScript, dialect: string): DramaScript {
@@ -212,6 +214,7 @@ function sanitize(script: DramaScript, dialect: string): DramaScript {
       characterId: known.has(l.characterId) ? l.characterId : characters[0].id,
       text: l.text.trim().slice(0, 600),
       emotion: l.emotion || "ودّي",
+      deliveryTag: cleanDeliveryTag(l.deliveryTag),
       stability: clamp(Number(l.stability), 0, 1, 0.5),
       speed: clamp(Number(l.speed), 0.7, 1.2, 1),
       pauseAfterMs: Math.round(clamp(Number(l.pauseAfterMs), 0, 1500, 250)),

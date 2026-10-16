@@ -48,3 +48,51 @@ export async function geminiGenerate(apiKey: string, body: unknown): Promise<Res
   }
   return last as Response;
 }
+
+/**
+ * سلسلة كتّاب السيناريو الصوتي (الدراما والبودكاست ومؤثرات المشهد):
+ * الأحدث أولاً والمجرَّب رجوعاً — بخلاف سلسلة المساعد التي تبدأ بالمجرَّب.
+ * GEMINI_SCRIPT_MODEL قائمة بفواصل تثبّت النموذج أو تعكس الترتيب بلا نشر.
+ */
+export function geminiScriptModels(): string[] {
+  return (process.env.GEMINI_SCRIPT_MODEL ?? "gemini-3.8-flash,gemini-3.6-flash")
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean);
+}
+
+/**
+ * توليد مهيكل عبر سلسلة: يُجرَّب كل نموذج حتى يُنتج ما يقبله `read`
+ * (فحص سبب التوقف وتحليل JSON والتطهير). فشل HTTP أو ناتج لا يُقرأ ينقل
+ * للمرشح التالي — فعقد جديد لم يُختبر على مساراتنا لا يُسقط الميزة —
+ * وفشل الجميع يرمي خطأ آخر نموذج كما هو ليصل سببه للشاشة.
+ */
+export async function geminiStructured<T>(
+  apiKey: string,
+  body: unknown,
+  read: (json: unknown) => T,
+  models: string[] = geminiScriptModels()
+): Promise<T> {
+  let lastError: unknown = new Error("لا نموذج نصي مضبوط");
+  for (const model of models) {
+    try {
+      const res = await fetchWithRetry(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body: JSON.stringify(body),
+        }
+      );
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        throw new Error(`Gemini ${res.status}: ${detail.slice(0, 200)}`);
+      }
+      return read(await res.json());
+    } catch (e) {
+      console.error(`Gemini script model ${model} failed:`, e instanceof Error ? e.message : e);
+      lastError = e;
+    }
+  }
+  throw lastError;
+}

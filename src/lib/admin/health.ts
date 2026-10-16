@@ -2,6 +2,8 @@ import { LIMITS, SIGNED_IN_MULTIPLIER } from "@/lib/rateLimit";
 import { VOICES } from "@/lib/voices";
 import { MAQAMAT } from "@/lib/maqamat";
 import { availableVoices } from "@/lib/providers";
+import { elevenMusicModel, elevenTTSModel } from "@/lib/providers/elevenlabs";
+import { geminiScriptModels, geminiTextModels } from "@/lib/retryFetch";
 import { ROUTE_LABELS, routeCostUsd } from "./aggregate";
 import { ownerEmails } from "@/lib/owner";
 
@@ -36,7 +38,7 @@ export function integrations(): IntegrationStatus[] {
       powers: ["النص إلى صوت", "التفريغ النصي", "تحويل صوت إلى صوت", "استنساخ وتصميم الأصوات", "ذاكرة النطق", "الاستوديو الدرامي", "Eleven Music"],
       configured: has("ELEVENLABS_API_KEY"),
       envVars: ["ELEVENLABS_API_KEY"],
-      model: process.env.ELEVENLABS_MODEL_ID ?? "eleven_multilingual_v2",
+      model: `${elevenTTSModel(false)} · ${elevenMusicModel()}`,
       critical: true,
     },
     {
@@ -45,7 +47,7 @@ export function integrations(): IntegrationStatus[] {
       powers: ["توليد الأغاني (Lyria 3 Pro)", "مساعد الكلمات البديل", "الموسيقى من صورة", "سيناريو البودكاست", "تحليل الدراما"],
       configured: has("GEMINI_API_KEY"),
       envVars: ["GEMINI_API_KEY"],
-      model: `${process.env.GEMINI_MODEL ?? "gemini-3.6-flash,gemini-3.8-flash"} + ${process.env.LYRIA_MODEL ?? "lyria-3.5,lyria-3-pro-preview"}`,
+      model: `${geminiTextModels().join(",")} · السيناريو ${geminiScriptModels().join(",")} + ${process.env.LYRIA_MODEL ?? "lyria-3.5,lyria-3-pro-preview"}`,
       critical: true,
     },
     {

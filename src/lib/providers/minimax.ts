@@ -46,10 +46,11 @@ function buildLyrics(req: MusicRequest): string {
   return raw ? `[Verse]\n${raw}` : "";
 }
 
-const TTS_MODEL = process.env.MINIMAX_TTS_MODEL ?? "speech-02-hd";
+/** الجيل الأحدث (Speech 2.8 HD) — MINIMAX_TTS_MODEL=speech-02-hd مفتاح رجوع */
+const TTS_MODEL = process.env.MINIMAX_TTS_MODEL ?? "speech-2.8-hd";
 
 /**
- * نطق MiniMax 💠 «المحرك الاقتصادي» — Speech-02 HD بتعزيز عربي:
+ * نطق MiniMax 💠 «المحرك الاقتصادي» — Speech 2.8 HD بتعزيز عربي:
  * يُخصم من نقاط اشتراك MiniMax الشهرية (شبه مجانية) بدل رصيد ElevenLabs،
  * فيناسب النصوص الطويلة والمعاينات. وسوم المخرج التعبيري لغة ElevenLabs
  * حصراً فتُنزع قبل الإرسال كي لا تُقرأ حرفياً.

@@ -11,8 +11,12 @@ import type { AudioResult, MusicProvider, MusicRequest, TTSProvider, TTSRequest 
 
 const API_BASE = "https://api.elevenlabs.io/v1";
 
-/** نموذج التوليد المتوازن — multilingual_v2 مستقر وممتاز مع العربية */
-const MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? "eleven_multilingual_v2";
+/**
+ * نموذج النطق الكلاسيكي (بلا وسوم) — الجيل الرابع أيضاً منذ تشرين الأول 2026
+ * ليعمل كل قسم صوتي على أحدث محرك: النطق والدراما والبودكاست.
+ * ELEVENLABS_MODEL_ID=eleven_multilingual_v2 مفتاح رجوع للجيل الثاني.
+ */
+const MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? "eleven_v4";
 /**
  * المحرك التعبيري — الافتراضي الجيل الرابع (أيلول 2026): الأول عالمياً
  * في تقييم Artificial Analysis بـ94 لغة بينها العربية، ويقبل طيف
@@ -20,6 +24,20 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? "eleven_multilingual_v2";
  * eleven_v3 لمن أراد الرجوع لسلوك الجيل الثالث.
  */
 const V3_MODEL_ID = process.env.ELEVENLABS_V3_MODEL ?? "eleven_v4";
+
+/** نموذج النطق الفعلي لطلب ما — التعبيري للوسوم والأساليب، والكلاسيكي لما عداه */
+export function elevenTTSModel(expressive: boolean): string {
+  return expressive ? V3_MODEL_ID : MODEL_ID;
+}
+
+/**
+ * جيل الوسوم (الثالث فما بعده: eleven_v3، eleven_v4...): يفهم وسوم الأداء
+ * بين قوسين، ولا يقبل وسم <break> ولا قواميس النطق — فذاكرة النطق تُطبَّق
+ * عليه نصياً والوقفات صمتاً حقيقياً. الجيل الثاني يقرأ الوسوم كلمات.
+ */
+export function isTagGeneration(modelId: string): boolean {
+  return /^eleven_v\d/.test(modelId);
+}
 
 /** الجيل الثالث يقبل ثلاث درجات ثبات فقط: 0 مبدع | 0.5 طبيعي | 1 رصين */
 export function snapStabilityV3(value: number): 0 | 0.5 | 1 {
@@ -41,7 +59,10 @@ type VoiceSettings = {
  * والثاني والرابع يدعمان الطيف الكامل — ثبات متصل وسرعة وقوة تعبير
  * (style) وتعزيز حضور.
  */
-export function voiceSettingsFor(modelId: string, req: TTSRequest): VoiceSettings {
+export function voiceSettingsFor(
+  modelId: string,
+  req: Pick<TTSRequest, "stability" | "speed" | "liveliness" | "speakerBoost">
+): VoiceSettings {
   if (modelId.startsWith("eleven_v3")) {
     return {
       stability: snapStabilityV3(req.stability ?? 0.5),
@@ -144,13 +165,13 @@ export function elevenLabsTTS(apiKey: string): TTSProvider {
       // باقة Creator تتيح جودة 192kbps — قابلة للتخفيض عبر متغير البيئة عند تغيير الباقة
       const mp3Quality = process.env.ELEVENLABS_MP3_QUALITY ?? "mp3_44100_192";
       const outputFormat = wantWav ? "pcm_44100" : mp3Quality;
-      const expressive = !!req.expressive;
+      const model = elevenTTSModel(!!req.expressive);
 
-      // ذاكرة النطق: قاموس المحرك للجيل الثاني — والجيل الثالث لا يدعمه
+      // ذاكرة النطق: قاموس المحرك للجيل الثاني — وجيل الوسوم لا يدعمه
       // (تتكفل به قواعد الاستبدال النصية المطبقة في المسار قبل الوصول هنا)
-      const dict = expressive ? null : await findDictionary(apiKey).catch(() => null);
+      const dict = isTagGeneration(model) ? null : await findDictionary(apiKey).catch(() => null);
 
-      const voiceSettings = voiceSettingsFor(expressive ? V3_MODEL_ID : MODEL_ID, req);
+      const voiceSettings = voiceSettingsFor(model, req);
 
       // النصوص الطويلة تُقسَّم عند حدود الجمل وتُدمج مخرجاتها (mp3 مباشرة، وwav عبر PCM خام)
       // بادئة الأسلوب تُحقن في كل جزء كي يبقى الأداء موحداً عبر الأجزاء
@@ -163,7 +184,7 @@ export function elevenLabsTTS(apiKey: string): TTSProvider {
             apiKey,
             {
               text: req.stylePrefix ? `${req.stylePrefix} ${chunk}` : chunk,
-              model_id: expressive ? V3_MODEL_ID : MODEL_ID,
+              model_id: model,
               voice_settings: voiceSettings,
               ...(dict?.id && {
                 pronunciation_dictionary_locators: [
@@ -207,9 +228,9 @@ export async function elevenLabsTTSStream(apiKey: string, req: TTSRequest): Prom
     throw new ElevenLabsError(`لا يوجد صوت ElevenLabs مطابق للمعرّف ${req.voiceId}`, 400);
   }
 
-  const expressive = !!req.expressive;
-  const dict = expressive ? null : await findDictionary(apiKey).catch(() => null);
-  const voiceSettings = voiceSettingsFor(expressive ? V3_MODEL_ID : MODEL_ID, req);
+  const model = elevenTTSModel(!!req.expressive);
+  const dict = isTagGeneration(model) ? null : await findDictionary(apiKey).catch(() => null);
+  const voiceSettings = voiceSettingsFor(model, req);
 
   const mp3Quality = process.env.ELEVENLABS_MP3_QUALITY ?? "mp3_44100_192";
   const res = await fetch(
@@ -219,7 +240,7 @@ export async function elevenLabsTTSStream(apiKey: string, req: TTSRequest): Prom
       headers: { "xi-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({
         text: req.stylePrefix ? `${req.stylePrefix} ${req.text}` : req.text,
-        model_id: expressive ? V3_MODEL_ID : MODEL_ID,
+        model_id: model,
         voice_settings: voiceSettings,
         ...(dict?.id && {
           pronunciation_dictionary_locators: [
@@ -448,11 +469,12 @@ async function musicCall(
 }
 
 /**
- * نموذج Eleven Music: الأحدث (music_v2 — حزيران 2026) افتراضياً بجودة أعلى
- * وإخراج 48kHz/192kbps، وELEVEN_MUSIC_MODEL=music_v1 مفتاح رجوع للسلوك القديم.
+ * نموذج Eleven Music: الأحدث (music_v2_5) افتراضياً — يبني على v2 بعقده
+ * نفسه (برومبت وforce_instrumental وmusic_length_ms) بجودة أعلى والتزام
+ * أدق بالبرومبت. ELEVEN_MUSIC_MODEL=music_v2 أو music_v1 مفتاح رجوع.
  */
-function elevenMusicModel(): string {
-  return process.env.ELEVEN_MUSIC_MODEL ?? "music_v2";
+export function elevenMusicModel(): string {
+  return process.env.ELEVEN_MUSIC_MODEL ?? "music_v2_5";
 }
 
 export function elevenLabsMusic(apiKey: string): MusicProvider {
