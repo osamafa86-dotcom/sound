@@ -7,6 +7,8 @@ import SaveToLibrary from "@/components/SaveToLibrary";
 import SingAlongPanel from "@/components/SingAlongPanel";
 import StemsPanel from "@/components/StemsPanel";
 import LiveMaqamPanel from "@/components/LiveMaqamPanel";
+import SunoHandoff from "@/components/SunoHandoff";
+import type { SunoPackage } from "@/lib/sunoPackage";
 import {
   adherencePercent,
   alignWordsToLyrics,
@@ -265,6 +267,43 @@ export default function SongsStudio() {
   const [bpm, setBpm] = useState<number | null>(null);
   /** لهجة الأداء الغنائي — تتبع لهجة الكتابة افتراضياً وتُغيَّر في خطوة التوليد */
   const [deliveryDialectId, setDeliveryDialectId] = useState<string>(DIALECTS[0].id);
+
+  // مقام العقل وSuno الحنجرة: حزمة جاهزة للنسخ + إياب الأداء المنزّل
+  const [sunoPkg, setSunoPkg] = useState<SunoPackage | null>(null);
+  const [sunoLoading, setSunoLoading] = useState(false);
+  const [sunoError, setSunoError] = useState("");
+  const [sunoAudio, setSunoAudio] = useState<{ url: string; name: string } | null>(null);
+
+  async function prepareSuno() {
+    const hasWords = sections?.some((s) => s.lyrics.trim()) || lyrics.trim();
+    if (!hasWords) {
+      setSunoError("اكتب الكلمات أولاً — Suno سيغنّيها كما جهّزها مقام");
+      return;
+    }
+    setSunoError("");
+    setSunoLoading(true);
+    try {
+      const res = await fetch("/api/suno/package", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({
+          ...(sections?.length ? { sections } : { lyrics }),
+          maqamId,
+          styleId,
+          dialectId: deliveryDialectId,
+          singer,
+          instrumentIds,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "تعذّر تجهيز حزمة Suno");
+      setSunoPkg({ title: data.title, lyrics: data.lyrics, style: data.style, exclude: data.exclude });
+    } catch (e) {
+      setSunoError(e instanceof Error ? e.message : "تعذّر تجهيز حزمة Suno");
+    } finally {
+      setSunoLoading(false);
+    }
+  }
 
   // المدقق اللغوي: إملاء + تشكيل تام حسب اللهجة
   // 🎧 بروفة النطق: قراءة مسموعة للنص الملقَّن قبل دفع كلفة التلحين
@@ -2202,6 +2241,67 @@ export default function SongsStudio() {
                     ? "🧪 ولّد النسختين للمقارنة"
                     : "🎼 ولّد الأغنية"}
             </button>
+
+            <button
+              onClick={prepareSuno}
+              disabled={sunoLoading}
+              title="مقام يجهّز الكلمات المشكّلة وبرومبت المقام، وتولّد بحسابك في Suno"
+              className="rounded-xl border border-border-soft px-6 py-3 text-sm font-semibold transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+            >
+              {sunoLoading ? "يجهّز الكلمات المشكّلة وبرومبت المقام..." : "🎤 أدِّها بصوت Suno"}
+            </button>
+
+            {sunoError && (
+              <p className="rounded-xl border border-primary/40 bg-rose px-4 py-2.5 text-sm text-primary-strong">
+                {sunoError}
+              </p>
+            )}
+
+            {sunoPkg && (
+              <div className="rounded-2xl border border-border-soft bg-surface-card p-5">
+                <h3 className="text-sm font-bold">🎤 مقام كتب ولحّن الفكرة — وSuno يغنّي</h3>
+                <p className="mt-1 mb-3 text-xs leading-relaxed text-muted">
+                  الكلمات مشكّلة تشكيلاً تاماً حسب لهجة الأداء، والأسلوب مبني من مقامك وآلاتك.
+                  التوليد يتم بحسابك في Suno، ثم تعيد الأغنية هنا.
+                </p>
+                <SunoHandoff pkg={sunoPkg} />
+
+                <label className="mt-4 flex cursor-pointer flex-col gap-1 rounded-xl border border-dashed border-gold/60 bg-gold/5 p-3 text-sm">
+                  <span className="font-semibold">⬇️ أعد أداء Suno إلى مقام</span>
+                  <span className="text-xs text-muted">ارفع ملف MP3 المنزّل من Suno لتحفظه في مكتبتك وتشاركه</span>
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    className="mt-1 text-xs"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setSunoAudio((prev) => {
+                        if (prev) URL.revokeObjectURL(prev.url);
+                        return { url: URL.createObjectURL(file), name: file.name };
+                      });
+                    }}
+                  />
+                </label>
+
+                {sunoAudio && (
+                  <div className="mt-3">
+                    <AudioPlayer src={sunoAudio.url} title={`🎤 ${sunoPkg.title}`} filename={sunoAudio.name}>
+                      <SaveToLibrary
+                        url={sunoAudio.url}
+                        kind="song"
+                        title={sunoPkg.title}
+                        content={sunoPkg.lyrics}
+                        maqamId={maqamId}
+                        styleId={styleId}
+                        provider="suno"
+                        settings={{ performer: "suno", style: sunoPkg.style }}
+                      />
+                    </AudioPlayer>
+                  </div>
+                )}
+              </div>
+            )}
 
             {compareNote && (
               <p className="rounded-xl border border-gold/40 bg-gold/10 px-4 py-2.5 text-sm">

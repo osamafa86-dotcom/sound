@@ -25,6 +25,7 @@ export type NodeKind =
   | "enhance"
   | "tts"
   | "song"
+  | "suno"
   | "music"
   | "sfx"
   | "split"
@@ -156,6 +157,14 @@ export const NODE_DEFS: Record<NodeKind, NodeDef> = {
     ],
     outputs: [{ id: "out", label: "أغنية", type: "audio" }],
     cost: 25,
+  },
+  suno: {
+    kind: "suno",
+    name: "أداء Suno",
+    icon: "🎤",
+    desc: "مقام يجهّز الكلمات المشكّلة وبرومبت المقام — وSuno يغنّيها بحسابك، ثم تعيد الأغنية للسلسلة",
+    inputs: [{ id: "in", label: "كلمات", accepts: ["text"] }],
+    outputs: [{ id: "out", label: "أغنية", type: "audio" }],
   },
   music: {
     kind: "music",

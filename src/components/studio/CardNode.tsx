@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Handle, Position, useReactFlow, type NodeProps, type Node } from "@xyflow/react";
 import Recorder from "@/components/Recorder";
+import SunoHandoff from "@/components/SunoHandoff";
 import { authHeaders } from "@/lib/supabase";
+import type { SunoPackage } from "@/lib/sunoPackage";
 import {
   AI_MODES,
   NODE_DEFS,
@@ -15,7 +17,7 @@ import {
   type NodeKind,
 } from "@/lib/studio/graph";
 import { uploadStore } from "@/lib/studio/uploads";
-import { MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
+import { DIALECTS, MAQAMAT, SONG_STYLES } from "@/lib/maqamat";
 import { VOICES } from "@/lib/voices";
 
 /** ناتج وسائطي لبطاقة — الفصل يخرج مقطعين والذكاء صورة أو فيديو */
@@ -25,13 +27,16 @@ export type MediaResult = { label: string; url: string; mime: string };
 export type CardData = {
   kind: NodeKind;
   config: Record<string, string>;
-  status: "idle" | "running" | "done" | "error";
+  /** waiting: تنتظر خطوة من المستخدم خارج مقام (أداء Suno) */
+  status: "idle" | "running" | "done" | "error" | "waiting";
   stage?: string;
   error?: string;
   resultText?: string;
   media?: MediaResult[];
   /** تنبيه شفافية: رجوع تجريبي أو ملاحظة محرك — يظهر مع الناتج */
   note?: string;
+  /** حزمة Suno الجاهزة للنسخ — تبقى ظاهرة حتى يعود الأداء */
+  suno?: SunoPackage;
 };
 
 export type CardNodeType = Node<CardData, "card">;
@@ -41,6 +46,7 @@ const STATUS_BORDER: Record<CardData["status"], string> = {
   running: "border-primary animate-pulse",
   done: "border-success",
   error: "border-primary-strong",
+  waiting: "border-gold",
 };
 
 /** موضع منفذ رأسياً — تحت الترويسة بمسافات متساوية */
@@ -291,6 +297,7 @@ export default function CardNode({ id, data }: NodeProps<CardNodeType>) {
             <span className="text-[10px] text-primary">{data.stage || "يعمل..."}</span>
           )}
           {data.status === "done" && <span className="text-xs text-success">✓</span>}
+          {data.status === "waiting" && <span className="text-[10px] text-gold">⏸ بانتظارك</span>}
           <button
             onClick={() => {
               uploadStore.delete(id);
@@ -513,6 +520,74 @@ export default function CardNode({ id, data }: NodeProps<CardNodeType>) {
           </div>
         )}
 
+        {data.kind === "suno" && (
+          <div className="flex flex-col gap-1.5">
+            <select
+              value={data.config.maqamId ?? MAQAMAT[0].id}
+              onChange={(e) => setConfig("maqamId", e.target.value)}
+              className={inputClass}
+            >
+              {MAQAMAT.map((m) => (
+                <option key={m.id} value={m.id}>
+                  مقام {m.name} — {m.mood}
+                </option>
+              ))}
+            </select>
+            <select
+              value={data.config.styleId ?? SONG_STYLES[0].id}
+              onChange={(e) => setConfig("styleId", e.target.value)}
+              className={inputClass}
+            >
+              {SONG_STYLES.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-1.5">
+              <select
+                value={data.config.dialectId ?? ""}
+                onChange={(e) => setConfig("dialectId", e.target.value)}
+                className={inputClass}
+                title="لهجة الأداء — توجّه التشكيل والنطق المغنّى"
+              >
+                <option value="">لهجة الأداء...</option>
+                {DIALECTS.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={data.config.singer ?? ""}
+                onChange={(e) => setConfig("singer", e.target.value)}
+                className={inputClass}
+              >
+                <option value="">الصوت...</option>
+                <option value="male">👨 رجالي</option>
+                <option value="female">👩 نسائي</option>
+              </select>
+            </div>
+
+            {data.suno && <SunoHandoff pkg={data.suno} compact />}
+
+            <div className="nodrag flex flex-col gap-1 rounded-lg border border-dashed border-gold/60 bg-gold/5 p-2">
+              <p className="text-[11px] font-semibold">⬇️ أعد أداء Suno إلى هنا</p>
+              <Recorder
+                onAudio={(blob) => {
+                  uploadStore.set(id, blob);
+                  updateNodeData(id, { config: { ...data.config, hasAudio: "true" } });
+                }}
+              />
+              <p className="text-[10px] leading-relaxed text-muted">
+                {data.config.hasAudio === "true"
+                  ? "✓ أداء Suno جاهز — شغّل المساحة ليكمل السلسلة."
+                  : "نزّل الأغنية من Suno (MP3) وارفعها هنا، ثم شغّل المساحة."}
+              </p>
+            </div>
+          </div>
+        )}
+
         {data.kind === "music" && (
           <div className="flex flex-col gap-1.5">
             <select
@@ -582,6 +657,13 @@ export default function CardNode({ id, data }: NodeProps<CardNodeType>) {
           />
         )}
 
+        {/* بانتظار خطوة المستخدم — إرشاد لا خطأ */}
+        {data.status === "waiting" && data.stage && (
+          <p className="rounded-lg border border-gold/50 bg-gold/10 px-2 py-1.5 text-[11px] leading-relaxed">
+            {data.stage}
+          </p>
+        )}
+
         {/* الخطأ */}
         {data.status === "error" && data.error && (
           <p className="rounded-lg border border-primary/40 bg-rose px-2 py-1.5 text-[11px] leading-relaxed text-primary-strong">
@@ -625,7 +707,7 @@ export default function CardNode({ id, data }: NodeProps<CardNodeType>) {
                   ? "image"
                   : m.mime.startsWith("video/")
                     ? "video"
-                    : data.kind === "song" || data.kind === "music"
+                    : data.kind === "song" || data.kind === "music" || data.kind === "suno"
                       ? "song"
                       : "tts"
               }

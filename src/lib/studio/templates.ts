@@ -137,4 +137,21 @@ export const SPACE_TEMPLATES: SpaceTemplate[] = [
       { source: "g2", target: "g4", targetHandle: "ctx" },
     ],
   },
+  {
+    id: "suno-voice",
+    name: "مقام يكتب وSuno يغني",
+    icon: "🎤",
+    desc: "فكرة ← كلمات مشكّلة ← حزمة Suno بمقامك ← أداء Suno يعود ← فصل الغناء عن الموسيقى",
+    nodes: [
+      { id: "u1", kind: "text", x: 0, y: 120, config: { text: "أغنية عن بيّارات يافا ورائحة البرتقال" } },
+      { id: "u2", kind: "lyrics", x: 330, y: 120 },
+      { id: "u3", kind: "suno", x: 660, y: 40, config: { maqamId: "bayati", dialectId: "palestinian" } },
+      { id: "u4", kind: "split", x: 1000, y: 120 },
+    ],
+    edges: [
+      { source: "u1", target: "u2" },
+      { source: "u2", target: "u3" },
+      { source: "u3", target: "u4" },
+    ],
+  },
 ];

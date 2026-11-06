@@ -46,6 +46,9 @@ type RunOutput = { text?: string; blob?: Blob; voiceId?: string; note?: string }
 /** ناتج تشغيل بطاقة: قيمة لكل منفذ خرج + ملاحظة شفافية للعرض */
 type NodeResult = { ports: Record<string, RunOutput>; note?: string };
 
+/** البطاقة جهّزت ما عليها وتنتظر خطوة المستخدم خارج مقام — إرشاد لا عطل */
+class WaitingForUser extends Error {}
+
 /** مدخلات بطاقة مجمعة حسب منفذ الدخل — المنفذ الجمعي يحمل عدة قيم مرتبة */
 type NodeInputs = Map<string, RunOutput[]>;
 
@@ -406,6 +409,36 @@ export default function StudioSpace() {
       return out(result, [brief?.note, result.note].filter(Boolean).join("\n") || undefined);
     }
 
+    if (kind === "suno") {
+      // الإياب: أداء Suno مرفوع في البطاقة — يكمل السلسلة كأي أغنية
+      const performed = uploadStore.get(node.id);
+      if (performed) return out({ blob: performed }, "🎤 أداء Suno — بكلمات وبرومبت من مقام");
+
+      // الذهاب: حزمة Suno (تشكيل تام + علامات مقاطع + برومبت المقام)
+      const lyrics = first("in")?.text?.trim();
+      if (!lyrics) throw new Error("أوصل بطاقة كلمات أولاً");
+      patchNode(node.id, { stage: "يجهّز الكلمات المشكّلة وبرومبت المقام لـ Suno..." });
+      const res = await fetch("/api/suno/package", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({
+          lyrics,
+          maqamId: cfg.maqamId ?? MAQAMAT[0].id,
+          styleId: cfg.styleId ?? SONG_STYLES[0].id,
+          dialectId: cfg.dialectId ?? "",
+          ...(cfg.singer && { singer: cfg.singer }),
+        }),
+      });
+      const pkg = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(pkg?.error ?? "تعذّر تجهيز حزمة Suno");
+      patchNode(node.id, {
+        suno: { title: pkg.title, lyrics: pkg.lyrics, style: pkg.style, exclude: pkg.exclude },
+      });
+      throw new WaitingForUser(
+        "✓ الحزمة جاهزة أدناه — انسخها إلى Suno وولّد الأغنية، ثم ارفع الملف المنزّل في هذه البطاقة وشغّل المساحة مجدداً ليكمل ما بعدها."
+      );
+    }
+
     if (kind === "music") {
       const melody = first("melody")?.blob;
       const brief = melody ? await melodyBrief(melody) : null;
@@ -591,6 +624,7 @@ export default function StudioSpace() {
     // النواتج بمفتاح «بطاقة:منفذ» — بطاقة الفصل مثلاً تملأ منفذين
     const outputs = new Map<string, RunOutput>();
     const failed = new Set<string>();
+    const waiting = new Set<string>();
 
     for (const layer of layers) {
       await Promise.all(
@@ -608,7 +642,10 @@ export default function StudioSpace() {
             for (const e of graphEdges) {
               if (e.target !== id || (e.targetHandle ?? firstIn) !== port.id) continue;
               if (failed.has(e.source)) {
-                patchNode(id, { status: "error", error: "تعطل المصدر قبلها" });
+                patchNode(id, {
+                  status: "error",
+                  error: waiting.has(e.source) ? "تنتظر أداء Suno قبلها" : "تعطل المصدر قبلها",
+                });
                 failed.add(id);
                 blocked = true;
                 break;
@@ -656,11 +693,16 @@ export default function StudioSpace() {
               note: result.note,
             });
           } catch (e) {
-            patchNode(id, {
-              status: "error",
-              stage: undefined,
-              error: e instanceof Error ? e.message : "خطأ غير متوقع",
-            });
+            if (e instanceof WaitingForUser) {
+              patchNode(id, { status: "waiting", stage: e.message, error: undefined });
+              waiting.add(id);
+            } else {
+              patchNode(id, {
+                status: "error",
+                stage: undefined,
+                error: e instanceof Error ? e.message : "خطأ غير متوقع",
+              });
+            }
             failed.add(id);
           }
         })

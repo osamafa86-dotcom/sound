@@ -32,6 +32,7 @@ const PROVIDER_NAMES: Record<string, string> = {
   elevenlabs: "ElevenLabs",
   lyria: "Lyria 3 Pro",
   "eleven-music": "Eleven Music",
+  suno: "أداء Suno",
   gemini: "ذكاء مقام",
   mock: "تجريبي",
 };
